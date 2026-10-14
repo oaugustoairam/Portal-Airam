@@ -4,7 +4,9 @@ import Login from './components/Login.jsx'
 import ClienteHome from './components/ClienteHome.jsx'
 import AdminHome from './components/AdminHome.jsx'
 
-export const NOME_ESCRITORIO = 'Airam Arquitetura'
+import logoBranco from './assets/logo-branco.png'
+
+export const NOME_ESCRITORIO = 'Airam Arquitetura & Marcenaria'
 
 export default function App() {
   const [perfil, setPerfil] = useState(undefined)
@@ -22,7 +24,7 @@ export default function App() {
       <header className="topo">
         <div className="topo-in">
           <div className="marca">
-            <span className="marca-nome">{NOME_ESCRITORIO}</span>
+            <img className="marca-logo" src={logoBranco} alt={NOME_ESCRITORIO} />
             <span className="marca-sub">Portal do cliente</span>
           </div>
           {perfil && (

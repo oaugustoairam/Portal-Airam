@@ -37,18 +37,22 @@ export function criarDadosDemo() {
   const p2 = 'demo-casa-lago'
 
   const fases1 = [
-    ['Briefing e levantamento', 'concluida', -78, -70, -71],
-    ['Estudo preliminar', 'concluida', -70, -52, -50],
-    ['Anteprojeto e renders', 'concluida', -50, -28, -26],
-    ['Projeto executivo', 'em_andamento', -26, 6, null],
-    ['Detalhamento e marcenaria', 'pendente', 6, 30, null],
-    ['Acompanhamento de obra', 'pendente', 30, 110, null],
+    ['Briefing e medição', 'concluida', -62, -56, -57],
+    ['Projeto inicial e renders', 'concluida', -56, -42, -41],
+    ['Aprovação e contrato', 'concluida', -41, -35, -36],
+    ['Projeto final (executivo)', 'concluida', -36, -24, -24],
+    ['Produção na fábrica', 'em_andamento', -24, 9, null],
+    ['Entrega e montagem', 'pendente', 9, 19, null],
+    ['Vistoria final', 'pendente', 19, 22, null],
   ]
   const fases2 = [
-    ['Briefing e levantamento', 'concluida', -12, -4, -5],
-    ['Estudo preliminar', 'em_andamento', -4, 14, null],
-    ['Anteprojeto e renders', 'pendente', 14, 40, null],
-    ['Projeto executivo', 'pendente', 40, 75, null],
+    ['Briefing e medição', 'concluida', -9, -4, -5],
+    ['Projeto inicial e renders', 'em_andamento', -4, 8, null],
+    ['Aprovação e contrato', 'pendente', 8, 14, null],
+    ['Projeto final (executivo)', 'pendente', 14, 24, null],
+    ['Produção na fábrica', 'pendente', 24, 54, null],
+    ['Entrega e montagem', 'pendente', 54, 62, null],
+    ['Vistoria final', 'pendente', 62, 65, null],
   ]
 
   const montarFases = (projeto_id, linhas, obs) =>
@@ -81,40 +85,41 @@ export function criarDadosDemo() {
     projetos: [
       {
         id: p1,
-        nome: 'Apartamento Jardins',
+        nome: 'Apartamento Mooca',
         cliente_nome: 'Marina Duarte (exemplo)',
         cliente_email: 'marina@exemplo.com',
         endereco: 'Rua das Acácias, 120 — ap. 82',
-        descricao: 'Reforma completa de interiores, 142 m²: sala integrada, cozinha, 3 suítes.',
-        data_inicio: hoje(-78),
-        prazo_final: hoje(110),
-        criado_em: new Date(Date.now() - 78 * 86400000).toISOString(),
+        descricao: 'Móveis planejados para cozinha integrada, suíte master e home office. Garantia de 10 anos.',
+        data_inicio: hoje(-62),
+        prazo_final: hoje(22),
+        criado_em: new Date(Date.now() - 62 * 86400000).toISOString(),
       },
       {
         id: p2,
-        nome: 'Casa do Lago',
+        nome: 'Casa Jardim São Paulo',
         cliente_nome: 'Rafael Moura (exemplo)',
         cliente_email: 'rafael@exemplo.com',
-        endereco: 'Condomínio Vale Verde, lote 14',
-        descricao: 'Projeto arquitetônico residencial, 280 m² de área construída.',
-        data_inicio: hoje(-12),
-        prazo_final: hoje(75),
-        criado_em: new Date(Date.now() - 12 * 86400000).toISOString(),
+        endereco: 'Rua dos Ipês, 48 — Guarulhos',
+        descricao: 'Cozinha planejada, lavanderia e dois dormitórios.',
+        data_inicio: hoje(-9),
+        prazo_final: hoje(65),
+        criado_em: new Date(Date.now() - 9 * 86400000).toISOString(),
       },
     ],
     fases: [
       ...montarFases(p1, fases1, {
-        3: 'Pranchas de elétrica e hidráulica em revisão. Entrega prevista para a próxima semana.',
+        4: 'Chapas cortadas e em acabamento. Vamos agendar a montagem com você.',
       }),
-      ...montarFases(p2, fases2, { 1: 'Duas opções de implantação em estudo.' }),
+      ...montarFases(p2, fases2, { 1: 'Duas opções de layout para a cozinha em preparação.' }),
     ],
     documentos: [
       doc(p1, 1, 'contrato', 'Contrato de prestação de serviços', pdfFicticio('Contrato de prestação de serviços'), 'text/html', -78),
-      doc(p1, 2, 'projeto_inicial', 'Estudo preliminar — planta de layout', pdfFicticio('Estudo preliminar — planta de layout'), 'text/html', -50),
-      doc(p1, 3, 'render', 'Sala de estar', renderSvg('Sala de estar', '#8a9a8f', '#c9b79c', '#3f5a63'), 'image/svg+xml', -27),
-      doc(p1, 4, 'render', 'Suíte master', renderSvg('Suíte master', '#a39486', '#d8cdbf', '#7b8f99'), 'image/svg+xml', -27),
-      doc(p1, 5, 'render', 'Cozinha integrada', renderSvg('Cozinha integrada', '#6f7f86', '#bfb3a3', '#c8a46a'), 'image/svg+xml', -26),
-      doc(p2, 6, 'contrato', 'Contrato de prestação de serviços', pdfFicticio('Contrato — Casa do Lago'), 'text/html', -12),
+      doc(p1, 2, 'projeto_inicial', 'Projeto inicial — planta e vistas', pdfFicticio('Projeto inicial — planta e vistas'), 'text/html', -50),
+      doc(p1, 3, 'render', 'Cozinha integrada', renderSvg('Cozinha integrada', '#7d8a90', '#d9d2c7', '#a0764f'), 'image/svg+xml', -44),
+      doc(p1, 4, 'render', 'Suíte master', renderSvg('Suíte master', '#a39486', '#d8cdbf', '#8a5a3c'), 'image/svg+xml', -44),
+      doc(p1, 5, 'render', 'Home office', renderSvg('Home office', '#9aa39b', '#cdbfa9', '#5b6b73'), 'image/svg+xml', -43),
+      doc(p1, 7, 'projeto_final', 'Projeto executivo — rev. final', pdfFicticio('Projeto executivo — rev. final'), 'text/html', -24),
+      doc(p2, 6, 'contrato', 'Contrato de prestação de serviços', pdfFicticio('Contrato — Casa Jardim São Paulo'), 'text/html', -9),
     ],
   }
 }

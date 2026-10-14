@@ -105,7 +105,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-demo-v1'
+const CHAVE_DEMO = 'portal-demo-v2'
 let memoria = null
 const ouvintes = new Set()
 

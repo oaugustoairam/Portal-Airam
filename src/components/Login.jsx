@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, MODO_DEMO } from '../lib/api.js'
+import logoVermelho from '../assets/logo-vermelho.png'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -25,10 +26,11 @@ export default function Login() {
 
   return (
     <section className="login">
+      <img className="login-marca" src={logoVermelho} alt="Airam Arquitetura & Marcenaria" />
       <h1 className="titulo-grande">Acompanhe seu projeto</h1>
       <p className="login-texto">
-        Veja em que fase está o seu projeto, os prazos combinados e todos os documentos: contrato,
-        estudos, renders e projeto final.
+        Do projeto à montagem: veja em que fase estão seus móveis, os prazos combinados e todos os
+        documentos, como contrato, projeto inicial, renders e projeto final.
       </p>
 
       {enviado ? (

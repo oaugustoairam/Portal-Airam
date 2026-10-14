@@ -12,14 +12,15 @@ export const STATUS = {
   concluida: 'Concluída',
 }
 
-// Fases padrão de um projeto de arquitetura/interiores. Editáveis em cada projeto.
+// Fases padrão de um projeto de móveis planejados. Editáveis em cada projeto.
 export const FASES_PADRAO = [
-  'Briefing e levantamento',
-  'Estudo preliminar',
-  'Anteprojeto e renders',
-  'Projeto executivo',
-  'Detalhamento e marcenaria',
-  'Acompanhamento de obra',
+  'Briefing e medição',
+  'Projeto inicial e renders',
+  'Aprovação e contrato',
+  'Projeto final (executivo)',
+  'Produção na fábrica',
+  'Entrega e montagem',
+  'Vistoria final',
 ]
 
 export function faseAtual(fases) {

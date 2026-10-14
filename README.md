@@ -1,4 +1,4 @@
-# Portal do Cliente — Airam Arquitetura
+# Portal do Cliente — Airam Arquitetura & Marcenaria
 
 Portal onde cada cliente entra com o próprio e-mail e acompanha o projeto:
 
