@@ -382,8 +382,8 @@ function FormDocs({ projeto, onMudou }) {
           <Campo id="d-titulo" rotulo="Título (o cliente vê)">
             <input id="d-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Planta de layout — rev. 2" />
           </Campo>
-          <Campo id="d-arq" rotulo="Arquivo (PDF, imagem, DWG…)">
-            <input id="d-arq" type="file" required onChange={(e) => setArquivo(e.target.files[0] || null)} />
+          <Campo id="d-arq" rotulo="Arquivo (PDF, JPG, PNG, WEBP ou DWG, até 50 MB)">
+            <input id="d-arq" type="file" required accept=".pdf,.jpg,.jpeg,.png,.webp,.dwg" onChange={(e) => setArquivo(e.target.files[0] || null)} />
           </Campo>
         </div>
         {erro && <p className="erro">{erro}</p>}

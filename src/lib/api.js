@@ -9,6 +9,18 @@ export const MODO_DEMO = !url || !chave
 
 const sb = MODO_DEMO ? null : createClient(url, chave)
 
+const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+const EXTENSOES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg']
+const TAMANHO_MAXIMO = 50 * 1024 * 1024
+
+function validarArquivo(arquivo) {
+  const nome = arquivo.name.toLowerCase()
+  const extOk = EXTENSOES_PERMITIDAS.some((e) => nome.endsWith(e))
+  const tipoOk = TIPOS_PERMITIDOS.includes(arquivo.type) || nome.endsWith('.dwg')
+  if (!extOk || !tipoOk) throw new Error('tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP ou DWG.')
+  if (arquivo.size > TAMANHO_MAXIMO) throw new Error('o arquivo passa de 50 MB.')
+}
+
 function ordenarFases(fases) {
   return [...fases].sort((a, b) => a.ordem - b.ordem)
 }
@@ -78,9 +90,12 @@ const supabaseApi = {
     if (error) throw error
   },
   async enviarDocumento(projetoId, { titulo, categoria, fase_id }, arquivo) {
+    validarArquivo(arquivo)
     const nomeSeguro = arquivo.name.normalize('NFD').replace(/[^\w.-]+/g, '_')
     const caminho = `${projetoId}/${Date.now()}-${nomeSeguro}`
-    const up = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: arquivo.type })
+    const up = await sb.storage
+      .from('documentos')
+      .upload(caminho, arquivo, { contentType: arquivo.type || 'application/octet-stream' })
     if (up.error) throw up.error
     const { error } = await sb.from('documentos').insert({
       projeto_id: projetoId,
@@ -98,7 +113,7 @@ const supabaseApi = {
     if (error) throw error
   },
   async urlDocumento(doc) {
-    const { data, error } = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 3600)
+    const { data, error } = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 600) // link vale 10 minutos
     if (error) throw error
     return data.signedUrl
   },
@@ -196,6 +211,7 @@ const demoApi = {
     gravar()
   },
   async enviarDocumento(projetoId, { titulo, categoria, fase_id }, arquivo) {
+    validarArquivo(arquivo)
     const dataUrl = await new Promise((ok, erro) => {
       const r = new FileReader()
       r.onload = () => ok(r.result)

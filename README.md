@@ -35,3 +35,5 @@ Sem configuração, roda em **modo demonstração** (dados de exemplo no navegad
 - `src/components/ProjetoView.jsx` — tela que o cliente vê
 - `src/components/AdminHome.jsx` — painel do escritório
 - `supabase/schema.sql` — tabelas, permissões e armazenamento de arquivos
+
+Veja também [SEGURANCA.md](SEGURANCA.md) para as configurações de segurança antes de colocar no ar.

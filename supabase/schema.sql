@@ -23,6 +23,7 @@ drop trigger if exists ao_criar_usuario on auth.users;
 create trigger ao_criar_usuario after insert on auth.users
   for each row execute function public.criar_perfil();
 
+-- Administrador = papel 'admin' na tabela perfis (só muda pelo SQL Editor; o app não consegue alterar).
 create or replace function public.eh_admin()
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.perfis where id = auth.uid() and papel = 'admin');
@@ -72,11 +73,18 @@ alter table public.projetos enable row level security;
 alter table public.fases enable row level security;
 alter table public.documentos enable row level security;
 
+-- E-mail do usuário logado, somente se ele já foi confirmado (link mágico clicado).
+-- Impede que alguém crie uma conta com o e-mail de um cliente sem ter acesso à caixa de entrada.
+create or replace function public.meu_email_confirmado()
+returns text language sql stable security definer set search_path = public, auth as $$
+  select lower(email) from auth.users where id = auth.uid() and email_confirmed_at is not null;
+$$;
+
 create or replace function public.eh_meu_projeto(p uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from public.projetos
-    where id = p and lower(cliente_email) = lower(auth.jwt() ->> 'email')
+    where id = p and lower(cliente_email) = public.meu_email_confirmado()
   );
 $$;
 
@@ -89,7 +97,7 @@ create policy "admin projetos" on public.projetos for all
   using (public.eh_admin()) with check (public.eh_admin());
 drop policy if exists "cliente ve projeto" on public.projetos;
 create policy "cliente ve projeto" on public.projetos for select
-  using (lower(cliente_email) = lower(auth.jwt() ->> 'email'));
+  using (lower(cliente_email) = public.meu_email_confirmado());
 
 drop policy if exists "admin fases" on public.fases;
 create policy "admin fases" on public.fases for all
@@ -106,8 +114,16 @@ create policy "cliente ve documentos" on public.documentos for select
   using (public.eh_meu_projeto(projeto_id));
 
 -- 6. Arquivos (Storage) — bucket privado; caminho: <projeto_id>/<arquivo>
-insert into storage.buckets (id, name, public) values ('documentos', 'documentos', false)
-  on conflict (id) do nothing;
+-- Limite de 50 MB por arquivo e só tipos esperados (PDF, imagens, DWG).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('documentos', 'documentos', false, 52428800, array[
+  'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+  'image/vnd.dwg', 'application/acad', 'application/octet-stream'
+])
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "admin arquivos" on storage.objects;
 create policy "admin arquivos" on storage.objects for all
@@ -115,8 +131,51 @@ create policy "admin arquivos" on storage.objects for all
   with check (bucket_id = 'documentos' and public.eh_admin());
 drop policy if exists "cliente le arquivos" on storage.objects;
 create policy "cliente le arquivos" on storage.objects for select
-  using (bucket_id = 'documentos' and public.eh_meu_projeto(((storage.foldername(name))[1])::uuid));
+  using (bucket_id = 'documentos' and public.eh_meu_projeto(
+    case when (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$'
+         then ((storage.foldername(name))[1])::uuid end));
 
--- 7. Depois de entrar no portal pela primeira vez com o e-mail do escritório,
+-- 7. Registro de atividades (auditoria) --------------------------------------
+-- Guarda quem criou, alterou ou apagou projetos, etapas e documentos, e quando.
+create table if not exists public.registro_atividades (
+  id bigint generated always as identity primary key,
+  quando timestamptz not null default now(),
+  usuario_id uuid,
+  usuario_email text,
+  tabela text not null,
+  acao text not null,
+  registro_id uuid,
+  antes jsonb,
+  depois jsonb
+);
+alter table public.registro_atividades enable row level security;
+drop policy if exists "admin le registro" on public.registro_atividades;
+create policy "admin le registro" on public.registro_atividades for select using (public.eh_admin());
+-- sem políticas de insert/update/delete: ninguém altera o registro pelo app
+
+create or replace function public.registrar_atividade()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.registro_atividades (usuario_id, usuario_email, tabela, acao, registro_id, antes, depois)
+  values (
+    auth.uid(), auth.jwt() ->> 'email', tg_table_name, tg_op,
+    coalesce((case when tg_op = 'DELETE' then old.id else new.id end), null),
+    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) end,
+    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end
+  );
+  return coalesce(new, old);
+end $$;
+
+drop trigger if exists auditoria on public.projetos;
+create trigger auditoria after insert or update or delete on public.projetos
+  for each row execute function public.registrar_atividade();
+drop trigger if exists auditoria on public.fases;
+create trigger auditoria after insert or update or delete on public.fases
+  for each row execute function public.registrar_atividade();
+drop trigger if exists auditoria on public.documentos;
+create trigger auditoria after insert or update or delete on public.documentos
+  for each row execute function public.registrar_atividade();
+
+-- 8. Depois de entrar no portal pela primeira vez com o e-mail do escritório,
 --    torne-se administrador rodando (troque o e-mail):
 -- update public.perfis set papel = 'admin' where email = 'voce@seuescritorio.com.br';
