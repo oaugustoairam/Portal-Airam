@@ -1,0 +1,3 @@
+# Configuração das funções do servidor (usada pelo comando `supabase functions deploy`)
+[functions.zapsign-webhook]
+verify_jwt = false   # o ZapSign chama sem login; a função confere o header x-airam-segredo

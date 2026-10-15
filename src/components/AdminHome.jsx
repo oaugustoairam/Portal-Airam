@@ -1,30 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
   CATEGORIAS,
-  FASES_PADRAO,
-  STATUS,
-  faseAtual,
-  progresso,
+  TIPOS_PRAZO,
+  calcularTipoPrazo,
+  diasEntre,
+  diasAte,
+  linhaDoTempo,
+  etapaAtual,
   formatarData,
   prazoTexto,
-  diasAte,
+  formatarCpf,
+  cpfValido,
 } from '../lib/constants.js'
-import ProjetoView from './ProjetoView.jsx'
+import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
+import CampoData from './CampoData.jsx'
 
+// ============================================================ Lista de processos
 export default function AdminHome() {
-  const [projetos, setProjetos] = useState(null)
-  const [editando, setEditando] = useState(null) // id do projeto ou 'novo'
+  const [processos, setProcessos] = useState(null)
+  const [editando, setEditando] = useState(null) // id ou 'novo'
+  const [busca, setBusca] = useState('')
+  const [filtro, setFiltro] = useState('todos')
 
-  const recarregar = () => api.listarProjetos().then(setProjetos)
+  const recarregar = () => api.listarProcessos().then(setProcessos)
   useEffect(() => {
     recarregar()
   }, [])
 
+  const linhas = useMemo(
+    () =>
+      (processos || []).map((p) => {
+        const etapas = linhaDoTempo(p, p.assinaturas)
+        return { ...p, atual: etapaAtual(etapas), concluido: p.entrega_concluida }
+      }),
+    [processos]
+  )
+
   if (editando)
     return (
-      <EditorProjeto
+      <EditorProcesso
         id={editando === 'novo' ? null : editando}
+        codigos={(processos || []).map((p) => p.codigo)}
         onFechar={() => {
           setEditando(null)
           recarregar()
@@ -33,46 +50,83 @@ export default function AdminHome() {
       />
     )
 
+  const ativos = linhas.filter((p) => !p.concluido)
+  const indicadores = [
+    ['Processos ativos', ativos.length],
+    ['Aguardando assinatura', ativos.filter((p) => p.assinaturas?.some((a) => a.status === 'pendente')).length],
+    ['Financeiro pendente', ativos.filter((p) => p.solucao_financeira === 'pendente').length],
+    ['Entregas em 30 dias', ativos.filter((p) => { const d = diasAte(p.data_entrega_prevista); return d !== null && d <= 30 }).length],
+  ]
+
+  const termo = busca.trim().toLowerCase()
+  const visiveis = linhas.filter(
+    (p) =>
+      (filtro === 'todos' || (filtro === 'concluidos' ? p.concluido : !p.concluido && p.tipo_prazo === filtro)) &&
+      (!termo || p.codigo.toLowerCase().includes(termo) || p.cliente_nome.toLowerCase().includes(termo))
+  )
+
   return (
     <section>
       <div className="cab-linha">
-        <h1 className="titulo-grande">Projetos</h1>
-        <button className="btn btn-principal" onClick={() => setEditando('novo')}>
-          Novo projeto
-        </button>
+        <h1 className="titulo-grande">Processos</h1>
+        <button className="btn btn-principal" onClick={() => setEditando('novo')}>Novo processo</button>
       </div>
-      {!projetos && <div className="carregando">Carregando…</div>}
-      {projetos?.length === 0 && <p className="vazio">Nenhum projeto ainda. Crie o primeiro.</p>}
-      {projetos?.length > 0 && (
+
+      {processos && (
+        <div className="indicadores">
+          {indicadores.map(([t, v]) => (
+            <div key={t} className="indicador">
+              <span className="indicador-valor num">{v}</span>
+              <span className="rotulo">{t}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="filtros">
+        <input id="busca" type="search" placeholder="Buscar por nome ou código" value={busca}
+          onChange={(e) => setBusca(e.target.value)} aria-label="Buscar processo" />
+        <div className="segmentado" role="group" aria-label="Filtrar por prazo">
+          {[['todos', 'Todos'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro'], ['concluidos', 'Entregues']].map(([k, t]) => (
+            <button key={k} type="button" className={filtro === k ? 'ativo' : ''} onClick={() => setFiltro(k)}>{t}</button>
+          ))}
+        </div>
+      </div>
+
+      {!processos && <div className="carregando">Carregando…</div>}
+      {processos && !visiveis.length && <p className="vazio">Nenhum processo encontrado.</p>}
+      {visiveis.length > 0 && (
         <div className="tabela-wrap">
           <table className="tabela">
             <thead>
               <tr>
-                <th>Projeto</th>
+                <th>Código</th>
                 <th>Cliente</th>
-                <th>Fase atual</th>
-                <th>Andamento</th>
-                <th>Entrega</th>
+                <th>Prazo</th>
+                <th>Etapa atual</th>
+                <th>Financeiro</th>
+                <th>Entrega prevista</th>
               </tr>
             </thead>
             <tbody>
-              {projetos.map((p) => {
-                const atual = faseAtual(p.fases)
-                const atraso = diasAte(p.prazo_final) < 0
+              {visiveis.map((p) => {
+                const atraso = !p.concluido && diasAte(p.data_entrega_prevista) < 0
                 return (
                   <tr key={p.id} onClick={() => setEditando(p.id)} tabIndex={0}
                     onKeyDown={(e) => e.key === 'Enter' && setEditando(p.id)}>
-                    <td><strong>{p.nome}</strong></td>
+                    <td className="num"><strong>{p.codigo}</strong></td>
+                    <td>{p.cliente_nome}<span className="celula-sub">{p.ambientes}</span></td>
+                    <td><span className={`chip chip-prazo-${p.tipo_prazo}`}>{TIPOS_PRAZO[p.tipo_prazo]?.nome}</span></td>
+                    <td>{p.concluido ? 'Entregue' : p.atual.nome}</td>
                     <td>
-                      {p.cliente_nome || '—'}
-                      <span className="celula-sub">{p.cliente_email}</span>
+                      <span className={`chip ${p.solucao_financeira === 'ok' ? 'chip-concluida' : 'chip-atraso'}`}>
+                        {p.solucao_financeira === 'ok' ? 'OK' : 'Pendente'}
+                      </span>
                     </td>
-                    <td>{atual?.nome || '—'}</td>
-                    <td className="num">{progresso(p.fases)}%</td>
                     <td className="num">
-                      {formatarData(p.prazo_final)}
+                      {formatarData(p.data_entrega_prevista)}
                       <span className={`celula-sub ${atraso ? 'texto-atraso' : ''}`}>
-                        {prazoTexto(p.prazo_final)}
+                        {p.concluido ? 'Entregue' : prazoTexto(p.data_entrega_prevista)}
                       </span>
                     </td>
                   </tr>
@@ -86,27 +140,30 @@ export default function AdminHome() {
   )
 }
 
-const VAZIO = {
-  nome: '',
-  cliente_nome: '',
-  cliente_email: '',
-  endereco: '',
-  descricao: '',
-  data_inicio: '',
-  prazo_final: '',
+// ============================================================ Editor
+function proximoCodigo(codigos) {
+  const n = codigos.map((c) => Number(String(c).replace(/\D/g, ''))).filter(Number.isFinite)
+  return 'AIR-' + String((n.length ? Math.max(...n) : 0) + 1).padStart(4, '0')
 }
 
-function EditorProjeto({ id, onFechar, onCriado }) {
-  const [projeto, setProjeto] = useState(id ? null : { ...VAZIO, fases: [], documentos: [] })
+const VAZIO = {
+  codigo: '', cliente_nome: '', cliente_cpf: '', cliente_email: '', cliente_telefone: '', endereco: '', ambientes: '',
+  data_venda: '', data_disponivel_medicao: '', data_entrega_prevista: '', solucao_financeira: 'pendente',
+  data_medicao: '', medicao_concluida: false, data_conferencia: '', conferencia_concluida: false,
+  data_assinatura_projeto: '', projeto_assinado_manual: false, entrega_concluida: false, recado_cliente: '',
+}
+
+function EditorProcesso({ id, codigos, onFechar, onCriado }) {
+  const [processo, setProcesso] = useState(id ? null : { ...VAZIO, codigo: proximoCodigo(codigos), documentos: [], assinaturas: [] })
   const [aba, setAba] = useState('dados')
   const [msg, setMsg] = useState('')
 
-  const recarregar = () => api.projeto(id).then(setProjeto)
+  const recarregar = () => api.processo(id).then(setProcesso)
   useEffect(() => {
     if (id) recarregar()
   }, [id])
 
-  if (!projeto) return <div className="carregando">Carregando…</div>
+  if (!processo) return <div className="carregando">Carregando…</div>
 
   const avisar = (t) => {
     setMsg(t)
@@ -115,237 +172,208 @@ function EditorProjeto({ id, onFechar, onCriado }) {
 
   return (
     <section>
-      <button className="btn btn-leve voltar" onClick={onFechar}>
-        ← Todos os projetos
-      </button>
+      <button className="btn btn-leve voltar" onClick={onFechar}>← Todos os processos</button>
       <div className="cab-linha">
-        <h1 className="titulo-grande">{id ? projeto.nome : 'Novo projeto'}</h1>
+        <div className="titulo-processo">
+          {id && <span className="rotulo">{processo.codigo}</span>}
+          <h1 className="titulo-grande">{id ? processo.cliente_nome : 'Novo processo'}</h1>
+        </div>
         {msg && <span className="toast" role="status">{msg}</span>}
       </div>
 
       {id && (
         <div className="abas">
-          {[
-            ['dados', 'Dados'],
-            ['fases', 'Etapas e prazos'],
-            ['docs', 'Documentos'],
-            ['cliente', 'Ver como cliente'],
-          ].map(([k, t]) => (
-            <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>
-              {t}
-            </button>
+          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
+            <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>{t}</button>
           ))}
         </div>
       )}
 
       {aba === 'dados' && (
         <FormDados
-          projeto={projeto}
+          key={processo.id || 'novo'}
+          processo={processo}
           onSalvo={async (salvo) => {
-            if (!id) {
-              await api.salvarFases(
-                salvo.id,
-                FASES_PADRAO.map((nome) => ({ nome, status: 'pendente', observacao: '' }))
-              )
-              onCriado(salvo.id)
-            } else {
-              await recarregar()
-            }
-            avisar('Dados salvos')
+            if (!id) onCriado(salvo.id)
+            else await recarregar()
+            avisar('Processo salvo')
           }}
           onExcluido={onFechar}
         />
       )}
-      {aba === 'fases' && (
-        <FormFases projeto={projeto} onSalvo={async () => { await recarregar(); avisar('Etapas salvas') }} />
-      )}
-      {aba === 'docs' && (
-        <FormDocs projeto={projeto} onMudou={async (t) => { await recarregar(); avisar(t) }} />
-      )}
+      {aba === 'anexos' && <Anexos processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'assinaturas' && <Assinaturas processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'acesso' && <Acesso processo={processo} />}
       {aba === 'cliente' && (
         <div className="preview-cliente">
-          <ProjetoView projeto={projeto} />
+          <ProcessoView processo={{ ...processo, documentos: processo.documentos.filter((d) => d.categoria !== 'medicao') }} visualizacao />
         </div>
       )}
     </section>
   )
 }
 
-function Campo({ id, rotulo, children }) {
+function Campo({ id, rotulo, obrigatorio, ajuda, children }) {
   return (
     <div className="campo">
-      <label htmlFor={id}>{rotulo}</label>
+      <label htmlFor={id}>
+        {rotulo}
+        {obrigatorio && <span className="obrigatorio" aria-hidden="true"> *</span>}
+      </label>
       {children}
+      {ajuda && <span className="ajuda">{ajuda}</span>}
     </div>
   )
 }
 
-function FormDados({ projeto, onSalvo, onExcluido }) {
+function FormDados({ processo, onSalvo, onExcluido }) {
   const [f, setF] = useState(() => {
-    const { fases, documentos, ...resto } = projeto
-    return resto
+    const { documentos, assinaturas, ...resto } = processo
+    return { ...resto, cliente_cpf: formatarCpf(resto.cliente_cpf) }
   })
   const [confirmar, setConfirmar] = useState(false)
   const [erro, setErro] = useState('')
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
+  const [salvando, setSalvando] = useState(false)
+  const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? (v.target.type === 'checkbox' ? v.target.checked : v.target.value) : v }))
+
+  const tipo = calcularTipoPrazo(f.data_venda, f.data_disponivel_medicao)
+  const dias = diasEntre(f.data_venda, f.data_disponivel_medicao)
+  const projetoAssinadoZapSign = processo.assinaturas?.some((a) => a.tipo === 'projeto_final' && a.status === 'assinado')
 
   async function salvar(e) {
     e.preventDefault()
     setErro('')
+    if (f.cliente_cpf && !cpfValido(f.cliente_cpf)) return setErro('O CPF informado não é válido.')
+    if (dias !== null && dias < 0) return setErro('A disponibilidade para medição não pode ser antes da data da venda.')
+    if (!f.data_entrega_prevista) return setErro('Informe o prazo do cliente (entrega prevista).')
+    setSalvando(true)
     try {
-      const limpo = { ...f, data_inicio: f.data_inicio || null, prazo_final: f.prazo_final || null }
-      const salvo = await api.salvarProjeto(limpo)
-      await onSalvo(salvo)
+      await onSalvo(await api.salvarProcesso(f))
     } catch (err) {
-      setErro('Não foi possível salvar: ' + err.message)
+      setErro(err.message)
+    } finally {
+      setSalvando(false)
     }
   }
 
   return (
     <form className="form" onSubmit={salvar}>
-      <div className="grade">
-        <Campo id="p-nome" rotulo="Nome do projeto">
-          <input id="p-nome" required value={f.nome} onChange={set('nome')} placeholder="Apartamento Jardins" />
+      <fieldset className="grupo">
+        <legend>Cliente</legend>
+        <div className="grade">
+          <Campo id="p-codigo" rotulo="Código do cliente" obrigatorio>
+            <input id="p-codigo" required value={f.codigo} onChange={set('codigo')} />
+          </Campo>
+          <Campo id="p-nome" rotulo="Nome do cliente" obrigatorio>
+            <input id="p-nome" required value={f.cliente_nome} onChange={set('cliente_nome')} />
+          </Campo>
+          <Campo id="p-cpf" rotulo="CPF" ajuda="Usado para o cliente entrar no portal">
+            <input id="p-cpf" inputMode="numeric" value={f.cliente_cpf || ''} placeholder="000.000.000-00"
+              onChange={(e) => set('cliente_cpf')(formatarCpf(e.target.value))} />
+          </Campo>
+          <Campo id="p-email" rotulo="E-mail" obrigatorio ajuda="Login do cliente e assinatura">
+            <input id="p-email" type="email" required value={f.cliente_email} onChange={set('cliente_email')} />
+          </Campo>
+          <Campo id="p-tel" rotulo="Telefone / WhatsApp">
+            <input id="p-tel" inputMode="tel" value={f.cliente_telefone || ''} onChange={set('cliente_telefone')} />
+          </Campo>
+          <Campo id="p-amb" rotulo="Ambientes">
+            <input id="p-amb" value={f.ambientes || ''} onChange={set('ambientes')} placeholder="Cozinha, suíte, home office" />
+          </Campo>
+        </div>
+        <Campo id="p-end" rotulo="Endereço da obra">
+          <input id="p-end" value={f.endereco || ''} onChange={set('endereco')} />
         </Campo>
-        <Campo id="p-endereco" rotulo="Endereço da obra">
-          <input id="p-endereco" value={f.endereco || ''} onChange={set('endereco')} />
-        </Campo>
-        <Campo id="p-cnome" rotulo="Nome do cliente">
-          <input id="p-cnome" value={f.cliente_nome || ''} onChange={set('cliente_nome')} />
-        </Campo>
-        <Campo id="p-cemail" rotulo="E-mail do cliente (usado para o acesso)">
-          <input id="p-cemail" type="email" required value={f.cliente_email} onChange={set('cliente_email')} />
-        </Campo>
-        <Campo id="p-inicio" rotulo="Início">
-          <input id="p-inicio" type="date" value={f.data_inicio || ''} onChange={set('data_inicio')} />
-        </Campo>
-        <Campo id="p-prazo" rotulo="Prazo de entrega final">
-          <input id="p-prazo" type="date" value={f.prazo_final || ''} onChange={set('prazo_final')} />
-        </Campo>
-      </div>
-      <Campo id="p-desc" rotulo="Descrição (o cliente vê)">
-        <textarea id="p-desc" rows={3} value={f.descricao || ''} onChange={set('descricao')} />
+      </fieldset>
+
+      <fieldset className="grupo">
+        <legend>Venda e prazo</legend>
+        <div className="grade">
+          <CampoData id="p-venda" rotulo="Data da venda" obrigatorio valor={f.data_venda} onChange={set('data_venda')} />
+          <CampoData id="p-disp" rotulo="Disponível para medição" obrigatorio valor={f.data_disponivel_medicao}
+            onChange={set('data_disponivel_medicao')} ajuda="Quando o imóvel fica pronto para medir" />
+          <CampoData id="p-entrega" rotulo="Prazo do cliente (entrega prevista)" obrigatorio
+            valor={f.data_entrega_prevista} onChange={set('data_entrega_prevista')} />
+        </div>
+        <div className={`tipo-prazo ${tipo ? 'tipo-prazo-' + tipo : ''}`} aria-live="polite">
+          {tipo ? (
+            <>
+              <strong>{TIPOS_PRAZO[tipo].nome}</strong>
+              <span>{dias} dias entre a venda e a medição. {TIPOS_PRAZO[tipo].desc}.</span>
+            </>
+          ) : (
+            <span>Informe a data da venda e a disponibilidade para medição: o sistema classifica em Prazo normal (até 90 dias) ou Projeto futuro (acima de 90).</span>
+          )}
+        </div>
+      </fieldset>
+
+      <fieldset className="grupo">
+        <legend>Depois da venda</legend>
+        <div className="campo">
+          <span className="rotulo-campo" id="fin-rot">Solução financeira</span>
+          <div className="segmentado" role="radiogroup" aria-labelledby="fin-rot">
+            {[['ok', 'OK'], ['pendente', 'Pendente']].map(([k, t]) => (
+              <button key={k} type="button" role="radio" aria-checked={f.solucao_financeira === k}
+                className={f.solucao_financeira === k ? `ativo ativo-${k}` : ''} onClick={() => set('solucao_financeira')(k)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grade grade-etapas">
+          <EtapaData id="p-med" rotulo="Dia da medição" valor={f.data_medicao} onData={set('data_medicao')}
+            feito={f.medicao_concluida} onFeito={set('medicao_concluida')} textoFeito="Medição feita" />
+          <EtapaData id="p-conf" rotulo="Dia da conferência do projeto final" valor={f.data_conferencia} onData={set('data_conferencia')}
+            feito={f.conferencia_concluida} onFeito={set('conferencia_concluida')} textoFeito="Conferência feita" />
+          <EtapaData id="p-assproj" rotulo="Dia da assinatura do projeto final" valor={f.data_assinatura_projeto}
+            onData={set('data_assinatura_projeto')} feito={projetoAssinadoZapSign || f.projeto_assinado_manual}
+            travado={projetoAssinadoZapSign} onFeito={set('projeto_assinado_manual')}
+            textoFeito={projetoAssinadoZapSign ? 'Assinado pelo portal' : 'Assinado fora do portal'} />
+          <EtapaData id="p-entr" rotulo="Dia previsto para entrega" valor={f.data_entrega_prevista} onData={set('data_entrega_prevista')}
+            feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Entregue e montado" obrigatorio />
+        </div>
+        <p className="dica">A produção aparece para o cliente automaticamente depois da assinatura do projeto final, até a entrega.</p>
+      </fieldset>
+
+      <Campo id="p-recado" rotulo="Recado para o cliente (aparece no topo do portal)">
+        <textarea id="p-recado" rows={2} value={f.recado_cliente || ''} onChange={set('recado_cliente')} />
       </Campo>
-      {erro && <p className="erro">{erro}</p>}
+
+      {erro && <p className="erro" role="alert">{erro}</p>}
       <div className="acoes">
-        <button className="btn btn-principal">{f.id ? 'Salvar dados' : 'Criar projeto'}</button>
+        <button className="btn btn-principal" disabled={salvando}>{f.id ? 'Salvar processo' : 'Criar processo'}</button>
         {f.id && !confirmar && (
-          <button type="button" className="btn btn-perigo-leve" onClick={() => setConfirmar(true)}>
-            Excluir projeto
-          </button>
+          <button type="button" className="btn btn-perigo-leve" onClick={() => setConfirmar(true)}>Excluir processo</button>
         )}
         {confirmar && (
           <span className="confirmar">
-            Excluir o projeto e todos os documentos?
-            <button type="button" className="btn btn-perigo"
-              onClick={async () => { await api.excluirProjeto(f.id); onExcluido() }}>
+            Excluir o processo e todos os anexos?
+            <button type="button" className="btn btn-perigo" onClick={async () => { await api.excluirProcesso(f.id); onExcluido() }}>
               Sim, excluir
             </button>
-            <button type="button" className="btn btn-leve" onClick={() => setConfirmar(false)}>
-              Cancelar
-            </button>
+            <button type="button" className="btn btn-leve" onClick={() => setConfirmar(false)}>Cancelar</button>
           </span>
         )}
       </div>
-      {!f.id && (
-        <p className="dica">
-          O projeto começa com as etapas padrão ({FASES_PADRAO.join(', ')}). Você ajusta depois.
-        </p>
-      )}
     </form>
   )
 }
 
-function FormFases({ projeto, onSalvo }) {
-  const [fases, setFases] = useState(projeto.fases.map((f) => ({ ...f })))
-  const [salvando, setSalvando] = useState(false)
-
-  const mudar = (i, k, v) => {
-    const nova = fases.map((f, j) => (j === i ? { ...f, [k]: v } : f))
-    // ao concluir uma fase, registra a data de hoje se estiver vazia
-    if (k === 'status' && v === 'concluida' && !nova[i].data_conclusao)
-      nova[i].data_conclusao = new Date().toISOString().slice(0, 10)
-    setFases(nova)
-  }
-  const mover = (i, d) => {
-    const j = i + d
-    if (j < 0 || j >= fases.length) return
-    const nova = [...fases]
-    ;[nova[i], nova[j]] = [nova[j], nova[i]]
-    setFases(nova)
-  }
-
-  async function salvar() {
-    setSalvando(true)
-    const limpas = fases.map(({ id, nome, status, data_inicio, data_prevista, data_conclusao, observacao }) => ({
-      ...(id ? { id } : {}),
-      nome,
-      status,
-      data_inicio: data_inicio || null,
-      data_prevista: data_prevista || null,
-      data_conclusao: status === 'concluida' ? data_conclusao || null : null,
-      observacao: observacao || '',
-    }))
-    await api.salvarFases(projeto.id, limpas)
-    setSalvando(false)
-    onSalvo()
-  }
-
+function EtapaData({ id, rotulo, valor, onData, feito, onFeito, textoFeito, travado, obrigatorio }) {
   return (
-    <div className="form">
-      <ol className="editor-fases">
-        {fases.map((f, i) => (
-          <li key={f.id || 'n' + i} className="editor-fase">
-            <div className="editor-fase-topo">
-              <span className="num editor-fase-n">{String(i + 1).padStart(2, '0')}</span>
-              <input aria-label="Nome da etapa" className="editor-fase-nome" value={f.nome}
-                onChange={(e) => mudar(i, 'nome', e.target.value)} />
-              <div className="editor-fase-mov">
-                <button type="button" className="btn btn-icone" aria-label="Subir" onClick={() => mover(i, -1)}>↑</button>
-                <button type="button" className="btn btn-icone" aria-label="Descer" onClick={() => mover(i, 1)}>↓</button>
-                <button type="button" className="btn btn-icone" aria-label="Remover etapa"
-                  onClick={() => setFases(fases.filter((_, j) => j !== i))}>×</button>
-              </div>
-            </div>
-            <div className="grade grade-4">
-              <Campo id={`f${i}-status`} rotulo="Situação">
-                <select id={`f${i}-status`} value={f.status} onChange={(e) => mudar(i, 'status', e.target.value)}>
-                  {Object.entries(STATUS).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-                </select>
-              </Campo>
-              <Campo id={`f${i}-ini`} rotulo="Início">
-                <input id={`f${i}-ini`} type="date" value={f.data_inicio || ''} onChange={(e) => mudar(i, 'data_inicio', e.target.value)} />
-              </Campo>
-              <Campo id={`f${i}-prev`} rotulo="Prazo da etapa">
-                <input id={`f${i}-prev`} type="date" value={f.data_prevista || ''} onChange={(e) => mudar(i, 'data_prevista', e.target.value)} />
-              </Campo>
-              <Campo id={`f${i}-concl`} rotulo="Concluída em">
-                <input id={`f${i}-concl`} type="date" disabled={f.status !== 'concluida'}
-                  value={f.data_conclusao || ''} onChange={(e) => mudar(i, 'data_conclusao', e.target.value)} />
-              </Campo>
-            </div>
-            <Campo id={`f${i}-obs`} rotulo="Recado para o cliente nesta etapa">
-              <input id={`f${i}-obs`} value={f.observacao || ''} placeholder="Ex.: aguardando aprovação do layout"
-                onChange={(e) => mudar(i, 'observacao', e.target.value)} />
-            </Campo>
-          </li>
-        ))}
-      </ol>
-      <div className="acoes">
-        <button type="button" className="btn btn-contorno"
-          onClick={() => setFases([...fases, { nome: 'Nova etapa', status: 'pendente', observacao: '' }])}>
-          Adicionar etapa
-        </button>
-        <button type="button" className="btn btn-principal" disabled={salvando} onClick={salvar}>
-          {salvando ? 'Salvando…' : 'Salvar etapas'}
-        </button>
-      </div>
+    <div className={`etapa-data ${feito ? 'etapa-data-feita' : ''}`}>
+      <CampoData id={id} rotulo={rotulo} valor={valor} onChange={onData} obrigatorio={obrigatorio} />
+      <label className="check">
+        <input type="checkbox" checked={!!feito} disabled={travado} onChange={(e) => onFeito(e.target.checked)} />
+        {textoFeito}
+      </label>
     </div>
   )
 }
 
-function FormDocs({ projeto, onMudou }) {
-  const [categoria, setCategoria] = useState('contrato')
+// ============================================================ Anexos
+function Anexos({ processo, onMudou }) {
+  const [categoria, setCategoria] = useState('medicao')
   const [titulo, setTitulo] = useState('')
   const [arquivo, setArquivo] = useState(null)
   const [enviando, setEnviando] = useState(false)
@@ -358,72 +386,220 @@ function FormDocs({ projeto, onMudou }) {
     setErro('')
     setEnviando(true)
     try {
-      await api.enviarDocumento(projeto.id, { categoria, titulo: titulo || arquivo.name }, arquivo)
+      await api.enviarDocumento(processo.id, { categoria, titulo: titulo || arquivo.name }, arquivo)
       setTitulo('')
       setArquivo(null)
       e.target.reset()
-      await onMudou('Documento enviado')
+      await onMudou('Anexo enviado')
     } catch (err) {
-      setErro('Falha no envio: ' + err.message)
+      setErro(err.message)
     } finally {
       setEnviando(false)
     }
   }
 
+  const cat = CATEGORIAS.find((c) => c.id === categoria)
+
   return (
     <div className="form">
       <form className="envio" onSubmit={enviar}>
         <div className="grade grade-3">
-          <Campo id="d-cat" rotulo="Tipo">
+          <Campo id="d-cat" rotulo="Tipo de anexo">
             <select id="d-cat" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-              {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.interno ? ' (somente loja)' : ''}</option>)}
             </select>
           </Campo>
-          <Campo id="d-titulo" rotulo="Título (o cliente vê)">
-            <input id="d-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Planta de layout — rev. 2" />
+          <Campo id="d-titulo" rotulo="Título">
+            <input id="d-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Projeto final — rev. 2" />
           </Campo>
           <Campo id="d-arq" rotulo="Arquivo (PDF, JPG, PNG, WEBP ou DWG, até 50 MB)">
             <input id="d-arq" type="file" required accept=".pdf,.jpg,.jpeg,.png,.webp,.dwg" onChange={(e) => setArquivo(e.target.files[0] || null)} />
           </Campo>
         </div>
-        {erro && <p className="erro">{erro}</p>}
+        <p className={`dica ${cat.interno ? 'dica-interno' : ''}`}>
+          {cat.interno ? 'Somente a loja vê este anexo. O cliente não tem acesso.' : 'O cliente vê este anexo no portal.'}
+        </p>
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <div className="acoes">
-          <button className="btn btn-principal" disabled={enviando || !arquivo}>
-            {enviando ? 'Enviando…' : 'Enviar documento'}
-          </button>
+          <button className="btn btn-principal" disabled={enviando || !arquivo}>{enviando ? 'Enviando…' : 'Enviar anexo'}</button>
         </div>
       </form>
 
       {CATEGORIAS.map((c) => {
-        const docs = projeto.documentos.filter((d) => d.categoria === c.id)
+        const docs = processo.documentos.filter((d) => d.categoria === c.id)
         if (!docs.length) return null
         return (
           <div key={c.id} className="grupo-docs">
-            <h3 className="rotulo">{c.nome}</h3>
+            <h3 className="rotulo">
+              {c.nome}
+              {c.interno && <span className="chip chip-interno chip-mini">Somente loja</span>}
+            </h3>
             <ul className="docs">
               {docs.map((d) => (
-                <li key={d.id} className="doc">
-                  <div className="doc-info">
-                    <span className="doc-titulo">{d.titulo}</span>
-                    <span className="doc-data num">{formatarData(d.criado_em?.slice(0, 10))}</span>
-                  </div>
-                  {excluir === d.id ? (
+                <LinhaDoc key={d.id} doc={d} acoes={
+                  excluir === d.id ? (
                     <span className="confirmar">
-                      <button className="btn btn-perigo"
-                        onClick={async () => { await api.excluirDocumento(d); setExcluir(null); onMudou('Documento excluído') }}>
-                        Excluir
-                      </button>
+                      <button className="btn btn-perigo" onClick={async () => { await api.excluirDocumento(d); setExcluir(null); onMudou('Anexo excluído') }}>Excluir</button>
                       <button className="btn btn-leve" onClick={() => setExcluir(null)}>Cancelar</button>
                     </span>
                   ) : (
                     <button className="btn btn-perigo-leve" onClick={() => setExcluir(d.id)}>Remover</button>
-                  )}
-                </li>
+                  )
+                } />
               ))}
             </ul>
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ============================================================ Assinaturas (ZapSign)
+const TIPOS_ASSINATURA = [
+  { tipo: 'contrato', nome: 'Contrato', categoria: 'contrato' },
+  { tipo: 'projeto_final', nome: 'Projeto final', categoria: 'projeto_final' },
+]
+
+function Assinaturas({ processo, onMudou }) {
+  return (
+    <div className="form">
+      <p className="dica">
+        O documento vai para o ZapSign e o cliente assina dentro do Portal Airam, com código de confirmação no e-mail.
+        Quando todos assinarem, o PDF assinado entra sozinho nos anexos.
+      </p>
+      {TIPOS_ASSINATURA.map((t) => (
+        <CartaoAssinatura key={t.tipo} processo={processo} config={t} onMudou={onMudou} />
+      ))}
+    </div>
+  )
+}
+
+function CartaoAssinatura({ processo, config, onMudou }) {
+  const historico = processo.assinaturas.filter((a) => a.tipo === config.tipo).sort((a, b) => (b.criado_em || '').localeCompare(a.criado_em || ''))
+  const ativa = historico.find((a) => a.status === 'pendente' || a.status === 'assinado')
+  const pdfs = processo.documentos.filter((d) => d.categoria === config.categoria && !d.assinado && d.tipo_mime === 'application/pdf')
+  const [docId, setDocId] = useState(pdfs[0]?.id || '')
+  const [ocupado, setOcupado] = useState(false)
+  const [erro, setErro] = useState('')
+  const [cancelar, setCancelar] = useState(false)
+
+  async function enviar() {
+    setErro('')
+    setOcupado(true)
+    try {
+      await api.enviarParaAssinatura(processo.id, docId, config.tipo)
+      await onMudou(`${config.nome} enviado para assinatura`)
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <div className="cartao-ass">
+      <div className="cartao-ass-topo">
+        <h3>{config.nome}</h3>
+        {ativa?.status === 'assinado' && <span className="chip chip-concluida">Assinado em {formatarData(ativa.assinado_em)}</span>}
+        {ativa?.status === 'pendente' && <span className="chip chip-em_andamento">Aguardando o cliente</span>}
+        {!ativa && <span className="chip chip-neutro">Não enviado</span>}
+      </div>
+
+      {ativa?.status === 'pendente' && (
+        <div className="acoes">
+          <span className="dica">Enviado em {formatarData(ativa.criado_em)}. O cliente vê o botão "Assinar agora" no portal.</span>
+          {!cancelar ? (
+            <button className="btn btn-perigo-leve" onClick={() => setCancelar(true)}>Cancelar envio</button>
+          ) : (
+            <span className="confirmar">
+              Cancelar esta assinatura?
+              <button className="btn btn-perigo" onClick={async () => { await api.cancelarAssinatura(ativa.id); setCancelar(false); onMudou('Assinatura cancelada') }}>Sim, cancelar</button>
+              <button className="btn btn-leve" onClick={() => setCancelar(false)}>Voltar</button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {!ativa && (
+        pdfs.length ? (
+          <div className="acoes">
+            <select aria-label={`PDF do ${config.nome}`} value={docId} onChange={(e) => setDocId(e.target.value)} className="select-doc">
+              {pdfs.map((d) => <option key={d.id} value={d.id}>{d.titulo}</option>)}
+            </select>
+            <button className="btn btn-principal" disabled={ocupado || !docId} onClick={enviar}>
+              {ocupado ? 'Enviando…' : 'Enviar para assinatura'}
+            </button>
+          </div>
+        ) : (
+          <p className="dica">Anexe o PDF em "Anexos" (tipo {config.nome}) para enviar para assinatura.</p>
+        )
+      )}
+      {erro && <p className="erro" role="alert">{erro}</p>}
+    </div>
+  )
+}
+
+// ============================================================ Acesso do cliente
+function Acesso({ processo }) {
+  const [resultado, setResultado] = useState(null)
+  const [erro, setErro] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const [copiado, setCopiado] = useState(false)
+
+  async function liberar() {
+    setErro('')
+    setOcupado(true)
+    try {
+      setResultado(await api.liberarAcesso(processo.id))
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  const login = processo.cliente_cpf ? `seu CPF (${formatarCpf(processo.cliente_cpf)}) ou e-mail` : `seu e-mail (${processo.cliente_email})`
+  const mensagem = resultado &&
+    `Olá, ${processo.cliente_nome.split(' ')[0]}! Seu acesso ao Portal Airam está liberado.\n` +
+    `Endereço: ${window.location.origin}${window.location.pathname}\nLogin: ${login}\nSenha provisória: ${resultado.senha}\n` +
+    `No primeiro acesso você cria uma senha só sua.`
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(mensagem)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      document.getElementById('msg-acesso')?.select()
+    }
+  }
+
+  return (
+    <div className="form">
+      <p className="dica">
+        Gera uma senha provisória para <strong>{processo.cliente_nome}</strong>. O cliente entra com {login}, e no primeiro acesso é obrigado a criar a própria senha.
+        Gerar de novo invalida a senha anterior.
+      </p>
+      <div className="acoes">
+        <button className="btn btn-principal" disabled={ocupado} onClick={liberar}>
+          {ocupado ? 'Gerando…' : 'Liberar acesso / gerar nova senha'}
+        </button>
+      </div>
+      {erro && <p className="erro" role="alert">{erro}</p>}
+      {resultado && (
+        <div className="senha-gerada">
+          <span className="rotulo">Senha provisória</span>
+          <strong className="senha-valor">{resultado.senha}</strong>
+          <span className="dica">
+            {resultado.emailEnviado ? 'Também enviamos por e-mail para o cliente.' : 'Envie a mensagem abaixo para o cliente pelo WhatsApp.'} A senha não fica salva: copie agora.
+          </span>
+          <textarea id="msg-acesso" readOnly rows={6} value={mensagem} />
+          <div className="acoes">
+            <button className="btn btn-contorno" onClick={copiar}>{copiado ? 'Copiado' : 'Copiar mensagem'}</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

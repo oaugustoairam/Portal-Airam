@@ -1,55 +1,47 @@
+// Regras do processo Airam: categorias de anexos, prazo Normal/Futuro e linha do tempo.
+
 export const CATEGORIAS = [
   { id: 'contrato', nome: 'Contrato' },
+  { id: 'medicao', nome: 'Medição', interno: true },
   { id: 'projeto_inicial', nome: 'Projeto inicial' },
   { id: 'render', nome: 'Renders' },
   { id: 'projeto_final', nome: 'Projeto final' },
   { id: 'outro', nome: 'Outros' },
 ]
+export const CATEGORIAS_CLIENTE = CATEGORIAS.filter((c) => !c.interno)
 
-export const STATUS = {
-  pendente: 'A iniciar',
-  em_andamento: 'Em andamento',
-  concluida: 'Concluída',
+export const LIMITE_PRAZO_NORMAL = 90 // dias entre a venda e a disponibilidade para medição
+
+export const TIPOS_PRAZO = {
+  normal: { nome: 'Prazo normal', desc: 'Medição disponível em até 90 dias' },
+  futuro: { nome: 'Projeto futuro', desc: 'Medição disponível acima de 90 dias' },
 }
 
-// Fases padrão de um projeto de móveis planejados. Editáveis em cada projeto.
-export const FASES_PADRAO = [
-  'Briefing e medição',
-  'Projeto inicial e renders',
-  'Aprovação e contrato',
-  'Projeto final (executivo)',
-  'Produção na fábrica',
-  'Entrega e montagem',
-  'Vistoria final',
-]
-
-export function faseAtual(fases) {
-  return (
-    fases.find((f) => f.status === 'em_andamento') ||
-    fases.find((f) => f.status === 'pendente') ||
-    fases[fases.length - 1] ||
-    null
-  )
+export function hojeISO() {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 10)
 }
 
-export function progresso(fases) {
-  if (!fases.length) return 0
-  const feitas = fases.filter((f) => f.status === 'concluida').length
-  const meia = fases.some((f) => f.status === 'em_andamento') ? 0.5 : 0
-  return Math.round(((feitas + meia) / fases.length) * 100)
+export function diasEntre(de, ate) {
+  if (!de || !ate) return null
+  return Math.round((new Date(ate + 'T00:00:00') - new Date(de + 'T00:00:00')) / 86400000)
 }
 
 export function diasAte(data) {
-  if (!data) return null
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const alvo = new Date(data + 'T00:00:00')
-  return Math.round((alvo - hoje) / 86400000)
+  return diasEntre(hojeISO(), data)
+}
+
+// Mesma regra calculada no banco (coluna tipo_prazo)
+export function calcularTipoPrazo(dataVenda, dataDisponivel) {
+  const d = diasEntre(dataVenda, dataDisponivel)
+  if (d === null) return null
+  return d <= LIMITE_PRAZO_NORMAL ? 'normal' : 'futuro'
 }
 
 export function formatarData(data) {
-  if (!data) return '—'
-  return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', {
+  if (!data) return 'A definir'
+  return new Date(data.slice(0, 10) + 'T00:00:00').toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -58,8 +50,88 @@ export function formatarData(data) {
 
 export function prazoTexto(data) {
   const d = diasAte(data)
-  if (d === null) return 'Sem prazo definido'
-  if (d === 0) return 'Vence hoje'
+  if (d === null) return 'Sem data'
+  if (d === 0) return 'É hoje'
   if (d > 0) return d === 1 ? 'Falta 1 dia' : `Faltam ${d} dias`
   return d === -1 ? '1 dia de atraso' : `${-d} dias de atraso`
+}
+
+export function formatarCpf(v) {
+  const n = String(v || '').replace(/\D/g, '').slice(0, 11)
+  return n
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
+export function cpfValido(v) {
+  const n = String(v || '').replace(/\D/g, '')
+  if (n.length !== 11 || /^(\d)\1+$/.test(n)) return false
+  const dig = (len) => {
+    let s = 0
+    for (let i = 0; i < len; i++) s += Number(n[i]) * (len + 1 - i)
+    const r = (s * 10) % 11
+    return r === 10 ? 0 : r
+  }
+  return dig(9) === Number(n[9]) && dig(10) === Number(n[10])
+}
+
+// Linha do tempo do processo, calculada a partir das datas e marcações da equipe.
+// Cada etapa: { id, nome, data, status: 'concluida' | 'atual' | 'futura', atrasada, detalhe }
+export function linhaDoTempo(p, assinaturas = []) {
+  const assinou = (tipo) => assinaturas.find((a) => a.tipo === tipo && a.status === 'assinado')
+  const contrato = assinou('contrato')
+  const projeto = assinou('projeto_final')
+
+  const etapas = [
+    {
+      id: 'contrato',
+      nome: 'Assinatura do contrato',
+      data: contrato?.assinado_em?.slice(0, 10) || null,
+      semData: !contrato,
+      feito: !!contrato,
+      detalhe: contrato ? null : 'Aguardando sua assinatura',
+    },
+    {
+      id: 'financeiro',
+      nome: 'Solução financeira',
+      data: null,
+      semData: true,
+      feito: p.solucao_financeira === 'ok',
+      detalhe: p.solucao_financeira === 'ok' ? 'Aprovada' : 'Em andamento',
+    },
+    { id: 'medicao', nome: 'Medição', data: p.data_medicao, feito: p.medicao_concluida },
+    { id: 'conferencia', nome: 'Conferência do projeto final', data: p.data_conferencia, feito: p.conferencia_concluida },
+    {
+      id: 'assinatura_projeto',
+      nome: 'Assinatura do projeto final',
+      data: projeto?.assinado_em?.slice(0, 10) || p.data_assinatura_projeto,
+      feito: !!projeto || p.projeto_assinado_manual,
+    },
+    { id: 'producao', nome: 'Produção', data: null, feito: p.entrega_concluida, producao: true },
+    { id: 'entrega', nome: 'Entrega e montagem', data: p.data_entrega_prevista, feito: p.entrega_concluida },
+  ]
+
+  let atualDefinida = false
+  return etapas.map((e) => {
+    let status = 'futura'
+    if (e.feito) status = 'concluida'
+    else if (!atualDefinida) {
+      status = 'atual'
+      atualDefinida = true
+    }
+    // a produção só começa depois do projeto final assinado
+    if (e.producao && status === 'futura' && etapas[4].feito) status = 'atual'
+    const d = diasAte(e.data)
+    return { ...e, status, atrasada: !e.feito && !e.producao && d !== null && d < 0 }
+  })
+}
+
+export function etapaAtual(etapas) {
+  return etapas.find((e) => e.status === 'atual') || etapas[etapas.length - 1]
+}
+
+export function progresso(etapas) {
+  const feitas = etapas.filter((e) => e.status === 'concluida').length
+  return Math.round((feitas / etapas.length) * 100)
 }

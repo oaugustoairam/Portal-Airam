@@ -1,13 +1,19 @@
-# Portal do Cliente — Airam Arquitetura & Marcenaria
+# Portal Airam — Arquitetura & Marcenaria
 
-Portal onde cada cliente entra com o próprio e-mail e acompanha o projeto:
+Sistema de processos pós-venda da Airam, com duas áreas:
 
-- **Fase atual** e linha do tempo com todas as etapas (concluída, em andamento, a iniciar, atrasada)
-- **Prazos**: data de cada etapa e entrega final, com contagem de dias
-- **Documentos** por tipo: contrato, projeto inicial, renders (com galeria), projeto final e outros
-- **Recado por etapa** (ex.: "aguardando aprovação do layout")
+**Cliente** (entra com e-mail ou CPF e senha; no primeiro acesso cria a própria senha)
+- Cronograma: assinatura do contrato → solução financeira → medição → conferência do projeto final →
+  assinatura do projeto final → produção (ícone animado) → entrega e montagem
+- Prazo do processo: **Prazo normal** (medição disponível em até 90 dias após a venda) ou **Projeto futuro** (acima de 90)
+- Contrato, projeto inicial, renders e projeto final
+- Assinatura eletrônica ZapSign dentro do portal
 
-O escritório tem um painel para criar projetos, editar etapas e prazos, enviar arquivos e ver o projeto como o cliente vê.
+**Equipe** (gerência = `admin`, funcionários = `equipe`)
+- Lista de processos com indicadores, busca por nome ou código e filtro Normal/Futuro
+- Cadastro: código + nome do cliente, CPF, datas com calendário, prazo obrigatório
+- Anexos: Medição (somente a loja vê), projeto inicial, renders, projeto final
+- Envio para assinatura (ZapSign), liberação de acesso com senha provisória e "Ver como cliente"
 
 ## Rodar no computador
 
@@ -15,25 +21,17 @@ O escritório tem um painel para criar projetos, editar etapas e prazos, enviar 
 npm install
 npm run dev
 ```
+Sem configuração, roda em **modo demonstração** (senha das contas de exemplo: `airam123`).
 
-Sem configuração, roda em **modo demonstração** (dados de exemplo no navegador).
+## Colocar no ar
 
-## Colocar no ar com dados reais (≈ 20 min, plano gratuito)
+1. Crie um projeto em https://supabase.com e rode `supabase/schema.sql` no **SQL Editor**.
+2. Em **Authentication > Users > Add user**, crie seu usuário (e-mail + senha) e rode no SQL Editor:
+   `update public.perfis set papel = 'admin', nome = 'Seu nome' where email = 'voce@airam.arq.br';`
+   Para funcionários, use `papel = 'equipe'`.
+3. Publique as funções do servidor e configure o ZapSign: veja [ZAPSIGN.md](ZAPSIGN.md).
+4. Copie `.env.example` para `.env` com a URL e a *anon key* do Supabase.
+5. Publique o site (Cloudflare Pages, Netlify ou Vercel): build `npm run build`, pasta `dist`, com as
+   mesmas variáveis `VITE_SUPABASE_*`.
 
-1. Crie uma conta em https://supabase.com e um projeto novo.
-2. No Supabase, abra **SQL Editor**, cole o conteúdo de `supabase/schema.sql` e rode.
-3. Em **Authentication > URL Configuration**, coloque o endereço do portal (ex.: `https://portal.airam.arq.br`) em *Site URL* e *Redirect URLs*.
-4. Copie `.env.example` para `.env` e preencha com a URL e a *anon key* (Project Settings > API).
-5. Publique na Vercel ou Netlify (importe o repositório; adicione as mesmas duas variáveis de ambiente). Comando de build: `npm run build`, pasta: `dist`.
-6. Entre no portal com o e-mail do escritório e, no SQL Editor, rode:
-   `update public.perfis set papel = 'admin' where email = 'seu@email';`
-7. Crie um projeto com o e-mail do cliente. O cliente entra pelo link mágico que recebe por e-mail; ele só vê os projetos ligados ao e-mail dele (garantido pelo banco, via Row Level Security).
-
-## Estrutura
-
-- `src/lib/api.js` — acesso a dados (Supabase ou demonstração)
-- `src/components/ProjetoView.jsx` — tela que o cliente vê
-- `src/components/AdminHome.jsx` — painel do escritório
-- `supabase/schema.sql` — tabelas, permissões e armazenamento de arquivos
-
-Veja também [SEGURANCA.md](SEGURANCA.md) para as configurações de segurança antes de colocar no ar.
+Segurança e configurações obrigatórias do painel: [SEGURANCA.md](SEGURANCA.md).

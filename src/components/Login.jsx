@@ -1,74 +1,70 @@
 import { useState } from 'react'
 import { api, MODO_DEMO } from '../lib/api.js'
+import { formatarCpf } from '../lib/constants.js'
 import logoVermelho from '../assets/logo-vermelho.png'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
-  const [enviado, setEnviado] = useState(false)
+  const [id, setId] = useState('')
+  const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
 
-  async function enviar(e) {
+  async function entrar(e) {
     e.preventDefault()
     setErro('')
     setOcupado(true)
     try {
-      const r = await api.entrar(email.trim())
-      if (!r?.direto) setEnviado(true)
+      await api.entrar(id, senha)
     } catch (err) {
-      setErro('Não foi possível enviar o link. Confira o e-mail e tente de novo.')
+      setErro(err.message)
     } finally {
       setOcupado(false)
     }
   }
 
-  const demo = MODO_DEMO ? api.emailsDemo() : null
+  // formata como CPF enquanto digita, se não for e-mail
+  function mudarId(v) {
+    setId(/^[\d.\-\s]*$/.test(v) && v.replace(/\D/g, '').length > 3 ? formatarCpf(v) : v)
+  }
+
+  const demo = MODO_DEMO ? api.contasDemo() : null
 
   return (
     <section className="login">
       <img className="login-marca" src={logoVermelho} alt="Airam Arquitetura & Marcenaria" />
-      <h1 className="titulo-grande">Acompanhe seu projeto</h1>
+      <h1 className="titulo-grande">Acompanhe seus móveis</h1>
       <p className="login-texto">
-        Do projeto à montagem: veja em que fase estão seus móveis, os prazos combinados e todos os
-        documentos, como contrato, projeto inicial, renders e projeto final.
+        Prazos, contrato e projetos do seu processo em um só lugar. Entre com o e-mail ou o CPF
+        cadastrado na Airam e a senha que você recebeu.
       </p>
 
-      {enviado ? (
-        <div className="aviso">
-          Enviamos um link de acesso para <strong>{email}</strong>. Abra o e-mail e toque no link
-          para entrar.
+      <form className="login-form" onSubmit={entrar}>
+        <div className="campo">
+          <label htmlFor="login-id">E-mail ou CPF</label>
+          <input id="login-id" required autoComplete="username" value={id}
+            onChange={(e) => mudarId(e.target.value)} placeholder="nome@email.com ou 000.000.000-00" />
         </div>
-      ) : (
-        <form className="login-form" onSubmit={enviar}>
-          <label htmlFor="login-email">Seu e-mail</label>
-          <input
-            id="login-email"
-            type="email"
-            required
-            placeholder="nome@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button className="btn btn-principal" disabled={ocupado}>
-            {MODO_DEMO ? 'Entrar' : ocupado ? 'Enviando…' : 'Receber link de acesso'}
-          </button>
-          {erro && <p className="erro">{erro}</p>}
-          {!MODO_DEMO && (
-            <p className="dica">Sem senha: você recebe um link por e-mail a cada acesso.</p>
-          )}
-        </form>
-      )}
+        <div className="campo">
+          <label htmlFor="login-senha">Senha</label>
+          <input id="login-senha" type="password" required autoComplete="current-password"
+            value={senha} onChange={(e) => setSenha(e.target.value)} />
+        </div>
+        <button className="btn btn-principal" disabled={ocupado}>
+          {ocupado ? 'Entrando…' : 'Entrar'}
+        </button>
+        {erro && <p className="erro" role="alert">{erro}</p>}
+        <p className="dica">Esqueceu a senha? Fale com a Airam pelo WhatsApp e geramos uma nova.</p>
+      </form>
 
       {demo && (
         <div className="demo-atalhos">
-          <span className="rotulo">Entrar na demonstração como</span>
+          <span className="rotulo">Contas da demonstração (senha {demo.senha})</span>
           <div className="demo-botoes">
-            <button className="btn btn-contorno" onClick={() => api.entrar(demo.escritorio)}>
-              Escritório
-            </button>
-            {demo.clientes.map((c) => (
-              <button key={c} className="btn btn-contorno" onClick={() => api.entrar(c)}>
-                Cliente · {c.split('@')[0]}
+            {demo.contas.map((c) => (
+              <button key={c.email} type="button" className="btn btn-contorno"
+                onClick={() => api.entrar(c.email, c.senha).catch((e) => setErro(e.message))}>
+                {c.papel === 'cliente' ? `Cliente · ${c.nome.split(' ')[0]}` : 'Equipe Airam'}
+                {c.precisa_trocar_senha ? ' (1º acesso)' : ''}
               </button>
             ))}
           </div>

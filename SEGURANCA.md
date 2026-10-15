@@ -4,10 +4,11 @@
 
 | Camada | O que faz | Onde está |
 |---|---|---|
-| **Login sem senha** | O cliente entra por um link enviado ao e-mail dele. Não existe senha para vazar ou adivinhar. | Supabase Auth |
-| **Isolamento por cliente** | O banco só entrega um projeto, uma etapa, um documento ou um arquivo se o e-mail **confirmado** do usuário for o e-mail cadastrado no projeto. A regra fica no banco, então nem um app adulterado consegue burlar. | `supabase/schema.sql` (Row Level Security) |
-| **Cliente só lê** | Clientes não criam, editam nem apagam nada. Só o administrador altera. | `schema.sql` |
-| **Administrador** | O papel `admin` só muda pelo SQL Editor do Supabase. O app não tem como promover ninguém. | `schema.sql`, tabela `perfis` |
+| **Login com senha** | O cliente entra com e-mail ou CPF e senha. A equipe gera uma senha provisória e o cliente é obrigado a trocá-la no primeiro acesso. O login por CPF roda no servidor e não revela se o CPF existe. | Supabase Auth + `entrar-cpf` |
+| **Isolamento por cliente** | O banco só entrega um processo, um documento, uma assinatura ou um arquivo se o e-mail **confirmado** do usuário for o e-mail cadastrado no projeto. A regra fica no banco, então nem um app adulterado consegue burlar. | `supabase/schema.sql` (Row Level Security) |
+| **Cliente só lê** | Clientes não criam, editam nem apagam nada. Medição é interna: o cliente não vê nem o registro nem o arquivo. | `schema.sql` |
+| **Assinaturas** | Só o servidor marca um documento como assinado, depois do aviso do ZapSign. O webhook confere um segredo, e nem a equipe consegue forjar um "assinado". | `zapsign-*` |
+| **Equipe** | Os papéis `admin` e `equipe` só mudam pelo SQL Editor do Supabase. O app não tem como promover ninguém. | `schema.sql`, tabela `perfis` |
 | **Arquivos privados** | O bucket de arquivos é privado. Cada documento abre por um link temporário que expira em 10 minutos. | `schema.sql` + `src/lib/api.js` |
 | **Limite de arquivos** | Só PDF, JPG, PNG, WEBP e DWG, até 50 MB. A regra vale no navegador e no servidor. | `schema.sql` + `api.js` |
 | **Registro de atividades** | Toda criação, alteração e exclusão de projeto, etapa ou documento fica registrada com quem fez e quando. Só o admin lê, e ninguém apaga pelo app. | tabela `registro_atividades` |
@@ -17,9 +18,8 @@ Essas regras foram testadas num Postgres local: um cliente vê só o próprio pr
 
 ## Configurações no painel do Supabase (faça uma vez)
 
-1. **Authentication > Providers > Email**
-   - Deixe **Confirm email** ligado.
-   - Desligue o login com senha se for usar só o link mágico. Fica uma porta a menos.
+1. **Authentication > Providers > Email**: desligue **Allow new users to sign up**. As contas são
+   criadas só pela equipe, em "Liberar acesso".
 2. **Authentication > URL Configuration**: em *Redirect URLs*, coloque só o endereço oficial do portal (ex.: `https://portal.airam.arq.br`). Assim ninguém consegue redirecionar o link de login para outro site.
 3. **Authentication > Rate Limits**: mantenha o limite de envio de e-mails, por exemplo 30 por hora, para evitar abuso.
 4. **Authentication > Attack Protection**: ative o **CAPTCHA** (hCaptcha ou Cloudflare Turnstile), que impede robôs de dispararem links.
