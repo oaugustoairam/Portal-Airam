@@ -21,8 +21,8 @@ Essas regras foram testadas num Postgres local: um cliente vê só o próprio pr
 1. **Authentication > Providers > Email**: desligue **Allow new users to sign up**. As contas são
    criadas só pela equipe, em "Liberar acesso".
 2. **Authentication > URL Configuration**: em *Redirect URLs*, coloque só o endereço oficial do portal (ex.: `https://portal.airam.arq.br`). Assim ninguém consegue redirecionar o link de login para outro site.
-3. **Authentication > Rate Limits**: mantenha o limite de envio de e-mails, por exemplo 30 por hora, para evitar abuso.
-4. **Authentication > Attack Protection**: ative o **CAPTCHA** (hCaptcha ou Cloudflare Turnstile), que impede robôs de dispararem links.
+3. **Authentication > Rate Limits**: mantenha os limites de tentativas de login, para dificultar quem tenta adivinhar senhas.
+4. **Authentication > Attack Protection**: o **CAPTCHA** (Cloudflare Turnstile) impede robôs de testarem senhas. **Só ative depois** de o widget ser adicionado à tela de login. Esse é um próximo passo do portal, e ligar antes bloqueia todos os logins.
 5. **Authentication > SMTP**: use um e-mail próprio, como `portal@airam.arq.br`, via Resend, SendGrid ou o provedor do seu domínio. Os clientes passam a confiar no remetente e o e-mail não cai no spam.
 6. **Project Settings > API**: a chave `anon` pode ficar no site, porque as regras acima a protegem. A chave **`service_role` nunca** pode ir para o código do site nem ser enviada por WhatsApp ou e-mail.
 7. **Contas da equipe**: ative a verificação em duas etapas (2FA) na conta do Supabase, na Vercel/Netlify e no GitHub. Quem invade uma dessas contas tem acesso a tudo.
