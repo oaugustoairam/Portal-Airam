@@ -40,11 +40,14 @@ export function somenteNumeros(v) {
 // Senha provisória legível (sem 0/O, 1/l), 10 caracteres.
 export function gerarSenhaProvisoria() {
   const letras = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(10))
-  return Array.from(bytes, (b) => letras[b % letras.length]).join('')
+  // sorteia de novo até ter letra e número (regra de senha do Supabase)
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(10))
+    const senha = Array.from(bytes, (b) => letras[b % letras.length]).join('')
+    if (/[A-Za-z]/.test(senha) && /\d/.test(senha)) return senha
+  }
 }
 
-// Encontra a conta do cliente pelo e-mail ou CPF. Retorna { userId, email, telefone, nome } ou null.
 function cpfValido(n: string) {
   if (n.length !== 11 || /^(\d)\1+$/.test(n)) return false
   const dig = (len: number) => {
@@ -76,6 +79,7 @@ export async function emailDoIdentificador(sb, identificador) {
   return emails.length === 1 ? emails[0] : null
 }
 
+// Encontra a conta do cliente pelo e-mail, CPF ou telefone. Retorna { userId, email, telefone, nome } ou null.
 export async function acharCliente(sb, identificador) {
   const email = await emailDoIdentificador(sb, identificador)
   if (!email) return null

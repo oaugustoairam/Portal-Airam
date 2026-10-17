@@ -16,3 +16,6 @@ verify_jwt = false   # aberto pelo link do e-mail; confere o token
 
 [functions.aniversarios-do-dia]
 verify_jwt = false   # chamado pelo agendador; confere o segredo
+
+[functions.entrar-cpf]
+verify_jwt = false   # o cliente ainda não está logado; a função confere a senha
