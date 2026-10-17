@@ -3,7 +3,8 @@ import { api, MODO_DEMO } from './lib/api.js'
 import Login from './components/Login.jsx'
 import TrocarSenha from './components/TrocarSenha.jsx'
 import ClienteHome from './components/ClienteHome.jsx'
-import AdminHome from './components/AdminHome.jsx'
+import PainelEquipe from './components/PainelEquipe.jsx'
+import BotaoWhatsApp from './components/BotaoWhatsApp.jsx'
 import InstalarApp from './components/InstalarApp.jsx'
 import Entrada from './components/Entrada.jsx'
 import logoBranco from './assets/logo-branco.png'
@@ -37,6 +38,7 @@ export default function App() {
       <div className="app app-entrada">
         {faixaDemo}
         <Entrada>{!perfil ? <Login /> : <TrocarSenha perfil={perfil} />}</Entrada>
+        <BotaoWhatsApp />
       </div>
     )
 
@@ -60,7 +62,7 @@ export default function App() {
         {faixaDemo}
       </header>
       <main className={`conteudo ${equipe ? '' : 'conteudo-cliente'}`}>
-        {equipe ? <AdminHome /> : <ClienteHome />}
+        {equipe ? <PainelEquipe /> : <ClienteHome />}
         {!equipe && <InstalarApp />}
       </main>
     </div>

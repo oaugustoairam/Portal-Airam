@@ -20,6 +20,11 @@ recebe um código por SMS ou e-mail e redefine sozinho)
 - Envio do projeto final para assinatura (ZapSign), liberação de acesso com senha provisória e "Ver como cliente"
 - Filtros: situação, prazo, etapa atual, financeiro, período de entrega, busca por nome/código/CPF/telefone
 - Avisos automáticos ao cliente por WhatsApp e e-mail a cada etapa: veja [AVISOS.md](AVISOS.md)
+- Aniversários: calendário mensal, próximos 30 dias, aviso no painel e e-mail diário para a equipe
+- E-mail marketing: criar o conteúdo com prévia, escolher os clientes e enviar (com descadastro, LGPD)
+
+O cliente tem um botão de WhatsApp em todas as telas, com o nome e o código dele já na mensagem
+(configure `VITE_WHATSAPP_AIRAM` no `.env`).
 
 ## Rodar no computador
 

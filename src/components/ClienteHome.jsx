@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { linhaDoTempo, etapaAtual, formatarData, ROTULO_PRAZO } from '../lib/constants.js'
 import ProcessoView from './ProcessoView.jsx'
+import BotaoWhatsApp from './BotaoWhatsApp.jsx'
 
 export default function ClienteHome() {
   const [processos, setProcessos] = useState(null)
@@ -36,11 +37,13 @@ export default function ClienteHome() {
           <button className="btn btn-leve voltar" onClick={() => setAberto(null)}>← Meus processos</button>
         )}
         <ProcessoView processo={aberto} onAtualizar={() => abrir(aberto.id, false)} />
+        <BotaoWhatsApp nome={aberto.cliente_nome} codigo={aberto.codigo} />
       </>
     )
 
   return (
     <section>
+      <BotaoWhatsApp nome={processos[0]?.cliente_nome} />
       <h1 className="titulo-grande">Meus processos</h1>
       <ul className="cartoes">
         {processos.map((p) => (

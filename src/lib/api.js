@@ -37,6 +37,7 @@ const CAMPOS = [
   'projeto_inicial_enviado', 'data_projeto_inicial',
   'medicao_concluida', 'data_conferencia', 'conferencia_concluida', 'data_assinatura_projeto',
   'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente', 'notificar',
+  'cliente_nascimento', 'aceita_marketing',
 ]
 function limpar(p) {
   const out = {}
@@ -187,10 +188,25 @@ const supabaseApi = {
   async reenviarAviso(id) {
     return chamarFuncao('enviar-notificacoes', { id })
   },
+  async listarCampanhas() {
+    const { data, error } = await sb.from('campanhas').select('*').order('criado_em', { ascending: false }).limit(50)
+    if (error) throw error
+    return data
+  },
+  async salvarCampanha(c) {
+    const campos = (({ id, assunto, titulo, conteudo, imagem_url, botao_texto, botao_link }) =>
+      ({ ...(id ? { id } : {}), assunto, titulo, conteudo, imagem_url: imagem_url || null, botao_texto: botao_texto || null, botao_link: botao_link || null }))(c)
+    const { data, error } = await sb.from('campanhas').upsert(campos).select().single()
+    if (error) throw error
+    return data
+  },
+  async enviarCampanha(campanhaId, processoIds) {
+    return chamarFuncao('enviar-campanha', { campanha_id: campanhaId, processo_ids: processoIds })
+  },
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v5'
+const CHAVE_DEMO = 'portal-airam-demo-v6'
 let memoria = null
 const ouvintes = new Set()
 
@@ -439,6 +455,33 @@ const demoApi = {
     const a = (d.avisos || []).find((x) => x.id === id)
     if (a) d.avisos.unshift({ ...a, id: novoId(), criado_em: new Date().toISOString() })
     gravar()
+  },
+  async listarCampanhas() {
+    return db().campanhas || []
+  },
+  async salvarCampanha(c) {
+    const d = db()
+    d.campanhas = d.campanhas || []
+    if (c.id) {
+      d.campanhas = d.campanhas.map((x) => (x.id === c.id ? { ...x, ...c } : x))
+      gravar()
+      return d.campanhas.find((x) => x.id === c.id)
+    }
+    const nova = { ...c, id: novoId(), status: 'rascunho', total: 0, enviados: 0, falhas: 0, criado_em: new Date().toISOString() }
+    d.campanhas.unshift(nova)
+    gravar()
+    return nova
+  },
+  async enviarCampanha(campanhaId, processoIds) {
+    const d = db()
+    const emails = new Set(
+      d.processos.filter((p) => processoIds.includes(p.id) && p.aceita_marketing !== false).map((p) => p.cliente_email.toLowerCase())
+    )
+    if (!emails.size) throw new Error('Nenhum dos clientes escolhidos aceita receber novidades.')
+    const c = d.campanhas.find((x) => x.id === campanhaId)
+    Object.assign(c, { status: 'enviada', total: emails.size, enviados: emails.size, falhas: 0, enviada_em: new Date().toISOString(), simulada: true })
+    gravar()
+    return { total: emails.size, enviados: emails.size, falhas: 0 }
   },
   contasDemo() {
     return { senha: SENHA_DEMO, contas: db().contas }

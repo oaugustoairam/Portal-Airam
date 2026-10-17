@@ -40,9 +40,9 @@ function lerFiltros() {
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export default function AdminHome() {
+export default function AdminHome({ abrirInicial = null }) {
   const [processos, setProcessos] = useState(null)
-  const [editando, setEditando] = useState(null) // id ou 'novo'
+  const [editando, setEditando] = useState(abrirInicial) // id ou 'novo'
   const [filtros, setFiltros] = useState(lerFiltros)
   const [abertoMobile, setAbertoMobile] = useState(false)
 
@@ -381,6 +381,8 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           <Campo id="p-tel" rotulo="Telefone / WhatsApp">
             <input id="p-tel" inputMode="tel" value={f.cliente_telefone || ''} onChange={set('cliente_telefone')} />
           </Campo>
+          <CampoData id="p-nasc" rotulo="Data de nascimento" valor={f.cliente_nascimento} onChange={set('cliente_nascimento')}
+            ajuda="Para o calendário de aniversários" />
           <Campo id="p-amb" rotulo="Ambientes">
             <input id="p-amb" value={f.ambientes || ''} onChange={set('ambientes')} placeholder="Cozinha, suíte, home office" />
           </Campo>
@@ -442,6 +444,10 @@ function FormDados({ processo, onSalvo, onExcluido }) {
         <label className="check check-destaque">
           <input type="checkbox" checked={f.notificar !== false} onChange={set('notificar')} />
           Avisar o cliente por WhatsApp e e-mail a cada etapa
+        </label>
+        <label className="check check-destaque">
+          <input type="checkbox" checked={f.aceita_marketing !== false} onChange={set('aceita_marketing')} />
+          Aceita receber e-mails de novidades (e-mail marketing)
         </label>
         {f.notificar !== false && !telefoneWhatsApp(f.cliente_telefone) && (
           <p className="dica">Sem um telefone válido com DDD, o cliente recebe os avisos só por e-mail.</p>

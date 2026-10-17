@@ -10,3 +10,9 @@ verify_jwt = false   # o cliente ainda não está logado
 
 [functions.redefinir-senha]
 verify_jwt = false   # o cliente ainda não está logado; a função confere o código
+
+[functions.descadastrar]
+verify_jwt = false   # aberto pelo link do e-mail; confere o token
+
+[functions.aniversarios-do-dia]
+verify_jwt = false   # chamado pelo agendador; confere o segredo

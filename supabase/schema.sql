@@ -427,3 +427,51 @@ create table if not exists public.codigos_verificacao (
 create index if not exists codigos_usuario_idx on public.codigos_verificacao (user_id, criado_em desc);
 alter table public.codigos_verificacao enable row level security;
 -- sem políticas: ninguém acessa pelo app
+
+-- 12. Aniversários e e-mail marketing -----------------------------------------
+alter table public.processos add column if not exists cliente_nascimento date;
+-- LGPD: o cliente pode sair da lista de novidades (os avisos do processo continuam)
+alter table public.processos add column if not exists aceita_marketing boolean not null default true;
+
+create table if not exists public.campanhas (
+  id uuid primary key default gen_random_uuid(),
+  assunto text not null,
+  titulo text not null,
+  conteudo text not null,                 -- texto simples; {{nome}} vira o primeiro nome do cliente
+  imagem_url text,
+  botao_texto text,
+  botao_link text,
+  status text not null default 'rascunho' check (status in ('rascunho', 'enviando', 'enviada')),
+  total int not null default 0,
+  enviados int not null default 0,
+  falhas int not null default 0,
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now(),
+  enviada_em timestamptz
+);
+
+create table if not exists public.campanha_envios (
+  id uuid primary key default gen_random_uuid(),
+  campanha_id uuid not null references public.campanhas on delete cascade,
+  email text not null,
+  nome text,
+  status text not null default 'pendente' check (status in ('pendente', 'enviado', 'erro')),
+  erro text,
+  enviado_em timestamptz,
+  unique (campanha_id, email)
+);
+
+alter table public.campanhas enable row level security;
+alter table public.campanha_envios enable row level security;
+drop policy if exists "equipe campanhas" on public.campanhas;
+create policy "equipe campanhas" on public.campanhas for select using (public.eh_equipe());
+drop policy if exists "equipe cria campanhas" on public.campanhas;
+create policy "equipe cria campanhas" on public.campanhas for insert with check (public.eh_equipe() and status = 'rascunho');
+drop policy if exists "equipe edita rascunho" on public.campanhas;
+create policy "equipe edita rascunho" on public.campanhas for update
+  using (public.eh_equipe() and status = 'rascunho') with check (public.eh_equipe() and status = 'rascunho');
+drop policy if exists "equipe apaga rascunho" on public.campanhas;
+create policy "equipe apaga rascunho" on public.campanhas for delete using (public.eh_equipe() and status = 'rascunho');
+drop policy if exists "equipe le envios" on public.campanha_envios;
+create policy "equipe le envios" on public.campanha_envios for select using (public.eh_equipe());
+-- envios só pelo servidor (função enviar-campanha)

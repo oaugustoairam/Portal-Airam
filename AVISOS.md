@@ -91,3 +91,38 @@ funcionando, e o contrário também vale.
 Os avisos são parte do serviço contratado (informações sobre o próprio pedido). Mesmo assim, informe
 no contrato que o cliente vai receber atualizações por WhatsApp e e-mail. Se ele pedir para não
 receber, desligue a opção no processo.
+
+---
+
+# Aniversários
+
+- Cadastre a **data de nascimento** do cliente (aba Dados e prazos).
+- A área **Aniversários** mostra o calendário do mês, os aniversários dos próximos 30 dias e o botão
+  **Parabenizar no WhatsApp**, com a mensagem pronta.
+- No dia, aparece um aviso no topo do painel da equipe.
+- **E-mail diário para a equipe:** agende a função `aniversarios-do-dia` às 8h (horário de Brasília = 11h UTC):
+  ```sql
+  select cron.schedule('aniversarios-airam', '0 11 * * *', $$
+    select net.http_post(
+      url := 'https://<id-do-projeto>.supabase.co/functions/v1/aniversarios-do-dia',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-airam-segredo', '<mesmo NOTIFICACOES_SECRET>'),
+      body := '{}'::jsonb);
+  $$);
+  ```
+  e cadastre `AVISOS_EQUIPE_EMAIL=voce@airam.arq.br,loja@airam.arq.br`.
+
+# E-mail marketing
+
+1. Na área **E-mail marketing**, escreva o assunto, o título, o texto, uma imagem (opcional) e um botão (opcional).
+   `{{nome}}` vira o primeiro nome do cliente. A prévia mostra o e-mail como o cliente recebe.
+2. Escolha os clientes: todos, em andamento, concluídos, prazo normal/futuro ou aniversariantes do mês.
+3. Clique em **Enviar** e confirme. O histórico mostra quantos foram entregues.
+
+**LGPD:** todo e-mail tem o link **"Não quero mais receber novidades"**. Quem clica sai da lista na hora
+(os avisos do processo continuam). A opção também pode ser desmarcada no cadastro do cliente.
+
+**Ativar:** `supabase secrets set MARKETING_SECRET=<texto-longo> EMAIL_MARKETING_REMETENTE="Airam <novidades@airam.arq.br>"`,
+depois `supabase functions deploy enviar-campanha` e `supabase functions deploy descadastrar`.
+
+**Limites da Resend:** no plano gratuito são 100 e-mails por dia e 3.000 por mês. Para campanhas maiores,
+o plano pago (a partir de ≈ US$ 20/mês) libera 50.000 por mês. Confira os valores atuais no site da Resend.

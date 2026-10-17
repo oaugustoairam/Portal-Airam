@@ -27,6 +27,13 @@ function renderSvg(titulo, parede, piso, movel) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
 }
 
+// data de nascimento fictícia que cai daqui a `desloc` dias (no ano informado)
+function nascimento(desloc, ano) {
+  const d = new Date()
+  d.setDate(d.getDate() + desloc)
+  return `${ano}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function docFicticio(titulo) {
   const html = `<!doctype html><meta charset="utf-8"><title>${titulo}</title>
 <body style="font-family:sans-serif;max-width:640px;margin:48px auto;padding:0 16px;color:#222">
@@ -75,6 +82,7 @@ export function criarDadosDemo() {
         cliente_cpf: '52998224725',
         cliente_email: 'marina@exemplo.com',
         cliente_telefone: '(11) 90000-0154',
+        cliente_nascimento: nascimento(0, 1988),
         endereco: 'Rua das Acácias, 120, ap. 82 — Mooca, São Paulo',
         ambientes: 'Cozinha integrada, suíte master, home office',
         data_venda: dia(-58),
@@ -96,6 +104,7 @@ export function criarDadosDemo() {
         cliente_cpf: '27584319637',
         cliente_email: 'carla@exemplo.com',
         cliente_telefone: '(11) 90000-0158',
+        cliente_nascimento: nascimento(5, 1979),
         endereco: 'Av. Paes de Barros, 900 — Mooca, São Paulo',
         ambientes: 'Closet e banheiro',
         data_venda: dia(-34),
@@ -117,6 +126,7 @@ export function criarDadosDemo() {
         cliente_cpf: '11144477735',
         cliente_email: 'rafael@exemplo.com',
         cliente_telefone: '(11) 90000-0161',
+        cliente_nascimento: nascimento(23, 1992),
         endereco: 'Rua dos Ipês, 48 — Jardim São Paulo, Guarulhos',
         ambientes: 'Cozinha, lavanderia, dois dormitórios',
         data_venda: dia(-3),
@@ -153,6 +163,16 @@ export function criarDadosDemo() {
       { id: `av${i}w`, processo_id: p1, evento, titulo, mensagem, canal: 'whatsapp', destino: '5511900000154', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
       { id: `av${i}e`, processo_id: p1, evento, titulo, mensagem, canal: 'email', destino: 'marina@exemplo.com', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
     ]),
+    campanhas: [
+      {
+        id: 'c1', status: 'enviada', total: 3, enviados: 3, falhas: 0, simulada: true,
+        assunto: '{{nome}}, conheça a nova linha de cozinhas Airam',
+        titulo: 'Nova linha de cozinhas',
+        conteudo: 'Olá, {{nome}}!\n\nAcabamos de lançar acabamentos novos para cozinhas planejadas. Passe em uma das nossas lojas para conhecer.',
+        botao_texto: 'Ver no Instagram', botao_link: 'https://www.instagram.com/airam_arquitetura.marcenaria/',
+        criado_em: quando(-12), enviada_em: quando(-12),
+      },
+    ],
     assinaturas: [
       { id: 'a2', processo_id: p1, tipo: 'projeto_final', documento_id: 'd8', status: 'assinado', assinado_em: quando(-27), documento_assinado_id: 'd9', criado_em: quando(-29) },
       { id: 'a5', processo_id: p3, tipo: 'projeto_final', documento_id: 'd15', status: 'pendente', sign_url: null, criado_em: quando(-1) },
