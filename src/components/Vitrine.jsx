@@ -32,7 +32,6 @@ export default function Vitrine() {
         ))}
       </div>
       <div className="vitrine-texto" key={atual}>
-        <span className="vitrine-ambiente">{foto.nome}</span>
         <p className="vitrine-frase">{foto.frase}</p>
       </div>
     </section>

@@ -11,6 +11,7 @@ import {
 } from '../lib/constants.js'
 import { FOTOS, fotoDoProcesso } from '../lib/fotos.js'
 import { useContador, useRevelar } from '../lib/movimento.js'
+import { WHATSAPP_AIRAM, linkWhatsApp } from '../lib/contato.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
 import AvancoEtapa from './AvancoEtapa.jsx'
@@ -22,7 +23,8 @@ const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'O PDF do seu
 // O que o cliente vê. A equipe usa a mesma tela em "Ver como cliente" (visualizacao = true).
 export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
   const { documentos = [], assinaturas = [] } = processo
-  const etapas = linhaDoTempo(processo, assinaturas)
+  const etapas = linhaDoTempo(processo, assinaturas, { cliente: true })
+  const pendenciaFinanceira = processo.solucao_financeira !== 'ok'
   const pendentes = assinaturas.filter((a) => a.status === 'pendente')
   const [assinando, setAssinando] = useState(null)
 
@@ -31,8 +33,23 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
       <Hero processo={processo} etapas={etapas} documentos={documentos} />
       {!visualizacao && <AvancoEtapa processoId={processo.id} etapas={etapas} />}
 
-      {(processo.recado_cliente || pendentes.length > 0) && (
+      {(processo.recado_cliente || pendentes.length > 0 || pendenciaFinanceira) && (
         <div className="avisos-topo">
+          {pendenciaFinanceira && (
+            <div className="lembrete-financeiro" role="status">
+              <span className="lembrete-financeiro-icone" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M3 10h18M7 15h3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+              </span>
+              <div>
+                <strong>Existe uma pendência financeira</strong>
+                <span>Para seguirmos com o seu projeto, falta resolver a solução financeira. Os prazos do contrato começam a contar quando não houver pendências.</span>
+              </div>
+              <a className="btn btn-contorno" target="_blank" rel="noreferrer"
+                href={linkWhatsApp(WHATSAPP_AIRAM, `Olá! Sou ${processo.cliente_nome} (código ${processo.codigo}) e quero resolver a pendência financeira.`)}>
+                Falar com a Airam
+              </a>
+            </div>
+          )}
           {pendentes.map((a) => (
             <div key={a.id} className="cartao-assinar">
               <span className="cartao-assinar-icone" aria-hidden="true">
@@ -129,7 +146,7 @@ function Hero({ processo, etapas, documentos }) {
           <dl className="hero-dados">
             <div>
               <dt>Etapa atual</dt>
-              <dd>{processo.entrega_concluida ? 'Montagem concluída' : aguardandoImovel && atual.id !== 'financeiro' && atual.id !== 'projeto_inicial' ? 'Aguardando o imóvel ficar pronto' : atual.nome}</dd>
+              <dd>{processo.entrega_concluida ? 'Montagem concluída' : aguardandoImovel && atual.id !== 'projeto_inicial' ? 'Aguardando o imóvel ficar pronto' : atual.nome}</dd>
             </div>
             <div>
               <dt>{ROTULO_PRAZO}</dt>

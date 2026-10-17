@@ -166,10 +166,13 @@ export function cpfValido(v) {
 // Linha do tempo do processo, calculada a partir das datas e marcações da equipe.
 // O contrato já chega assinado (na loja) e fica só nos anexos; a jornada começa na solução financeira.
 // Cada etapa: { id, nome, data, status: 'concluida' | 'atual' | 'futura', atrasada, detalhe }
-export function linhaDoTempo(p, assinaturas = []) {
+// Para o cliente (cliente: true), a solução financeira não é uma etapa: no lugar dela entra
+// a compra, com a data da venda. A pendência financeira aparece como lembrete à parte.
+export function linhaDoTempo(p, assinaturas = [], { cliente = false } = {}) {
   const projeto = assinaturas.find((a) => a.tipo === 'projeto_final' && a.status === 'assinado')
   const projetoPendente = assinaturas.some((a) => a.tipo === 'projeto_final' && a.status === 'pendente')
 
+  const compra = { id: 'compra', nome: 'Compra', data: p.data_venda || null, feito: true, detalhe: null }
   const etapas = [
     {
       id: 'financeiro',
@@ -199,6 +202,8 @@ export function linhaDoTempo(p, assinaturas = []) {
     { id: 'entrega', nome: 'Montagem', data: p.data_entrega_prevista, feito: p.entrega_concluida },
   ]
 
+  if (cliente) etapas.splice(0, 1, compra)
+
   let atualDefinida = false
   return etapas.map((e) => {
     let status = 'futura'
@@ -208,7 +213,7 @@ export function linhaDoTempo(p, assinaturas = []) {
       atualDefinida = true
     }
     // a fabricação começa depois do projeto final assinado
-    if (e.producao && status === 'futura' && etapas[4].feito) status = 'atual'
+    if (e.producao && status === 'futura' && etapas.find((x) => x.id === 'assinatura_projeto').feito) status = 'atual'
     const d = diasAte(e.data)
     return { ...e, status, atrasada: !e.feito && !e.producao && d !== null && d < 0 }
   })

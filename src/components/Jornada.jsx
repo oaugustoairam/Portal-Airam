@@ -6,6 +6,10 @@ import IconeCubo from './IconeCubo.jsx'
 // O que acontece em cada etapa e o que o cliente precisa fazer, na linguagem do cliente
 // (escopo do contrato Airam).
 export const GUIA = {
+  compra: {
+    acontece: 'Você fechou o seu projeto com a Airam. A partir daqui, acompanhamos com você cada passo até a montagem.',
+    voce: [],
+  },
   financeiro: {
     acontece: 'Analisamos e aprovamos a sua solução financeira em até 5 dias úteis. Os prazos do contrato começam a contar quando não há pendências financeiras.',
     voce: ['Envie os documentos que a equipe financeira pedir', 'Acompanhe seu e-mail e WhatsApp'],
@@ -40,6 +44,7 @@ const tracos = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeL
 const ICONES = {
   projeto_inicial: <><path d="M7 3h7l4 4v14H7z" {...tracos} /><path d="M14 3v4h4M10 12h5M10 16h3" {...tracos} /></>,
   financeiro: <><rect x="3" y="6" width="18" height="12" rx="2" {...tracos} /><path d="M3 10h18M7 15h3" {...tracos} /></>,
+  compra: <><path d="M5 8h14l-1 12H6z" {...tracos} /><path d="M9 8V6a3 3 0 0 1 6 0v2" {...tracos} /></>,
   medicao: <><path d="m3 17 14-14 4 4L7 21z" {...tracos} /><path d="m7 13 2 2M10 10l2 2M13 7l2 2" {...tracos} /></>,
   conferencia: <><circle cx="11" cy="11" r="6" {...tracos} /><path d="m20 20-4.5-4.5M8.5 11l1.8 1.8 3.2-3.3" {...tracos} /></>,
   assinatura_projeto: <><path d="M4 20c3-1 4-4 6-4s1 3 3 3 3-2 4-2" {...tracos} /><path d="m14 4 6 6-7 7-4 1 1-4z" {...tracos} /></>,
@@ -64,6 +69,7 @@ function textoStatus(e) {
 export function quandoEtapa(etapa) {
   const d = diasAte(etapa.data)
   if (etapa.producao) return null
+  if (etapa.id === 'compra') return etapa.data ? `Compra em ${formatarData(etapa.data)}` : null
   if (etapa.status === 'concluida' && etapa.data) return `Concluída em ${formatarData(etapa.data)}`
   if (etapa.data) return d > 0 ? `${formatarData(etapa.data)} · em ${d} ${d === 1 ? 'dia' : 'dias'}` : d === 0 ? `Hoje, ${formatarData(etapa.data)}` : `Previsto para ${formatarData(etapa.data)}`
   if (!etapa.semData && etapa.status !== 'concluida') return 'Data a definir'

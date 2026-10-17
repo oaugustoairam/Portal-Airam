@@ -4,6 +4,7 @@ import { linhaDoTempo, etapaAtual, formatarData, ROTULO_PRAZO } from '../lib/con
 import ProcessoView from './ProcessoView.jsx'
 import BotaoWhatsApp from './BotaoWhatsApp.jsx'
 import MeuPerfil from './MeuPerfil.jsx'
+import NossasLojas from './NossasLojas.jsx'
 
 export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
   const [processos, setProcessos] = useState(null)
@@ -22,6 +23,14 @@ export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
   }, [])
 
   if (!processos) return <div className="carregando">Carregando seu processo…</div>
+
+  if (aba === 'lojas')
+    return (
+      <>
+        <NossasLojas />
+        <BotaoWhatsApp nome={processos[0]?.cliente_nome} codigo={processos[0]?.codigo} />
+      </>
+    )
 
   if (aba === 'perfil')
     return (
@@ -59,7 +68,7 @@ export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
           <li key={p.id}>
             <button className="cartao" onClick={() => abrir(p.id)}>
               <strong>{p.codigo}</strong>
-              <span>Etapa atual: {etapaAtual(linhaDoTempo(p, p.assinaturas)).nome}</span>
+              <span>Etapa atual: {etapaAtual(linhaDoTempo(p, p.assinaturas, { cliente: true })).nome}</span>
               <span className="num">{ROTULO_PRAZO}: {formatarData(p.data_entrega_prevista)}</span>
             </button>
           </li>

@@ -9,6 +9,8 @@ import InstalarApp from './components/InstalarApp.jsx'
 import Entrada from './components/Entrada.jsx'
 import Avatar from './components/Avatar.jsx'
 import logoBranco from './assets/logo-branco.png'
+import { IconeInstagram, IconeSite } from './components/NossasLojas.jsx'
+import { INSTAGRAM_AIRAM, SITE_AIRAM } from './lib/contato.js'
 
 export const NOME_EMPRESA = 'Airam Arquitetura & Marcenaria'
 
@@ -83,10 +85,12 @@ export default function App() {
         {!equipe && (
           <nav className="topo-abas" aria-label="Áreas do cliente">
             <div className="topo-abas-in">
-              {[['processo', 'Meu processo'], ['perfil', 'Meu perfil']].map(([k, t]) => (
+              {[['processo', 'Meu processo'], ['perfil', 'Meu perfil'], ['lojas', 'Nossas lojas']].map(([k, t]) => (
                 <button key={k} className={`topo-aba ${abaCliente === k ? 'ativa' : ''}`} aria-current={abaCliente === k ? 'page' : undefined}
                   onClick={() => irPara(k)}>{t}</button>
               ))}
+              <a className="topo-aba topo-aba-externa" href={INSTAGRAM_AIRAM} target="_blank" rel="noreferrer"><IconeInstagram />Instagram</a>
+              <a className="topo-aba topo-aba-externa" href={SITE_AIRAM} target="_blank" rel="noreferrer"><IconeSite />Site</a>
             </div>
           </nav>
         )}

@@ -1494,3 +1494,49 @@ body { letter-spacing: 0; font-feature-settings: 'ss01' off; }
 @media (prefers-reduced-motion: reduce) {
   .avanco, .avanco *, .jornada-painel, .jn-detalhe-mobile, .jd-texto > *, .jd-andamento-barra span { animation: none !important; }
 }
+
+/* Lembrete de pendência financeira (portal do cliente) */
+.lembrete-financeiro { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--superficie);
+  border: 1px solid var(--marca); border-left-width: 4px; border-radius: var(--r); padding: 14px 16px; }
+.lembrete-financeiro > div { display: flex; flex-direction: column; gap: 3px; flex: 1 1 260px; min-width: 0; }
+.lembrete-financeiro strong { font-size: 16px; font-weight: 600; color: var(--marca); }
+.lembrete-financeiro span { font-size: 14px; color: var(--tinta-2); line-height: 1.45; }
+.lembrete-financeiro-icone { width: 42px; height: 42px; flex: none; border-radius: 50%; background: var(--acento-suave); color: var(--marca); display: grid; place-items: center; }
+.lembrete-financeiro-icone svg { width: 22px; height: 22px; }
+@media (max-width: 600px) { .lembrete-financeiro .btn { width: 100%; } }
+
+/* Abas do cliente: links externos e rolagem no celular */
+.topo-abas-in { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.topo-abas-in::-webkit-scrollbar { display: none; }
+.topo-aba { flex: none; white-space: nowrap; text-decoration: none; }
+.topo-aba-externa { display: inline-flex; align-items: center; gap: 6px; }
+.topo-aba-externa svg { width: 16px; height: 16px; }
+.topo-aba-externa:first-of-type { margin-left: auto; }
+@media (max-width: 600px) { .topo-aba-externa:first-of-type { margin-left: 0; } }
+
+/* Nossas lojas */
+.lojas { display: flex; flex-direction: column; gap: 22px; }
+.lojas-intro { margin: 6px 0 0; color: var(--tinta-2); font-size: 15px; }
+.lojas-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.loja { background: var(--superficie); border: 1px solid var(--linha); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.loja-mapa { aspect-ratio: 16 / 10; background: var(--neutro-suave); }
+.loja-mapa iframe { width: 100%; height: 100%; border: 0; display: block; filter: grayscale(.35); }
+.loja-info { padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.loja-cidade { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--marca); }
+.loja-cidade svg { width: 16px; height: 16px; }
+.loja-nome { margin: 0; font-size: 20px; font-weight: 400; letter-spacing: -.01em; line-height: 1.2; }
+.loja-endereco { font-style: normal; color: var(--tinta-2); font-size: 15px; line-height: 1.5; }
+.loja-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.loja-acoes .btn-principal { background: var(--marca); color: #fff; }
+.lojas-redes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.rede { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--superficie); border: 1px solid var(--linha);
+  border-radius: 14px; color: var(--tinta); text-decoration: none; transition: border-color .2s, transform .2s; }
+.rede:hover { border-color: var(--marca); transform: translateY(-2px); }
+.rede svg { width: 28px; height: 28px; color: var(--marca); flex: none; }
+.rede span { display: flex; flex-direction: column; }
+.rede strong { font-weight: 600; font-size: 15px; }
+.rede small { color: var(--tinta-2); font-size: 13px; }
+@media (max-width: 600px) {
+  .lembrete-financeiro { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: start; }
+  .lembrete-financeiro .btn { grid-column: 1 / -1; }
+}

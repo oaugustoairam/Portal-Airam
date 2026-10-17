@@ -8,6 +8,10 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
 - **Cliente** (entra com e-mail, CPF ou telefone + senha): acompanha as 7 etapas do processo (Solução financeira,
   Projeto inicial, Medição, Projeto final · Conferência, Projeto final · Assinatura, Fabricação, Montagem), vê
   documentos e renders, assina o projeto final pelo ZapSign dentro do portal, edita "Meu perfil".
+  Para o cliente, a linha do tempo começa em **Compra** (data da venda) e a solução financeira não é etapa:
+  com pendência, aparece um lembrete no topo (`linhaDoTempo(p, a, { cliente: true })`).
+  Abas do cliente: Meu processo, Meu perfil, Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site
+  (endereços e links em `src/lib/contato.js`).
   O fundo do topo alterna entre os renders do cliente (ou fotos da loja). Ao avançar de fase, aparece a transição.
 - **Equipe**: área com duas seções.
   - **Processos**: Geral (resumo por fase + lista com filtros) e pastas Financeiro, Medição, Conferência,
