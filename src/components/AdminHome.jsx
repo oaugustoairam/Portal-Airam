@@ -18,6 +18,8 @@ import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
 import ControleInterno from './ControleInterno.jsx'
 import Relatorios from './Relatorios.jsx'
+import PastaProcessos, { ResumoPastas } from './PastaProcessos.jsx'
+import { PASTAS } from '../lib/pastas.js'
 import Avatar from './Avatar.jsx'
 import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
@@ -44,15 +46,21 @@ function lerFiltros() {
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-export default function AdminHome({ abrirInicial = null }) {
+export default function AdminHome({ abrirInicial = null, pasta = 'geral', onPasta }) {
   const [processos, setProcessos] = useState(null)
+  const [controles, setControles] = useState({})
   const [editando, setEditando] = useState(abrirInicial) // id ou 'novo'
+  const [abaEditor, setAbaEditor] = useState('dados')
   const [filtros, setFiltros] = useState(lerFiltros)
   const [abertoMobile, setAbertoMobile] = useState(false)
   const [selecionados, setSelecionados] = useState(() => new Set())
   const [relatorio, setRelatorio] = useState(false)
 
-  const recarregar = () => api.listarProcessos().then(setProcessos)
+  const recarregar = () =>
+    api.listarProcessos().then((lista) => {
+      setProcessos(lista)
+      if (lista.length) api.controlesInternos(lista.map((p) => p.id)).then(setControles).catch(() => {})
+    })
   useEffect(() => {
     recarregar()
   }, [])
@@ -88,13 +96,45 @@ export default function AdminHome({ abrirInicial = null }) {
     return (
       <EditorProcesso
         id={editando === 'novo' ? null : editando}
+        abaInicial={abaEditor}
         codigos={(processos || []).map((p) => p.codigo)}
         onFechar={() => {
           setEditando(null)
+          setAbaEditor('dados')
           recarregar()
         }}
         onCriado={(id) => setEditando(id)}
       />
+    )
+
+  const alternar = (id) => setSelecionados((atual) => {
+    const novo = new Set(atual)
+    novo.has(id) ? novo.delete(id) : novo.add(id)
+    return novo
+  })
+  const nSel = linhas.filter((p) => selecionados.has(p.id)).length
+  const barraSelecao = nSel > 0 && (
+    <div className="barra-selecao" role="region" aria-label="Processos selecionados">
+      <span><strong className="num">{nSel}</strong> {nSel === 1 ? 'processo selecionado' : 'processos selecionados'}</span>
+      <div className="acoes">
+        <button className="btn btn-leve" onClick={() => setSelecionados(new Set())}>Limpar</button>
+        <button className="btn btn-principal" onClick={() => setRelatorio(true)}>
+          Criar relatório{nSel === 1 ? ' em PDF' : ''}
+        </button>
+      </div>
+    </div>
+  )
+
+  const pastaAtual = PASTAS.find((x) => x.id === pasta)
+  if (pastaAtual)
+    return (
+      <>
+        {!processos ? <div className="carregando">Carregando…</div> : (
+          <PastaProcessos pasta={pastaAtual} processos={linhas} controles={controles} selecionados={selecionados} onAlternar={alternar}
+            onAbrir={(id) => { setAbaEditor('cronograma'); setEditando(id) }} />
+        )}
+        {barraSelecao}
+      </>
     )
 
   const set = (k) => (v) => setFiltros((f) => ({ ...f, [k]: v?.target ? v.target.value : v }))
@@ -137,19 +177,12 @@ export default function AdminHome({ abrirInicial = null }) {
       return (a.data_entrega_prevista || '9999').localeCompare(b.data_entrega_prevista || '9999')
     })
 
-  const alternar = (id) => setSelecionados((atual) => {
-    const novo = new Set(atual)
-    novo.has(id) ? novo.delete(id) : novo.add(id)
-    return novo
-  })
   const todosVisiveis = visiveis.length > 0 && visiveis.every((p) => selecionados.has(p.id))
   const alternarTodos = () => setSelecionados((atual) => {
     const novo = new Set(atual)
     visiveis.forEach((p) => (todosVisiveis ? novo.delete(p.id) : novo.add(p.id)))
     return novo
   })
-  const nSel = linhas.filter((p) => selecionados.has(p.id)).length
-
   const ativosFiltro = ['prazo', 'etapa', 'financeiro', 'de', 'ate'].filter((k) => f[k]).length + (f.busca ? 1 : 0)
 
   return (
@@ -158,6 +191,13 @@ export default function AdminHome({ abrirInicial = null }) {
         <h1 className="titulo-grande">Processos</h1>
         <button className="btn btn-principal" onClick={() => setEditando('novo')}>Novo processo</button>
       </div>
+
+      {processos && onPasta && (
+        <section className="secao-resumo" aria-label="Resumo por pasta">
+          <h2 className="titulo-secao">Resumo por fase</h2>
+          <ResumoPastas pastas={PASTAS} processos={linhas} controles={controles} onPasta={onPasta} />
+        </section>
+      )}
 
       {processos && (
         <div className="indicadores">
@@ -255,17 +295,7 @@ export default function AdminHome({ abrirInicial = null }) {
         </div>
       )}
 
-      {nSel > 0 && (
-        <div className="barra-selecao" role="region" aria-label="Processos selecionados">
-          <span><strong className="num">{nSel}</strong> {nSel === 1 ? 'processo selecionado' : 'processos selecionados'}</span>
-          <div className="acoes">
-            <button className="btn btn-leve" onClick={() => setSelecionados(new Set())}>Limpar</button>
-            <button className="btn btn-principal" onClick={() => setRelatorio(true)}>
-              Criar relatório{nSel === 1 ? ' em PDF' : ''}
-            </button>
-          </div>
-        </div>
-      )}
+      {barraSelecao}
     </section>
   )
 }
@@ -296,9 +326,9 @@ const VAZIO = {
   data_assinatura_projeto: '', projeto_assinado_manual: false, entrega_concluida: false, recado_cliente: '',
 }
 
-function EditorProcesso({ id, codigos, onFechar, onCriado }) {
+function EditorProcesso({ id, abaInicial = 'dados', codigos, onFechar, onCriado }) {
   const [processo, setProcesso] = useState(id ? null : { ...VAZIO, codigo: proximoCodigo(codigos), documentos: [], assinaturas: [] })
-  const [aba, setAba] = useState('dados')
+  const [aba, setAba] = useState(id ? abaInicial : 'dados')
   const [msg, setMsg] = useState('')
 
   const recarregar = () => api.processo(id).then(setProcesso)
@@ -315,7 +345,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
 
   return (
     <section>
-      <button className="btn btn-leve voltar" onClick={onFechar}>← Todos os processos</button>
+      <button className="btn btn-leve voltar" onClick={onFechar}>← Voltar</button>
       <div className="cab-linha">
         <div className="titulo-processo">
           {id && <span className="rotulo">{processo.codigo}</span>}

@@ -575,6 +575,8 @@ drop policy if exists "equipe controle" on public.controle_interno;
 create policy "equipe controle" on public.controle_interno for all
   using (public.eh_equipe()) with check (public.eh_equipe());
 
+alter table public.controle_interno add column if not exists assistencia_concluida_em date;
+
 create or replace function public.carimbar_controle()
 returns trigger language plpgsql set search_path = public as $$
 begin

@@ -282,7 +282,7 @@ function RelatorioCliente({ r, foto, interno, geradoEm }) {
                 <LinhaPrazo titulo="PDF do projeto final" regra="5 dias úteis após enviar a conferência" prazo={r.prazoPdf} feito={r.real.pdf} situacao={r.situacaoPdf} />
                 <LinhaPrazo titulo="Prazo máximo de entrega" regra={r.tipoPrazo || 'Contrato'} prazo={p.data_entrega_prevista} feito={r.real.entregue} situacao={r.situacaoEntrega} />
                 {c.tem_att === true && r.situacaoAssistencia && (
-                  <LinhaPrazo titulo="Assistência técnica" regra="Retorno máximo" prazo={c.assistencia_retorno_max} feito={null} situacao={r.situacaoAssistencia} />
+                  <LinhaPrazo titulo="Assistência técnica" regra="Retorno máximo" prazo={c.assistencia_retorno_max} feito={c.assistencia_concluida_em} situacao={r.situacaoAssistencia} />
                 )}
               </View>
             </View>

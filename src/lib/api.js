@@ -267,7 +267,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v10'
+const CHAVE_DEMO = 'portal-airam-demo-v11'
 let memoria = null
 const ouvintes = new Set()
 
@@ -317,7 +317,7 @@ function simularAvisos(p, eventos) {
 export const CAMPOS_CONTROLE = [
   'pendencia_resolvida_em', 'email_enviado_em', 'inicial_assinado_em', 'medido_em', 'liberador', 'liberador_recebeu_em',
   'conferido_em', 'conferencia_enviada_em', 'pdf_recebido_em', 'projeto_final_assinado_em', 'entregue_em',
-  'montagem_inicio_em', 'montador', 'tem_att', 'vistoria_em', 'assistencia_retorno_max', 'observacoes',
+  'montagem_inicio_em', 'montador', 'tem_att', 'vistoria_em', 'assistencia_retorno_max', 'assistencia_concluida_em', 'observacoes',
 ]
 function limparControle(c) {
   const out = { id: c.id }

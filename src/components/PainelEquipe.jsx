@@ -1,30 +1,55 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { aniversariantesDoDia } from '../lib/aniversarios.js'
+import { PASTAS } from '../lib/pastas.js'
 import AdminHome from './AdminHome.jsx'
 import Aniversarios, { linkParabens } from './Aniversarios.jsx'
 import EmailMarketing from './EmailMarketing.jsx'
 
-// Área interna da loja: processos, aniversários e e-mail marketing.
+const SECOES = {
+  processos: { nome: 'Processos', pastas: [['geral', 'Geral'], ...PASTAS.map((p) => [p.id, p.nome])] },
+  // novas ferramentas de marketing entram como novas pastas aqui
+  marketing: { nome: 'Marketing', pastas: [['email', 'E-mail marketing'], ['aniversarios', 'Aniversários']] },
+}
+
+// Área interna da loja: processos (geral e por fase) e marketing.
 export default function PainelEquipe() {
-  const [aba, setAba] = useState('processos')
+  const [secao, setSecao] = useState('processos')
+  const [pasta, setPasta] = useState({ processos: 'geral', marketing: 'email' })
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
 
   useEffect(() => {
     api.listarProcessos().then(setProcessos)
-  }, [aba])
+  }, [secao])
 
   const hoje = aniversariantesDoDia(processos)
+  const atual = pasta[secao]
+  const irPara = (s, p) => {
+    setSecao(s)
+    if (p) setPasta((x) => ({ ...x, [s]: p }))
+    setAbrir(null)
+    window.scrollTo(0, 0)
+  }
 
   return (
     <div className="painel-equipe">
       <nav className="painel-nav" aria-label="Áreas da gestão">
-        {[['processos', 'Processos'], ['aniversarios', 'Aniversários'], ['marketing', 'E-mail marketing']].map(([k, t]) => (
-          <button key={k} className={`painel-nav-item ${aba === k ? 'ativo' : ''}`} aria-current={aba === k ? 'page' : undefined}
-            onClick={() => { setAba(k); setAbrir(null) }}>
+        {Object.entries(SECOES).map(([k, s]) => (
+          <button key={k} className={`painel-nav-item ${secao === k ? 'ativo' : ''}`} aria-current={secao === k ? 'page' : undefined}
+            onClick={() => irPara(k)}>
+            {s.nome}
+            {k === 'marketing' && hoje.length > 0 && <span className="painel-nav-badge">{hoje.length}</span>}
+          </button>
+        ))}
+      </nav>
+
+      <nav className="subpastas" aria-label={`Pastas de ${SECOES[secao].nome}`}>
+        {SECOES[secao].pastas.map(([k, t]) => (
+          <button key={k} className={`subpasta ${atual === k ? 'ativa' : ''}`} aria-current={atual === k ? 'page' : undefined}
+            onClick={() => irPara(secao, k)}>
             {t}
-            {k === 'aniversarios' && hoje.length > 0 && <span className="painel-nav-badge">{hoje.length}</span>}
+            {k === 'aniversarios' && hoje.length > 0 && <span className="subpasta-badge">{hoje.length}</span>}
           </button>
         ))}
       </nav>
@@ -46,9 +71,13 @@ export default function PainelEquipe() {
         </div>
       )}
 
-      {aba === 'processos' && <AdminHome key={abrir || 'lista'} abrirInicial={abrir} />}
-      {aba === 'aniversarios' && <Aniversarios processos={processos} onAbrirProcesso={(id) => { setAbrir(id); setAba('processos') }} />}
-      {aba === 'marketing' && <EmailMarketing processos={processos} />}
+      {secao === 'processos' && (
+        <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />
+      )}
+      {secao === 'marketing' && atual === 'email' && <EmailMarketing processos={processos} />}
+      {secao === 'marketing' && atual === 'aniversarios' && (
+        <Aniversarios processos={processos} onAbrirProcesso={(id) => { irPara('processos', 'geral'); setAbrir(id) }} />
+      )}
     </div>
   )
 }

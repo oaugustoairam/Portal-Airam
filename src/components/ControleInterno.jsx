@@ -141,7 +141,8 @@ export default function ControleInterno({ processo: p }) {
           </div>
           {data('vistoria_em', 'Vistoria feita em')}
           {f.tem_att === true && data('assistencia_retorno_max', 'Assistência técnica: retorno máximo',
-            f.assistencia_retorno_max && <SituacaoPrazo prazo={f.assistencia_retorno_max} />)}
+            f.assistencia_retorno_max && <SituacaoPrazo prazo={f.assistencia_retorno_max} feito={f.assistencia_concluida_em} />)}
+          {f.tem_att === true && data('assistencia_concluida_em', 'Assistência técnica concluída em')}
         </div>
       </fieldset>
 

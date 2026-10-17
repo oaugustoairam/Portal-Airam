@@ -125,7 +125,7 @@ export function montarRelatorio(p, c = {}) {
     situacaoConferencia: situacaoPrazo(prazoConferencia, real.conferido),
     situacaoPdf: situacaoPrazo(prazoPdf, real.pdf),
     situacaoEntrega: p.entrega_concluida ? { tipo: 'ok', texto: 'Montagem concluída' } : situacaoPrazo(fimPrevisto, real.entregue),
-    situacaoAssistencia: c.assistencia_retorno_max ? situacaoPrazo(dia(c.assistencia_retorno_max), real.vistoria) : null,
+    situacaoAssistencia: c.tem_att && c.assistencia_retorno_max ? situacaoPrazo(dia(c.assistencia_retorno_max), dia(c.assistencia_concluida_em)) : null,
     diasDesdeVenda: real.venda ? diasEntre(real.venda, p.entrega_concluida ? real.concluido || hoje : hoje) : null,
     diasAtePrazo,
     documentos: (p.documentos || []).map((d) => ({ ...d, categoriaNome: CATEGORIAS.find((x) => x.id === d.categoria)?.nome || 'Outros' })),

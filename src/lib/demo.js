@@ -46,6 +46,11 @@ export function criarDadosDemo() {
   const p1 = 'demo-0154'
   const p2 = 'demo-0161'
   const p3 = 'demo-0158'
+  // processos só da equipe, para mostrar todas as pastas
+  const p4 = 'demo-0171'
+  const p5 = 'demo-0169'
+  const p6 = 'demo-0152'
+  const p7 = 'demo-0147'
 
   const doc = (id, processo_id, categoria, titulo, tipo, dias, extra = {}) => ({
     id,
@@ -140,6 +145,35 @@ export function criarDadosDemo() {
         data_entrega_prevista: dia(140),
         criado_em: quando(-70),
       },
+      {
+        ...base, id: p4, codigo: '2571', numero_contrato: '100000571-1', cliente_nome: 'Bruno Lima', cliente_email: 'bruno@exemplo.com',
+        cliente_telefone: '(11) 90000-0171', endereco: 'Rua Taquari, 300 — Mooca, São Paulo', ambientes: 'Cozinha e área gourmet',
+        data_venda: dia(-9), data_disponivel_medicao: dia(10), solucao_financeira: 'pendente', data_entrega_prevista: dia(80), criado_em: quando(-9),
+      },
+      {
+        ...base, id: p5, codigo: '2569', numero_contrato: '100000569-1', cliente_nome: 'Juliana Prado', cliente_email: 'juliana@exemplo.com',
+        cliente_telefone: '(11) 90000-0169', endereco: 'Av. Tiradentes, 1500 — Centro, Guarulhos', ambientes: 'Dormitório casal e closet',
+        data_venda: dia(-30), data_disponivel_medicao: dia(-20), solucao_financeira: 'ok', financeiro_ok_em: quando(-27),
+        data_projeto_inicial: dia(-22), projeto_inicial_enviado: true, projeto_inicial_em: quando(-22),
+        data_medicao: dia(-12), medicao_concluida: true, medicao_concluida_em: quando(-12), data_conferencia: dia(-2),
+        data_entrega_prevista: dia(55), criado_em: quando(-30),
+      },
+      {
+        ...base, id: p6, codigo: '2552', numero_contrato: '100000552-1', cliente_nome: 'Sofia Mendes', cliente_email: 'sofia@exemplo.com',
+        cliente_telefone: '(11) 90000-0152', endereco: 'Rua Juventus, 75 — Mooca, São Paulo', ambientes: 'Living e home theater',
+        data_venda: dia(-95), data_disponivel_medicao: dia(-85), solucao_financeira: 'ok', financeiro_ok_em: quando(-92),
+        projeto_inicial_enviado: true, projeto_inicial_em: quando(-88), medicao_concluida: true, medicao_concluida_em: quando(-84),
+        conferencia_concluida: true, conferencia_concluida_em: quando(-74), data_assinatura_projeto: dia(-70), projeto_assinado_manual: true,
+        projeto_assinado_em: quando(-70), data_entrega_prevista: dia(-6), criado_em: quando(-95),
+      },
+      {
+        ...base, id: p7, codigo: '2547', numero_contrato: '100000547-1', cliente_nome: 'Tatiane Rocha', cliente_email: 'tatiane@exemplo.com',
+        cliente_telefone: '(11) 90000-0147', endereco: 'Rua Dom Pedro II, 210 — Vila Galvão, Guarulhos', ambientes: 'Cozinha e lavanderia',
+        data_venda: dia(-120), data_disponivel_medicao: dia(-110), solucao_financeira: 'ok', financeiro_ok_em: quando(-117),
+        projeto_inicial_enviado: true, projeto_inicial_em: quando(-113), medicao_concluida: true, medicao_concluida_em: quando(-108),
+        conferencia_concluida: true, conferencia_concluida_em: quando(-98), data_assinatura_projeto: dia(-95), projeto_assinado_manual: true,
+        projeto_assinado_em: quando(-95), data_entrega_prevista: dia(-30), entrega_concluida: true, montagem_concluida_em: quando(-25), criado_em: quando(-120),
+      },
     ],
     documentos: [
       doc('d2', p1, 'contrato', 'Contrato assinado — 2561', 'pdf', -58, { assinado: true }),
@@ -170,6 +204,17 @@ export function criarDadosDemo() {
     ]),
     // Controle interno da loja (Marina em fabricação, Carla aguardando assinatura)
     controles: {
+      [p4]: { id: p4 },
+      [p5]: { id: p5, pendencia_resolvida_em: dia(-27), email_enviado_em: dia(-27), inicial_assinado_em: dia(-22), medido_em: dia(-12), liberador: 'Juliana', liberador_recebeu_em: dia(-11) },
+      [p6]: {
+        id: p6, pendencia_resolvida_em: dia(-92), medido_em: dia(-84), liberador: 'Ricardo', liberador_recebeu_em: dia(-83), conferido_em: dia(-78),
+        conferencia_enviada_em: dia(-77), pdf_recebido_em: dia(-72), projeto_final_assinado_em: dia(-70), entregue_em: dia(-8), montagem_inicio_em: dia(-4), montador: 'Sérgio',
+      },
+      [p7]: {
+        id: p7, pendencia_resolvida_em: dia(-117), medido_em: dia(-108), liberador: 'Juliana', liberador_recebeu_em: dia(-107), conferido_em: dia(-101),
+        conferencia_enviada_em: dia(-100), pdf_recebido_em: dia(-96), projeto_final_assinado_em: dia(-95), entregue_em: dia(-32), montagem_inicio_em: dia(-30),
+        montador: 'Carlos', vistoria_em: dia(-20), tem_att: true, assistencia_retorno_max: dia(-2), observacoes: 'Ajustar porta do armário da lavanderia.',
+      },
       [p1]: {
         id: p1, pendencia_resolvida_em: dia(-55), email_enviado_em: dia(-55), inicial_assinado_em: dia(-50), medido_em: dia(-45),
         liberador: 'Juliana', liberador_recebeu_em: dia(-44), conferido_em: dia(-38), conferencia_enviada_em: dia(-37),
@@ -177,7 +222,7 @@ export function criarDadosDemo() {
       },
       [p3]: {
         id: p3, pendencia_resolvida_em: dia(-32), email_enviado_em: dia(-31), inicial_assinado_em: dia(-26), medido_em: dia(-12),
-        liberador: 'Ricardo', liberador_recebeu_em: dia(-11), conferido_em: dia(-4), conferencia_enviada_em: dia(-3),
+        liberador: 'Ricardo', liberador_recebeu_em: dia(-11), conferido_em: dia(-4), conferencia_enviada_em: dia(-3), pdf_recebido_em: dia(-2),
       },
     },
     perfisCliente: {

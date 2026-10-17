@@ -74,3 +74,10 @@ endereço para correspondência (com busca pelo CEP) e informações do imóvel,
 da preferência de novidades e da troca de senha. E-mail de acesso e CPF ficam só para consulta.
 O celular, a data de nascimento e a preferência de novidades atualizam o processo automaticamente (avisos,
 aniversários e e-mail marketing). A equipe vê tudo em Processos > Dados e prazos.
+
+## Área da equipe
+
+- **Processos**
+  - **Geral:** resumo por fase e lista completa, com filtros e relatórios.
+  - **Pastas por fase:** Financeiro, Medição, Conferência, Assinatura do projeto final, Entregas, Vistoria e Assistência técnica. Cada pasta mostra só os processos daquela fase, dos mais urgentes para os menos, com os prazos de cada uma.
+- **Marketing:** E-mail marketing e Aniversários. As próximas ferramentas de marketing entram como novas pastas aqui.
