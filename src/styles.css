@@ -1299,3 +1299,39 @@ figure.recado::before { color: var(--marca); }
 .controle-prazo .celula-sub { font-size: 12px; }
 .controle-interno .grupo + .grupo { margin-top: 2px; }
 .secao-historico { margin-top: 28px; }
+
+/* Seleção de processos e relatórios */
+.tabela .col-sel { width: 44px; padding-right: 0; cursor: default; }
+.col-sel input { width: 20px; height: 20px; accent-color: var(--marca); cursor: pointer; margin: 0; }
+.tabela tbody tr.linha-selecionada { background: var(--acento-suave); }
+.barra-selecao { position: sticky; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 20; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; background: var(--tinta); color: var(--superficie); border-radius: 999px; padding: 10px 10px 10px 22px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / .18); }
+.barra-selecao strong { font-size: 18px; margin-right: 4px; }
+.barra-selecao .btn-leve { color: var(--superficie); }
+@media (max-width: 600px) { .barra-selecao { border-radius: 16px; padding: 12px 14px; } .barra-selecao .acoes { width: 100%; } .barra-selecao .btn-principal { flex: 1; } }
+
+.relatorio { display: flex; flex-direction: column; gap: 20px; }
+.relatorio-capa { display: grid; grid-template-columns: 1.4fr 1fr; gap: 0; background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--r); overflow: hidden; }
+.relatorio-capa-info { padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+.relatorio-conteudo { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; color: var(--tinta-2); font-size: 14px; }
+.relatorio-conteudo strong { color: var(--tinta); font-weight: 500; }
+.relatorio-resumo { background: var(--marca); color: var(--sobre-marca); padding: 22px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 16px; align-content: center; }
+.relatorio-resumo div { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgb(255 255 255 / .3); padding-top: 8px; }
+.relatorio-resumo .rotulo { color: rgb(255 255 255 / .75); }
+.relatorio-resumo strong { font-size: 17px; font-weight: 400; }
+.relatorio-resumo .texto-atraso { color: var(--sobre-marca); text-decoration: underline; }
+@media (max-width: 720px) { .relatorio-capa { grid-template-columns: 1fr; } }
+
+.tabela-relatorio { min-width: 1500px; font-size: 13px; }
+.tabela-relatorio td, .tabela-relatorio th { padding: 10px 12px; white-space: nowrap; }
+.tabela-relatorio td:nth-child(2) { white-space: normal; min-width: 160px; }
+.tabela-relatorio tbody tr { cursor: default; }
+.tabela-relatorio tbody tr:hover { background: none; }
+.mini-barra { display: inline-block; width: 46px; height: 5px; border-radius: 3px; background: var(--linha); margin-right: 8px; vertical-align: middle; overflow: hidden; }
+.mini-barra span { display: block; height: 100%; background: var(--marca); }
+.chip-sit-ok { background: var(--ok-suave); color: var(--ok); }
+.chip-sit-atraso { background: var(--marca); color: var(--sobre-marca); }
+.chip-sit-andamento { background: var(--andamento-suave); color: var(--andamento); }
+.chip-sit-neutro { background: var(--neutro-suave); color: var(--tinta-2); }
+.chip-sit-ok, .chip-sit-atraso, .chip-sit-andamento, .chip-sit-neutro { margin-left: 0; }

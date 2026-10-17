@@ -1,26 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
-import { formatarData, somarDiasUteis, diasEntre, diasAte } from '../lib/constants.js'
+import { formatarData, somarDiasUteis } from '../lib/constants.js'
+import { PRAZOS_INTERNOS, situacaoPrazo } from '../lib/relatorio.js'
 import CampoData from './CampoData.jsx'
 
-// Prazos internos da loja (dias úteis, sem feriados municipais)
-export const PRAZOS_INTERNOS = {
-  conferencia: 5, // liberador manda a conferência do projeto final após receber a medição
-  pdf: 5, // PDF do projeto final após o envio da conferência
-}
-
 // Situação de um prazo interno: cumprido, atrasado ou quanto falta
+const CHIP = { ok: 'chip-concluida', atraso: 'chip-atraso', andamento: 'chip-em_andamento' }
 function SituacaoPrazo({ prazo, feito, semBase }) {
   if (!prazo) return <span className="celula-sub">{semBase}</span>
-  if (feito) {
-    const atraso = diasEntre(prazo, feito)
-    return atraso > 0
-      ? <span className="chip chip-mini chip-atraso">Feito {atraso} {atraso === 1 ? 'dia' : 'dias'} após o prazo</span>
-      : <span className="chip chip-mini chip-concluida">Dentro do prazo</span>
-  }
-  const d = diasAte(prazo)
-  if (d < 0) return <span className="chip chip-mini chip-atraso">{-d} {d === -1 ? 'dia' : 'dias'} de atraso</span>
-  return <span className="chip chip-mini chip-em_andamento">{d === 0 ? 'Vence hoje' : d === 1 ? 'Falta 1 dia' : `Faltam ${d} dias`}</span>
+  const sit = situacaoPrazo(prazo, feito)
+  return <span className={`chip chip-mini ${CHIP[sit.tipo]}`}>{sit.texto}</span>
 }
 
 function Prazo({ rotulo, prazo, feito, semBase }) {

@@ -17,6 +17,7 @@ import {
 import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
 import ControleInterno from './ControleInterno.jsx'
+import Relatorios from './Relatorios.jsx'
 import Avatar from './Avatar.jsx'
 import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
@@ -48,6 +49,8 @@ export default function AdminHome({ abrirInicial = null }) {
   const [editando, setEditando] = useState(abrirInicial) // id ou 'novo'
   const [filtros, setFiltros] = useState(lerFiltros)
   const [abertoMobile, setAbertoMobile] = useState(false)
+  const [selecionados, setSelecionados] = useState(() => new Set())
+  const [relatorio, setRelatorio] = useState(false)
 
   const recarregar = () => api.listarProcessos().then(setProcessos)
   useEffect(() => {
@@ -77,6 +80,9 @@ export default function AdminHome({ abrirInicial = null }) {
       }),
     [processos]
   )
+
+  if (relatorio)
+    return <Relatorios processos={linhas.filter((p) => selecionados.has(p.id))} onFechar={() => setRelatorio(false)} />
 
   if (editando)
     return (
@@ -130,6 +136,19 @@ export default function AdminHome({ abrirInicial = null }) {
       if (f.ordem === 'cliente') return a.cliente_nome.localeCompare(b.cliente_nome, 'pt-BR')
       return (a.data_entrega_prevista || '9999').localeCompare(b.data_entrega_prevista || '9999')
     })
+
+  const alternar = (id) => setSelecionados((atual) => {
+    const novo = new Set(atual)
+    novo.has(id) ? novo.delete(id) : novo.add(id)
+    return novo
+  })
+  const todosVisiveis = visiveis.length > 0 && visiveis.every((p) => selecionados.has(p.id))
+  const alternarTodos = () => setSelecionados((atual) => {
+    const novo = new Set(atual)
+    visiveis.forEach((p) => (todosVisiveis ? novo.delete(p.id) : novo.add(p.id)))
+    return novo
+  })
+  const nSel = linhas.filter((p) => selecionados.has(p.id)).length
 
   const ativosFiltro = ['prazo', 'etapa', 'financeiro', 'de', 'ate'].filter((k) => f[k]).length + (f.busca ? 1 : 0)
 
@@ -192,6 +211,9 @@ export default function AdminHome({ abrirInicial = null }) {
           <table className="tabela">
             <thead>
               <tr>
+                <th className="col-sel">
+                  <input type="checkbox" aria-label="Selecionar todos os processos da lista" checked={todosVisiveis} onChange={alternarTodos} />
+                </th>
                 <th>Código</th>
                 <th>Cliente</th>
                 <th>Prazo</th>
@@ -202,8 +224,11 @@ export default function AdminHome({ abrirInicial = null }) {
             </thead>
             <tbody>
               {visiveis.map((p) => (
-                <tr key={p.id} onClick={() => setEditando(p.id)} tabIndex={0}
+                <tr key={p.id} onClick={() => setEditando(p.id)} tabIndex={0} className={selecionados.has(p.id) ? 'linha-selecionada' : ''}
                   onKeyDown={(e) => e.key === 'Enter' && setEditando(p.id)}>
+                  <td className="col-sel" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" aria-label={`Selecionar ${p.codigo} ${p.cliente_nome}`} checked={selecionados.has(p.id)} onChange={() => alternar(p.id)} />
+                  </td>
                   <td className="num"><strong>{p.codigo}</strong></td>
                   <td>{p.cliente_nome}<span className="celula-sub">{p.ambientes}</span></td>
                   <td><span className={`chip chip-prazo-${p.tipo_prazo}`}>{TIPOS_PRAZO[p.tipo_prazo]?.nome}</span></td>
@@ -227,6 +252,18 @@ export default function AdminHome({ abrirInicial = null }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {nSel > 0 && (
+        <div className="barra-selecao" role="region" aria-label="Processos selecionados">
+          <span><strong className="num">{nSel}</strong> {nSel === 1 ? 'processo selecionado' : 'processos selecionados'}</span>
+          <div className="acoes">
+            <button className="btn btn-leve" onClick={() => setSelecionados(new Set())}>Limpar</button>
+            <button className="btn btn-principal" onClick={() => setRelatorio(true)}>
+              Criar relatório{nSel === 1 ? ' em PDF' : ''}
+            </button>
+          </div>
         </div>
       )}
     </section>

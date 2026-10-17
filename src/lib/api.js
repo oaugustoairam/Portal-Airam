@@ -225,6 +225,11 @@ const supabaseApi = {
     const { data } = await sb.from('perfil_cliente').select('*').eq('id', perfil.id).maybeSingle()
     return data
   },
+  async controlesInternos(ids) {
+    const { data, error } = await sb.from('controle_interno').select('*').in('id', ids)
+    if (error) throw error
+    return Object.fromEntries(data.map((c) => [c.id, c]))
+  },
   async controleInterno(processoId) {
     const { data, error } = await sb.from('controle_interno').select('*').eq('id', processoId).maybeSingle()
     if (error) throw error
@@ -526,6 +531,10 @@ const demoApi = {
     if (a.tipo === 'projeto_final' && proc) proc.projeto_assinado_em = proc.projeto_assinado_em || a.assinado_em
     simularAvisos(d.processos.find((x) => x.id === a.processo_id), [avisoAssinatura(a.tipo, 'assinado')])
     gravar()
+  },
+  async controlesInternos(ids) {
+    const c = db().controles || {}
+    return Object.fromEntries(ids.filter((id) => c[id]).map((id) => [id, c[id]]))
   },
   async controleInterno(processoId) {
     return db().controles?.[processoId] || { id: processoId }
