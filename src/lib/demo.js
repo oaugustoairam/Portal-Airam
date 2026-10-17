@@ -30,6 +30,13 @@ function docFicticio(titulo) {
 // Renders da demonstração: fotos de ambientes da Airam
 const foto = (nome) => FOTOS.find((f) => f.nome === nome).src
 
+// Comprovante fictício (imagem) para a pasta do cliente na demonstração
+function comprovanteSvg(titulo, linhas) {
+  const t = linhas.map((l, i) => `<text x="40" y="${150 + i * 34}" font-family="Arial" font-size="20" fill="#393939">${l}</text>`).join('')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="${220 + linhas.length * 34}"><rect width="100%" height="100%" fill="#ffffff"/><rect width="100%" height="90" fill="#930000"/><text x="40" y="58" font-family="Arial" font-size="28" font-weight="bold" fill="#fff">${titulo}</text><text x="40" y="125" font-family="Arial" font-size="15" fill="#6e6e6c">Documento fictício da demonstração</text>${t}</svg>`
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+}
+
 export function criarDadosDemo() {
   const p1 = 'demo-0154'
   const p2 = 'demo-0161'
@@ -62,6 +69,7 @@ export function criarDadosDemo() {
     sessao: null,
     contas: [
       { email: 'equipe@airam.exemplo', nome: 'Equipe Airam', papel: 'admin', senha: SENHA_DEMO, precisa_trocar_senha: false },
+      { email: 'vendedor@airam.exemplo', nome: 'Augusto Moraes', papel: 'vendedor', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'marina@exemplo.com', cpf: '52998224725', nome: 'Marina Duarte', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'carla@exemplo.com', cpf: '27584319637', nome: 'Carla Nogueira', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'rafael@exemplo.com', cpf: '11144477735', nome: 'Rafael Moura', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: true },
@@ -189,7 +197,7 @@ export function criarDadosDemo() {
       ['producao_iniciada', 'Seus móveis entraram em fabricação', 'Projeto final assinado! Seus móveis entraram em fabricação.', -27],
       ['conferencia_realizada', 'Conferência concluída', 'A conferência do seu projeto final foi concluída. Em breve ele estará pronto para assinatura.', -30],
       ['medicao_realizada', 'Medição concluída', 'A medição dos seus ambientes foi concluída. Agora preparamos o seu projeto final.', -44],
-      ['projeto_inicial', 'Seu projeto inicial chegou', 'Seu projeto inicial está disponível no Portal Airam, em Documentos.', -50],
+      ['projeto_inicial', 'Seu projeto inicial chegou', 'Seu projeto inicial está disponível no Portal Airam, na aba Projeto inicial.', -50],
       ['financeiro_aprovado', 'Solução financeira aprovada', 'Sua solução financeira foi aprovada. Seguimos para a próxima etapa do seu processo.', -55],
     ].flatMap(([evento, titulo, mensagem, dias], i) => [
       { id: `av${i}w`, processo_id: p1, evento, titulo, mensagem, canal: 'whatsapp', destino: '5511900000154', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
@@ -218,9 +226,34 @@ export function criarDadosDemo() {
         liberador: 'Ricardo', liberador_recebeu_em: dia(-11), conferido_em: dia(-4), conferencia_enviada_em: dia(-3), pdf_recebido_em: dia(-2),
       },
     },
+    // Gestão de clientes (vendedores): clientes fictícios
+    vendas: [
+      ['v1', '100003012', 'Helena Martins Costa', 'Augusto Moraes', 'Indicação', 'mooca', -2, 'santander', '1 + 12', 28500, 24310.5, 'resolvido', ['pix', 'boletos']],
+      ['v2', '100003013', 'Paulo Henrique Lima', 'Agatha Moraes', 'Rubia', 'guarulhos', -4, 'airam', '18 s/ entrada', 15800, 12100, 'pendente', ['boletos']],
+      ['v3', '100003014-1', 'Camila Ferraz', 'Moises Alves', 'Cliente loja', 'mooca', -6, 'avista', 'À vista', 9200, 9200, 'resolvido', ['pix']],
+      ['v4', '100003015', 'Rodrigo Teixeira', 'Augusto Moraes', 'Arquitetura', 'guarulhos', -8, 'dubai', '1 + 10', 34000, 27890.4, 'pendente', ['pix', 'cartao']],
+      ['v5', '100003016', 'Larissa Gomes', 'Felipe Foiadell', 'Porta de loja', 'guarulhos', -10, 'cartao', '10x', 12400, 11530.2, 'resolvido', ['cartao']],
+      ['v6', '100003017', 'Eduardo Rezende', 'Ramon Arias', 'Rubia', 'mooca', -12, 'santander', '24 s/ entrada', 41000, 30220, 'cancelado', []],
+      ['v7', '100003018', 'Beatriz Nunes', 'Agatha Moraes', 'Amigos pessoais', 'mooca', -3, null, null, 7600, null, 'pendente', []],
+      ['v8', '100002990', 'Vinícius Prado', 'Moises Alves', 'Indicação', 'guarulhos', -40, 'airam', '1 + 24', 22000, 17400, 'resolvido', ['pix', 'boletos']],
+    ].map(([id, codigo, cliente_nome, vendedor, captacao, loja, dias, fin, forma, valor, defl, situacao, meios]) => ({
+      id, mes: dia(dias).slice(0, 7), codigo, cliente_nome, vendedor, captacao, loja, data_venda: dia(dias), financeira: fin,
+      forma_pagamento: forma, valor_venda: valor, valor_deflacionado: defl, valor_entrada: forma?.startsWith('1 +') ? Math.round(valor * 0.1) : null,
+      valor_parcela: null, vencimento_primeira: dia(dias + 30), meios, prazo_tipo: '45_dias', previsao_imovel: null,
+      envio_email: dia(dias + 1), assinatura_inicial: situacao === 'resolvido' ? dia(dias + 3) : null, avaliacao_google: situacao === 'resolvido' ? true : null,
+      bruto_promob: Math.round(valor * 1.18), pedido_fabrica: '', assinatura_projeto_final: null, prazo_limite_entrega: null,
+      medicao_realizada: null, limite_projeto_final: null, situacao, pasta_fechada_em: null, criado_em: quando(dias),
+      observacao: { v2: 'Gerar 18 boletos pela casa', v4: 'Aguardando aprovação da Dubai', v6: 'Desistiu do projeto', v7: 'Definir forma de pagamento' }[id] || '',
+    })),
+    vendaDocs: [
+      ['vd1', 'v1', 'comprovante_pix', 'Comprovante PIX — entrada', comprovanteSvg('Comprovante de PIX', ['Valor: R$ 2.850,00', 'Pagador: Helena M. Costa', 'Recebedor: Airam Arquitetura'])],
+      ['vd2', 'v1', 'financeira_aprovada', 'Santander aprovado', comprovanteSvg('Financeira aprovada', ['Santander · 1 + 12', 'Situação: APROVADO'])],
+      ['vd3', 'v1', 'contrato_assinado', 'Contrato assinado', comprovanteSvg('Contrato assinado', ['Pedido 100003012', 'Assinado na loja Mooca'])],
+      ['vd4', 'v3', 'comprovante_pix', 'Comprovante PIX', comprovanteSvg('Comprovante de PIX', ['Valor: R$ 9.200,00'])],
+    ].map(([id, venda_id, categoria, titulo, img]) => ({ id, venda_id, categoria, titulo, arquivo_path: img, tipo_mime: 'image/svg+xml', criado_em: quando(-2) })),
     perfisCliente: {
       'marina@exemplo.com': {
-        nome_preferido: 'Marina', telefone: '(11) 90000-0154', telefone_2: '', nascimento: null,
+        nome_preferido: 'Marina', sobrenome: 'Duarte', instagram: 'marina.duarte', telefone: '(11) 90000-0154', telefone_2: '', nascimento: null,
         cep: '03164000', endereco: 'Rua das Acácias', numero: '120', complemento: 'ap. 82', bairro: 'Mooca', cidade: 'São Paulo', uf: 'SP',
         observacoes: 'Portaria 24h. Elevador de serviço disponível das 8h às 17h. Tenho um gato.',
         receber_novidades: true, foto_path: null,

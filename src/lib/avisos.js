@@ -10,7 +10,7 @@ export function avisosDaMudanca(a, n) {
   if (n.data_medicao && n.data_medicao !== a.data_medicao && !n.medicao_concluida)
     add('medicao_agendada', 'Medição agendada', `Sua medição está agendada para ${br(n.data_medicao)}. Nossa equipe vai até o local nessa data.`)
   if (n.projeto_inicial_enviado && !a.projeto_inicial_enviado)
-    add('projeto_inicial', 'Seu projeto inicial chegou', 'Seu projeto inicial está disponível no Portal Airam, em Documentos.')
+    add('projeto_inicial', 'Seu projeto inicial chegou', 'Seu projeto inicial está disponível no Portal Airam, na aba Projeto inicial.')
   if (n.medicao_concluida && !a.medicao_concluida)
     add('medicao_realizada', 'Medição concluída', 'A medição dos seus ambientes foi concluída. Agora preparamos o seu projeto final.')
   if (n.data_conferencia && n.data_conferencia !== a.data_conferencia && !n.conferencia_concluida)

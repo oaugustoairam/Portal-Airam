@@ -39,11 +39,13 @@ export default function App() {
   const irPara = (aba) => {
     setAbaCliente(aba)
     window.scrollTo(0, 0)
+    // no celular, a aba escolhida fica visível na barra que desliza
+    requestAnimationFrame(() => document.querySelector('.topo-aba.ativa')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }))
   }
 
   if (perfil === undefined) return <div className="carregando">Carregando…</div>
 
-  const equipe = perfil && ['admin', 'equipe'].includes(perfil.papel)
+  const equipe = perfil && ['admin', 'equipe', 'vendedor'].includes(perfil.papel)
   const faixaDemo = MODO_DEMO && (
     <div className="faixa-demo">Modo demonstração: dados fictícios, salvos só neste navegador.</div>
   )
@@ -85,7 +87,8 @@ export default function App() {
         {!equipe && (
           <nav className="topo-abas" aria-label="Áreas do cliente">
             <div className="topo-abas-in">
-              {[['processo', 'Meu processo'], ['perfil', 'Meu perfil'], ['lojas', 'Nossas lojas']].map(([k, t]) => (
+              {[['perfil', 'Meu perfil'], ['processo', 'Meu processo'], ['contrato', 'Contrato'], ['projeto_inicial', 'Projeto inicial'],
+                ['render', 'Renders'], ['projeto_final', 'Projeto final'], ['lojas', 'Nossas lojas']].map(([k, t]) => (
                 <button key={k} className={`topo-aba ${abaCliente === k ? 'ativa' : ''}`} aria-current={abaCliente === k ? 'page' : undefined}
                   onClick={() => irPara(k)}>{t}</button>
               ))}
@@ -97,7 +100,7 @@ export default function App() {
         {faixaDemo}
       </header>
       <main className={`conteudo ${equipe ? '' : 'conteudo-cliente'}`}>
-        {equipe ? <PainelEquipe /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
+        {equipe ? <PainelEquipe perfil={perfil} /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
         {!equipe && <InstalarApp />}
       </main>
     </div>

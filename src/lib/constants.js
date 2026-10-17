@@ -187,7 +187,7 @@ export function linhaDoTempo(p, assinaturas = [], { cliente = false } = {}) {
       nome: 'Projeto inicial',
       data: p.projeto_inicial_em?.slice(0, 10) || p.data_projeto_inicial,
       feito: !!p.projeto_inicial_enviado,
-      detalhe: p.projeto_inicial_enviado ? 'Disponível em Documentos' : null,
+      detalhe: p.projeto_inicial_enviado ? 'Disponível na aba Projeto inicial' : null,
     },
     { id: 'medicao', nome: 'Medição', data: p.data_medicao, feito: p.medicao_concluida },
     { id: 'conferencia', nome: 'Projeto final · Conferência', data: p.data_conferencia, feito: p.conferencia_concluida },

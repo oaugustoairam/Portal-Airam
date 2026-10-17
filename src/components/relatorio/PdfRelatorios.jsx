@@ -419,6 +419,94 @@ function RelatorioLista({ linhas, geradoEm }) {
   )
 }
 
+// ============================================================ PDF do controle mensal de vendas
+const SIT_PDF = { resolvido: ['ok', 'Resolvido'], pendente: ['andamento', 'Pendente'], cancelado: ['atraso', 'Cancelado'] }
+const real = (v) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+const NOMES_FIN = { avista: 'À vista', dubai: 'Dubai', airam: 'Airam / Especiais', santander: 'Santander', cartao: 'Cartão de crédito' }
+const COL_V = [
+  ['codigo', 'Cód.', 58], ['cliente_nome', 'Cliente', 0], ['vendedor', 'Vendedor', 74], ['captacao', 'Captação', 62],
+  ['data_venda', 'Data', 46], ['financeira', 'Financeira', 82], ['valor_venda', 'Valor', 62], ['valor_deflacionado', 'Deflacionado', 66], ['situacao', 'Situação', 58],
+]
+
+function RelatorioVendas({ vendas, mes, resumo, porVendedor, porCaptacao, geradoEm }) {
+  const [a, m] = mes.split('-')
+  const nome = new Date(Number(a), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const maxV = Math.max(1, ...porVendedor.map((x) => x.valor))
+  const maxC = Math.max(1, ...porCaptacao.map((x) => x.valor))
+  const Ranking = ({ titulo, itens, max }) => (
+    <View style={{ flex: 1, marginRight: 14 }}>
+      <Text style={s.titulo}>{titulo}</Text>
+      {itens.slice(0, 6).map((x, i) => (
+        <View key={x.nome} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+          <Text style={{ width: 12, fontSize: 7, color: COR.tinta2 }}>{i + 1}</Text>
+          <Text style={{ width: 92, fontSize: 7.6 }}>{x.nome}</Text>
+          <View style={{ flexGrow: 1, height: 6, backgroundColor: COR.papel, borderRadius: 2, marginRight: 6 }}>
+            <View style={{ width: `${(x.valor / max) * 100}%`, height: 6, backgroundColor: i === 0 ? COR.marca : COR.tinta, borderRadius: 2 }} />
+          </View>
+          <Text style={{ width: 70, fontSize: 7.4, textAlign: 'right' }}>{real(x.valor)}</Text>
+          <Text style={{ width: 34, fontSize: 6.8, color: COR.tinta2, textAlign: 'right' }}>{x.qtd} {x.qtd === 1 ? 'venda' : 'vendas'}</Text>
+        </View>
+      ))}
+    </View>
+  )
+  return (
+    <Document title={`Relatório de vendas — ${nome}`} author={EMPRESA} creator="Portal Airam" language="pt-BR">
+      <Page size="A4" orientation="landscape" style={[s.pagina, { paddingTop: 58, paddingBottom: 46, paddingHorizontal: M }]}>
+        <View style={{ position: 'absolute', top: 22, left: M, right: M, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+          paddingBottom: 9, borderBottomWidth: 0.6, borderBottomColor: COR.linha }} fixed>
+          <Image src={logoVermelho} style={{ height: 18, width: 74, objectFit: 'contain' }} />
+          <Text style={s.miudo}>Gestão de clientes · uso interno · {dataCurta(geradoEm)}</Text>
+        </View>
+        <Text style={[s.rotulo, { color: COR.marca }]}>Relação de clientes</Text>
+        <Text style={{ fontSize: 22, fontWeight: 300, letterSpacing: -0.4, marginBottom: 12 }}>{nome.charAt(0).toUpperCase() + nome.slice(1)}</Text>
+
+        <View style={{ flexDirection: 'row', marginBottom: 14 }}>
+          {[['Resolvidos', resumo.resolvido, COR.ok], ['Pendentes', resumo.pendente, COR.ambar], ['Cancelados', resumo.cancelado, COR.marca], ['Total sem cancelados', resumo.validas, COR.tinta]].map(([t, r, cor]) => (
+            <View key={t} style={{ flex: 1, marginRight: 10, borderTopWidth: 1.4, borderTopColor: cor, paddingTop: 6 }}>
+              <Text style={s.rotulo}>{t}</Text>
+              <Text style={{ fontSize: 15, fontWeight: 300 }}>{real(r.valor)}</Text>
+              <Text style={s.miudo}>{r.qtd} {r.qtd === 1 ? 'venda' : 'vendas'} · deflacionado</Text>
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', marginBottom: 14 }} wrap={false}>
+          <Ranking titulo="Ranking por vendedor" itens={porVendedor} max={maxV} />
+          <Ranking titulo="Ranking por captação" itens={porCaptacao} max={maxC} />
+        </View>
+
+        <View style={{ flexDirection: 'row', backgroundColor: COR.tinta, paddingVertical: 5, paddingHorizontal: 4, borderRadius: 3 }} fixed>
+          {COL_V.map(([k, t, w]) => (
+            <Text key={k} style={{ width: w || undefined, flexGrow: w ? 0 : 1, paddingRight: 4, fontSize: 6.6, fontWeight: 500, color: COR.branco }}>{t}</Text>
+          ))}
+        </View>
+        {vendas.map((v, i) => (
+          <View key={v.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4.5, paddingHorizontal: 4, backgroundColor: i % 2 ? COR.papel : COR.branco }} wrap={false}>
+            {COL_V.map(([k, , w]) => {
+              const est = { width: w || undefined, flexGrow: w ? 0 : 1, paddingRight: 4, fontSize: 7.2 }
+              if (k === 'situacao') return <View key={k} style={est}><Selo tipo={SIT_PDF[v.situacao][0]}>{SIT_PDF[v.situacao][1]}</Selo></View>
+              if (k === 'cliente_nome')
+                return (
+                  <View key={k} style={est}>
+                    <Text style={{ fontSize: 7.4, fontWeight: 500 }}>{v.cliente_nome}</Text>
+                    {v.observacao ? <Text style={{ fontSize: 6.3, color: COR.tinta2, marginTop: 1 }}>{v.observacao}</Text> : null}
+                  </View>
+                )
+              const txt = k === 'data_venda' ? dataMini(v.data_venda) : k === 'financeira' ? [NOMES_FIN[v.financeira], v.forma_pagamento].filter(Boolean).join(' · ') || '—'
+                : k.startsWith('valor') ? real(v[k]) : v[k] || '—'
+              return <Text key={k} style={[est, k === 'codigo' && { fontWeight: 600 }]}>{txt}</Text>
+            })}
+          </View>
+        ))}
+        <Rodape paginas />
+      </Page>
+    </Document>
+  )
+}
+
+export function gerarPdfVendas(dados) {
+  return pdf(<RelatorioVendas {...dados} geradoEm={new Date().toISOString().slice(0, 10)} />).toBlob()
+}
+
 export function gerarPdfCliente(dados) {
   return pdf(<RelatorioCliente {...dados} />).toBlob()
 }

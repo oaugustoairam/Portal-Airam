@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
-  CATEGORIAS_CLIENTE,
   linhaDoTempo,
   etapaAtual,
   progresso,
@@ -10,7 +9,7 @@ import {
   ROTULO_PRAZO,
 } from '../lib/constants.js'
 import { FOTOS, fotoDoProcesso } from '../lib/fotos.js'
-import { useContador, useRevelar } from '../lib/movimento.js'
+import { useContador } from '../lib/movimento.js'
 import { WHATSAPP_AIRAM, linkWhatsApp } from '../lib/contato.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
@@ -21,12 +20,45 @@ import Garantia from './Garantia.jsx'
 const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'O PDF do seu projeto final' }
 
 // O que o cliente vê. A equipe usa a mesma tela em "Ver como cliente" (visualizacao = true).
-export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
+export default function ProcessoView({ processo, onAtualizar, visualizacao, secao = 'processo' }) {
   const { documentos = [], assinaturas = [] } = processo
   const etapas = linhaDoTempo(processo, assinaturas, { cliente: true })
   const pendenciaFinanceira = processo.solucao_financeira !== 'ok'
   const pendentes = assinaturas.filter((a) => a.status === 'pendente')
   const [assinando, setAssinando] = useState(null)
+
+  const modalAssinatura = assinando && (
+    <AssinaturaModal
+      assinatura={assinando}
+      documento={documentos.find((d) => d.id === assinando.documento_id)}
+      nomeCliente={processo.cliente_nome}
+      onFechar={() => setAssinando(null)}
+      onAssinado={() => {
+        setAssinando(null)
+        onAtualizar?.()
+      }}
+    />
+  )
+
+  // abas de documentos: Contrato, Projeto inicial, Renders, Projeto final
+  if (ABAS_DOCUMENTOS[secao]) {
+    const aba = ABAS_DOCUMENTOS[secao]
+    const assinar = secao === 'projeto_final' ? pendentes.filter((a) => a.tipo === 'projeto_final') : []
+    return (
+      <article className="processo processo-docs">
+        <header className="docs-cab">
+          <span className="rotulo">Código do cliente {processo.codigo}</span>
+          <h1 className="titulo-grande">{aba.titulo}</h1>
+          <p className="docs-cab-texto">{aba.texto}</p>
+        </header>
+        {assinar.map((a) => (
+          <CartaoAssinar key={a.id} assinatura={a} visualizacao={visualizacao} onAssinar={() => setAssinando(a)} />
+        ))}
+        <DocumentosCategoria documentos={documentos} categoria={secao} />
+        {modalAssinatura}
+      </article>
+    )
+  }
 
   return (
     <article className="processo">
@@ -51,19 +83,7 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
             </div>
           )}
           {pendentes.map((a) => (
-            <div key={a.id} className="cartao-assinar">
-              <span className="cartao-assinar-icone" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 20c3-1 4-4 6-4s1 3 3 3 3-2 4-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="m14 4 6 6-7 7-4 1 1-4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
-              </span>
-              <div>
-                <strong>{NOME_ASSINATURA[a.tipo]} está pronto para assinatura</strong>
-                <span>Confira e assine aqui mesmo pelo portal. Leva menos de 2 minutos.</span>
-              </div>
-              <button className="btn btn-principal" disabled={visualizacao} onClick={() => setAssinando(a)}
-                title={visualizacao ? 'Disponível só para o cliente' : undefined}>
-                Assinar agora
-              </button>
-            </div>
+            <CartaoAssinar key={a.id} assinatura={a} visualizacao={visualizacao} onAssinar={() => setAssinando(a)} />
           ))}
           {processo.recado_cliente && (
             <figure className="recado">
@@ -80,22 +100,9 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
 
       <Jornada etapas={etapas} />
 
-      <Documentos documentos={documentos} />
-
       <Garantia montagemEm={processo.entrega_concluida ? processo.montagem_concluida_em : null} />
 
-      {assinando && (
-        <AssinaturaModal
-          assinatura={assinando}
-          documento={documentos.find((d) => d.id === assinando.documento_id)}
-          nomeCliente={processo.cliente_nome}
-          onFechar={() => setAssinando(null)}
-          onAssinado={() => {
-            setAssinando(null)
-            onAtualizar?.()
-          }}
-        />
-      )}
+      {modalAssinatura}
     </article>
   )
 }
@@ -165,46 +172,54 @@ function Hero({ processo, etapas, documentos }) {
   )
 }
 
-// ---------------------------------------------------------------- Documentos
-function Documentos({ documentos }) {
-  const presentes = CATEGORIAS_CLIENTE.filter((c) => documentos.some((d) => d.categoria === c.id))
-  const [aba, setAba] = useState(presentes.find((c) => c.id === 'render')?.id || presentes[0]?.id)
+function CartaoAssinar({ assinatura: a, visualizacao, onAssinar }) {
+  return (
+    <div className="cartao-assinar">
+      <span className="cartao-assinar-icone" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 20c3-1 4-4 6-4s1 3 3 3 3-2 4-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="m14 4 6 6-7 7-4 1 1-4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+      </span>
+      <div>
+        <strong>{NOME_ASSINATURA[a.tipo]} está pronto para assinatura</strong>
+        <span>Confira e assine aqui mesmo pelo portal. Leva menos de 2 minutos.</span>
+      </div>
+      <button className="btn btn-principal" disabled={visualizacao} onClick={onAssinar}
+        title={visualizacao ? 'Disponível só para o cliente' : undefined}>
+        Assinar agora
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- Documentos (uma aba por tipo)
+export const ABAS_DOCUMENTOS = {
+  contrato: { titulo: 'Contrato', texto: 'Seu contrato assinado com a Airam.', vazio: 'O contrato assinado aparece aqui assim que a Airam anexar.' },
+  projeto_inicial: { titulo: 'Projeto inicial', texto: 'A representação dos seus móveis com as especificações combinadas na venda.', vazio: 'O projeto inicial aparece aqui assim que estiver pronto.' },
+  render: { titulo: 'Renders', texto: 'As imagens do seu projeto. Toque em uma imagem para ampliar.', vazio: 'Os renders do seu projeto aparecem aqui.' },
+  projeto_final: { titulo: 'Projeto final', texto: 'O projeto final executivo dos seus móveis. Quando estiver pronto, você assina por aqui.', vazio: 'O projeto final aparece aqui depois da conferência.' },
+}
+
+function DocumentosCategoria({ documentos, categoria }) {
   const [aberto, setAberto] = useState(null)
-  const [ref, visivel] = useRevelar()
-
-  useEffect(() => {
-    if (!presentes.some((c) => c.id === aba)) setAba(presentes[0]?.id)
-  }, [documentos])
-
   const lista = documentos
-    .filter((d) => d.categoria === aba)
+    .filter((d) => d.categoria === categoria)
     .sort((a, b) => (b.criado_em || '').localeCompare(a.criado_em || ''))
   const imagens = lista.filter((d) => d.tipo_mime?.startsWith('image/'))
+  const outros = categoria === 'contrato' ? documentos.filter((d) => d.categoria === 'outro') : []
 
   return (
-    <section className={`bloco documentos revelar ${visivel ? 'visivel' : ''}`} ref={ref}>
-      <h2 className="titulo-secao">Documentos e projetos</h2>
-      {!presentes.length && <p className="vazio">Os documentos aparecem aqui conforme o processo avança.</p>}
-      {presentes.length > 0 && (
+    <section className="bloco documentos">
+      {!lista.length && <p className="vazio">{ABAS_DOCUMENTOS[categoria].vazio}</p>}
+      {lista.length > 0 && (categoria === 'render' ? (
+        <Carrossel itens={lista} onAbrir={(i) => setAberto(i)} />
+      ) : (
+        <ul className="docs">
+          {lista.map((d, i) => <LinhaDoc key={d.id} doc={d} indice={i} />)}
+        </ul>
+      ))}
+      {outros.length > 0 && (
         <>
-          <div className="abas" role="tablist">
-            {presentes.map((c) => (
-              <button key={c.id} role="tab" aria-selected={aba === c.id}
-                className={`aba ${aba === c.id ? 'aba-ativa' : ''}`} onClick={() => setAba(c.id)}>
-                {c.nome}
-                <span className="aba-qtd">{documentos.filter((d) => d.categoria === c.id).length}</span>
-              </button>
-            ))}
-          </div>
-          {aba === 'render' ? (
-            <Carrossel itens={lista} onAbrir={(i) => setAberto(i)} />
-          ) : (
-            <ul className="docs" key={aba}>
-              {lista.map((d, i) => (
-                <LinhaDoc key={d.id} doc={d} indice={i} />
-              ))}
-            </ul>
-          )}
+          <h2 className="titulo-secao">Outros documentos</h2>
+          <ul className="docs">{outros.map((d, i) => <LinhaDoc key={d.id} doc={d} indice={i} />)}</ul>
         </>
       )}
       {aberto !== null && imagens.length > 0 && (

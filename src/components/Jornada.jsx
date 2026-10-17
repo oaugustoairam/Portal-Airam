@@ -16,7 +16,7 @@ export const GUIA = {
   },
   projeto_inicial: {
     acontece: 'Preparamos a representação dos seus móveis com as especificações combinadas na venda.',
-    voce: ['Confira o projeto inicial em Documentos', 'Anote as dúvidas para a medição'],
+    voce: ['Confira o projeto inicial na aba Projeto inicial', 'Anote as dúvidas para a medição'],
   },
   medicao: {
     acontece: 'Nossa equipe mede cada ambiente no imóvel, em até 10 dias após o agendamento, para tudo encaixar com precisão.',

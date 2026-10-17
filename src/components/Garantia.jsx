@@ -7,12 +7,46 @@ function somarAnos(iso, anos) {
   return d.toISOString().slice(0, 10)
 }
 
+const tracos = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }
+
+// Ferragens com amortecimento: padrão dos móveis Airam (ao lado da garantia)
+function Ferragens() {
+  return (
+    <aside className="ferragens" aria-label="Ferragens com amortecimento">
+      <span className="ferragens-rotulo">Padrão Airam</span>
+      <h3 className="ferragens-titulo">Fechamento suave em todo o móvel</h3>
+      <div className="ferragem">
+        <svg className="ferragem-icone ferragem-porta" viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="8" y="6" width="32" height="36" rx="2" {...tracos} />
+          <path className="porta" d="M24 6v36" {...tracos} />
+          <circle cx="12" cy="14" r="1.6" fill="currentColor" /><circle cx="12" cy="34" r="1.6" fill="currentColor" />
+        </svg>
+        <div>
+          <strong>Dobradiças com amortecimento</strong>
+          <p>As portas desaceleram no final e fecham devagar, sem batidas e sem barulho, protegendo os móveis do impacto.</p>
+        </div>
+      </div>
+      <div className="ferragem">
+        <svg className="ferragem-icone ferragem-gaveta" viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="6" y="10" width="36" height="28" rx="2" {...tracos} />
+          <g className="gaveta"><rect x="10" y="20" width="28" height="10" rx="1.5" {...tracos} /><path d="M20 25h8" {...tracos} /></g>
+        </svg>
+        <div>
+          <strong>Corrediças ocultas com amortecimento</strong>
+          <p>As gavetas deslizam leves e fecham sozinhas no final do curso. As corrediças ficam escondidas embaixo da gaveta, deixando o acabamento mais limpo.</p>
+        </div>
+      </div>
+    </aside>
+  )
+}
+
 // Garantia Airam: 10 anos na madeira. Depois da montagem, mostra até quando vale.
 export default function Garantia({ montagemEm }) {
   const [ref, visivel] = useRevelar()
   return (
     <section className={`bloco garantia revelar ${visivel ? 'visivel' : ''}`} ref={ref}>
       <span className="rotulo-mono secao-mono">Garantia</span>
+      <div className="garantia-duas">
       <div className="garantia-linha">
         <div className="garantia-numero">
           <span className="num">10</span>
@@ -32,6 +66,8 @@ export default function Garantia({ montagemEm }) {
             </ul>
           </details>
         </div>
+      </div>
+      <Ferragens />
       </div>
     </section>
   )

@@ -10,13 +10,24 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   documentos e renders, assina o projeto final pelo ZapSign dentro do portal, edita "Meu perfil".
   Para o cliente, a linha do tempo começa em **Compra** (data da venda) e a solução financeira não é etapa:
   com pendência, aparece um lembrete no topo (`linhaDoTempo(p, a, { cliente: true })`).
-  Abas do cliente: Meu processo, Meu perfil, Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site
-  (endereços e links em `src/lib/contato.js`).
+  Abas do cliente, nesta ordem: Meu perfil, Meu processo, Contrato, Projeto inicial, Renders, Projeto final,
+  Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (endereços e links em `src/lib/contato.js`).
+  Meu perfil: nome, sobrenome, Instagram, endereço de entrega dos móveis. Garantia de 10 anos na madeira +
+  card "Padrão Airam" (dobradiças e corrediças ocultas com amortecimento; não é garantia).
   O fundo do topo alterna entre os renders do cliente (ou fotos da loja). Ao avançar de fase, aparece a transição.
-- **Equipe**: área com duas seções.
+- **Papéis**: admin, equipe, vendedor, cliente (`perfis.papel`). `eh_equipe()` = admin/equipe/vendedor;
+  `eh_vendas()` = admin/vendedor.
+- **Equipe**: área com seções.
   - **Processos**: Geral (resumo por fase + lista com filtros) e pastas Financeiro, Medição, Conferência,
     Assinatura do projeto final, Entregas, Vistoria, Assistência técnica (`src/lib/pastas.js`).
   - **Marketing**: E-mail marketing e Aniversários (novas ferramentas entram como novas pastas).
+  - **Gestão de clientes** (só admin e vendedor; `src/components/GestaoClientes.jsx`, `src/lib/vendas.js`):
+    Controle mensal (tabela `vendas`, igual à planilha FEEDBACK_VENDAS: resumo, ranking por vendedor e captação,
+    "O que falta", planilha no modelo `src/assets/modelos/feedback-vendas.xlsx` e PDF), ficha da venda com
+    financeiras/formas da Airam, **Fazer capa** (preenche `capa-envelope.xlsx`, frente e verso, em `src/lib/planilhas.js`)
+    e **Controle de pastas** (`venda_documentos`, arquivos em `documentos/vendas/<id>/`; "Fechar venda" junta tudo
+    num PDF com pdf-lib em `src/lib/pastaPdf.js`). Os modelos .xlsx são preenchidos célula a célula (`src/lib/xlsx.js`)
+    sem mudar o desenho.
   - No processo: Dados e prazos, Anexos (cliente vê), Arquivos internos (só a loja: medição, Promob vendido,
     documentos do cliente, ficha cadastral), Assinaturas, Controle interno, Avisos, Acesso do cliente.
   - **Controle interno** (`controle_interno`, só equipe): datas reais de cada passo, liberador, montador,

@@ -999,12 +999,13 @@ function InfoDoCliente({ processo }) {
   const endereco = [p.endereco && `${p.endereco}${p.numero ? ', ' + p.numero : ''}`, p.complemento, p.bairro, p.cidade && `${p.cidade}${p.uf ? '/' + p.uf : ''}`,
     p.cep && `CEP ${String(p.cep).replace(/(\d{5})(\d{3})/, '$1-$2')}`].filter(Boolean).join(' · ')
   const linhas = [
-    ['Prefere ser chamado(a)', p.nome_preferido],
+    ['Nome', p.nome_preferido],
+    ['Sobrenome', p.sobrenome],
     ['Celular', p.telefone],
     ['Outro telefone', p.telefone_2],
     ['Novidades por e-mail', p.receber_novidades === false ? 'Não quer receber' : 'Aceita'],
-    ['Endereço para correspondência', endereco, true],
-    ['Informações sobre o imóvel', p.observacoes, true],
+    ['Instagram', p.instagram && `@${p.instagram}`],
+    ['Endereço de entrega dos móveis', endereco, true],
   ].filter(([, v]) => v)
   return (
     <div className="info-cliente">

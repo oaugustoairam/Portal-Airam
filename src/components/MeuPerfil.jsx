@@ -140,8 +140,13 @@ export default function MeuPerfil({ processo, onAtualizado }) {
           <legend>Seus dados</legend>
           <div className="grade">
             <div className="campo">
-              <label htmlFor="pf-nome">Como prefere ser chamado(a)</label>
-              <input id="pf-nome" maxLength={80} value={f.nome_preferido || ''} onChange={set('nome_preferido')} />
+              <label htmlFor="pf-nome">Nome</label>
+              <input id="pf-nome" maxLength={80} autoComplete="given-name" value={f.nome_preferido || ''} onChange={set('nome_preferido')} />
+              <span className="ajuda">Como prefere ser chamado(a)</span>
+            </div>
+            <div className="campo">
+              <label htmlFor="pf-sobrenome">Sobrenome</label>
+              <input id="pf-sobrenome" maxLength={120} autoComplete="family-name" value={f.sobrenome || ''} onChange={set('sobrenome')} />
             </div>
             <CampoData id="pf-nasc" rotulo="Data de nascimento" valor={f.nascimento} onChange={set('nascimento')} />
             <div className="campo">
@@ -152,6 +157,14 @@ export default function MeuPerfil({ processo, onAtualizado }) {
             <div className="campo">
               <label htmlFor="pf-tel2">Outro telefone (opcional)</label>
               <input id="pf-tel2" inputMode="tel" value={f.telefone_2 || ''} onChange={set('telefone_2', formatarTelefone)} />
+            </div>
+            <div className="campo">
+              <label htmlFor="pf-insta">Instagram (opcional)</label>
+              <div className="campo-prefixo">
+                <span aria-hidden="true">@</span>
+                <input id="pf-insta" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={60} value={f.instagram || ''}
+                  onChange={set('instagram', (v) => v.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[@\s/]/g, ''))} placeholder="seu.perfil" />
+              </div>
             </div>
           </div>
           <div className="grade">
@@ -168,7 +181,7 @@ export default function MeuPerfil({ processo, onAtualizado }) {
         </fieldset>
 
         <fieldset className="grupo">
-          <legend>Endereço para correspondência</legend>
+          <legend>Endereço de entrega dos móveis</legend>
           <div className="grade grade-endereco">
             <div className="campo">
               <label htmlFor="pf-cep">CEP</label>
@@ -203,17 +216,7 @@ export default function MeuPerfil({ processo, onAtualizado }) {
               </select>
             </div>
           </div>
-          {processo?.endereco && <p className="dica">Endereço da obra (cadastrado pela Airam): {processo.endereco}</p>}
-        </fieldset>
-
-        <fieldset className="grupo">
-          <legend>Sobre o imóvel</legend>
-          <div className="campo">
-            <label htmlFor="pf-obs">Informações sobre o imóvel</label>
-            <textarea id="pf-obs" rows={4} maxLength={1000} value={f.observacoes || ''} onChange={set('observacoes')}
-              placeholder="Portaria, elevador de serviço, vaga para descarga, horários do condomínio, animais de estimação…" />
-            <span className="ajuda num">{(f.observacoes || '').length}/1000</span>
-          </div>
+          {processo?.endereco && <p className="dica">Endereço informado no contrato: {processo.endereco}. Se a entrega for em outro lugar, avise a Airam.</p>}
         </fieldset>
 
         <fieldset className="grupo">

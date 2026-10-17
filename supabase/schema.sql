@@ -3,7 +3,7 @@
 -- Pode rodar de novo depois de mudanças: os comandos são idempotentes.
 
 -- 1. Perfis -----------------------------------------------------------------
--- papel: 'admin' (gerência), 'equipe' (funcionários) ou 'cliente'
+-- papel: 'admin' (gerência), 'equipe' (funcionários), 'vendedor' ou 'cliente'
 create table if not exists public.perfis (
   id uuid primary key references auth.users on delete cascade,
   email text not null,
@@ -25,11 +25,20 @@ drop trigger if exists ao_criar_usuario on auth.users;
 create trigger ao_criar_usuario after insert on auth.users
   for each row execute function public.criar_perfil();
 
--- Funcionário = papel admin ou equipe. Papéis só mudam pelo SQL Editor ou pelas
+alter table public.perfis drop constraint if exists perfis_papel_check;
+alter table public.perfis add constraint perfis_papel_check check (papel in ('admin', 'equipe', 'vendedor', 'cliente'));
+
+-- Funcionário = papel admin, equipe ou vendedor. Papéis só mudam pelo SQL Editor ou pelas
 -- funções do servidor; o app não consegue alterar.
 create or replace function public.eh_equipe()
 returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'equipe'));
+  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'equipe', 'vendedor'));
+$$;
+
+-- Gestão de clientes (vendas): só vendedores e gerência
+create or replace function public.eh_vendas()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'vendedor'));
 $$;
 
 create or replace function public.eh_admin()
@@ -180,8 +189,12 @@ on conflict (id) do update set
 
 drop policy if exists "equipe arquivos" on storage.objects;
 create policy "equipe arquivos" on storage.objects for all
-  using (bucket_id = 'documentos' and public.eh_equipe())
-  with check (bucket_id = 'documentos' and public.eh_equipe());
+  using (bucket_id = 'documentos' and public.eh_equipe() and coalesce((storage.foldername(name))[1], '') <> 'vendas')
+  with check (bucket_id = 'documentos' and public.eh_equipe() and coalesce((storage.foldername(name))[1], '') <> 'vendas');
+drop policy if exists "vendas arquivos" on storage.objects;
+create policy "vendas arquivos" on storage.objects for all
+  using (bucket_id = 'documentos' and public.eh_vendas() and (storage.foldername(name))[1] = 'vendas')
+  with check (bucket_id = 'documentos' and public.eh_vendas() and (storage.foldername(name))[1] = 'vendas');
 drop policy if exists "cliente le arquivos" on storage.objects;
 create policy "cliente le arquivos" on storage.objects for select
   using (
@@ -308,7 +321,7 @@ begin
   end if;
   if new.projeto_inicial_enviado and not old.projeto_inicial_enviado then
     perform public.enfileirar_aviso(new, 'projeto_inicial', 'Seu projeto inicial chegou',
-      'Seu projeto inicial está disponível no Portal Airam, em Documentos.');
+      'Seu projeto inicial está disponível no Portal Airam, na aba Projeto inicial.');
   end if;
   if new.medicao_concluida and not old.medicao_concluida then
     perform public.enfileirar_aviso(new, 'medicao_realizada', 'Medição concluída',
@@ -540,6 +553,13 @@ begin
   return new;
 end $$;
 
+-- Nome e sobrenome separados, Instagram e endereço de entrega dos móveis (endereco/numero/…)
+alter table public.perfil_cliente add column if not exists sobrenome text;
+alter table public.perfil_cliente add column if not exists instagram text;
+alter table public.perfil_cliente drop constraint if exists perfil_textos_extras;
+alter table public.perfil_cliente add constraint perfil_textos_extras
+  check (coalesce(length(sobrenome), 0) <= 120 and coalesce(length(instagram), 0) <= 60);
+
 drop trigger if exists sincronizar on public.perfil_cliente;
 create trigger sincronizar before insert or update on public.perfil_cliente
   for each row execute function public.sincronizar_perfil_cliente();
@@ -604,3 +624,72 @@ create trigger carimbar before insert or update on public.controle_interno
 drop trigger if exists auditoria on public.controle_interno;
 create trigger auditoria after insert or update or delete on public.controle_interno
   for each row execute function public.registrar_atividade();
+
+-- 16. Gestão de clientes (vendedores) ----------------------------------------
+-- Controle mensal das vendas (como a planilha de feedback), capa do envelope e controle de pastas.
+create table if not exists public.vendas (
+  id uuid primary key default gen_random_uuid(),
+  mes text not null check (mes ~ '^[0-9]{4}-[0-9]{2}$'),     -- mês do controle (AAAA-MM)
+  codigo text,
+  cliente_nome text not null,
+  vendedor text,
+  captacao text,
+  loja text check (loja in ('guarulhos', 'mooca')),
+  data_venda date,
+  financeira text check (financeira in ('avista', 'dubai', 'airam', 'santander', 'cartao')),
+  forma_pagamento text,
+  valor_venda numeric(12, 2),
+  valor_deflacionado numeric(12, 2),
+  valor_entrada numeric(12, 2),
+  valor_parcela numeric(12, 2),
+  vencimento_primeira date,
+  meios text[] not null default '{}',
+  prazo_tipo text check (prazo_tipo in ('45_dias', 'futura')),
+  previsao_imovel date,
+  envio_email date,
+  assinatura_inicial date,
+  avaliacao_google boolean,
+  bruto_promob numeric(12, 2),
+  pedido_fabrica text,
+  assinatura_projeto_final date,
+  prazo_limite_entrega date,
+  medicao_realizada date,
+  limite_projeto_final date,
+  observacao text,
+  situacao text not null default 'pendente' check (situacao in ('pendente', 'resolvido', 'cancelado')),
+  pasta_fechada_em timestamptz,
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  constraint vendas_textos check (coalesce(length(observacao), 0) <= 2000 and length(cliente_nome) <= 160)
+);
+create index if not exists vendas_mes_idx on public.vendas (mes);
+alter table public.vendas enable row level security;
+drop policy if exists "vendas equipe de vendas" on public.vendas;
+create policy "vendas equipe de vendas" on public.vendas for all using (public.eh_vendas()) with check (public.eh_vendas());
+
+create table if not exists public.venda_documentos (
+  id uuid primary key default gen_random_uuid(),
+  venda_id uuid not null references public.vendas on delete cascade,
+  categoria text not null check (categoria in ('comprovante_pix', 'financeira_aprovada', 'projeto_inicial', 'contrato_assinado', 'documento_foto')),
+  titulo text not null,
+  arquivo_path text not null check (arquivo_path like 'vendas/%'),
+  tipo_mime text,
+  criado_em timestamptz not null default now()
+);
+alter table public.venda_documentos enable row level security;
+drop policy if exists "pasta equipe de vendas" on public.venda_documentos;
+create policy "pasta equipe de vendas" on public.venda_documentos for all using (public.eh_vendas()) with check (public.eh_vendas());
+
+create or replace function public.carimbar_venda()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.atualizado_em := now();
+  return new;
+end $$;
+drop trigger if exists carimbar on public.vendas;
+create trigger carimbar before update on public.vendas for each row execute function public.carimbar_venda();
+drop trigger if exists auditoria on public.vendas;
+create trigger auditoria after insert or update or delete on public.vendas for each row execute function public.registrar_atividade();
+drop trigger if exists auditoria on public.venda_documentos;
+create trigger auditoria after insert or update or delete on public.venda_documentos for each row execute function public.registrar_atividade();

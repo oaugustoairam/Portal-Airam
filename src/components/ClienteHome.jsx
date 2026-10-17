@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { linhaDoTempo, etapaAtual, formatarData, ROTULO_PRAZO } from '../lib/constants.js'
-import ProcessoView from './ProcessoView.jsx'
+import ProcessoView, { ABAS_DOCUMENTOS } from './ProcessoView.jsx'
 import BotaoWhatsApp from './BotaoWhatsApp.jsx'
 import MeuPerfil from './MeuPerfil.jsx'
 import NossasLojas from './NossasLojas.jsx'
@@ -54,7 +54,7 @@ export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
         {processos.length > 1 && (
           <button className="btn btn-leve voltar" onClick={() => setAberto(null)}>← Meus processos</button>
         )}
-        <ProcessoView processo={aberto} onAtualizar={() => abrir(aberto.id, false)} />
+        <ProcessoView processo={aberto} secao={ABAS_DOCUMENTOS[aba] ? aba : 'processo'} onAtualizar={() => abrir(aberto.id, false)} />
         <BotaoWhatsApp nome={aberto.cliente_nome} codigo={aberto.codigo} />
       </>
     )

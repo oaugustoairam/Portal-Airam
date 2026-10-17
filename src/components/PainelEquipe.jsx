@@ -5,17 +5,21 @@ import { PASTAS } from '../lib/pastas.js'
 import AdminHome from './AdminHome.jsx'
 import Aniversarios, { linkParabens } from './Aniversarios.jsx'
 import EmailMarketing from './EmailMarketing.jsx'
+import GestaoClientes from './GestaoClientes.jsx'
 
 const SECOES = {
   processos: { nome: 'Processos', pastas: [['geral', 'Geral'], ...PASTAS.map((p) => [p.id, p.nome])] },
   // novas ferramentas de marketing entram como novas pastas aqui
   marketing: { nome: 'Marketing', pastas: [['email', 'E-mail marketing'], ['aniversarios', 'Aniversários']] },
+  // só vendedores e gerência
+  gestao: { nome: 'Gestão de clientes', pastas: [['mensal', 'Controle mensal'], ['pastas', 'Controle de pastas']], papeis: ['admin', 'vendedor'] },
 }
 
 // Área interna da loja: processos (geral e por fase) e marketing.
-export default function PainelEquipe() {
+export default function PainelEquipe({ perfil }) {
   const [secao, setSecao] = useState('processos')
-  const [pasta, setPasta] = useState({ processos: 'geral', marketing: 'email' })
+  const [pasta, setPasta] = useState({ processos: 'geral', marketing: 'email', gestao: 'mensal' })
+  const secoes = Object.entries(SECOES).filter(([, s]) => !s.papeis || s.papeis.includes(perfil?.papel))
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
 
@@ -35,7 +39,7 @@ export default function PainelEquipe() {
   return (
     <div className="painel-equipe">
       <nav className="painel-nav" aria-label="Áreas da gestão">
-        {Object.entries(SECOES).map(([k, s]) => (
+        {secoes.map(([k, s]) => (
           <button key={k} className={`painel-nav-item ${secao === k ? 'ativo' : ''}`} aria-current={secao === k ? 'page' : undefined}
             onClick={() => irPara(k)}>
             {s.nome}
@@ -75,6 +79,7 @@ export default function PainelEquipe() {
         <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />
       )}
       {secao === 'marketing' && atual === 'email' && <EmailMarketing processos={processos} />}
+      {secao === 'gestao' && <GestaoClientes aba={atual} perfil={perfil} />}
       {secao === 'marketing' && atual === 'aniversarios' && (
         <Aniversarios processos={processos} onAbrirProcesso={(id) => { irPara('processos', 'geral'); setAbrir(id) }} />
       )}

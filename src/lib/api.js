@@ -19,8 +19,8 @@ const TAMANHO_MAXIMO = 50 * 1024 * 1024
 const ERRO_LOGIN = 'Dados de acesso ou senha incorretos.'
 
 // campos do "Meu perfil" que o próprio cliente edita
-const CAMPOS_PERFIL = ['nome_preferido', 'telefone', 'telefone_2', 'nascimento', 'cep', 'endereco', 'numero', 'complemento',
-  'bairro', 'cidade', 'uf', 'observacoes', 'receber_novidades', 'foto_path']
+const CAMPOS_PERFIL = ['nome_preferido', 'sobrenome', 'telefone', 'telefone_2', 'instagram', 'nascimento', 'cep', 'endereco', 'numero',
+  'complemento', 'bairro', 'cidade', 'uf', 'receber_novidades', 'foto_path']
 function limparPerfil(d) {
   const out = {}
   for (const k of CAMPOS_PERFIL) if (k in d) out[k] = d[k] === '' ? null : d[k]
@@ -184,6 +184,56 @@ const supabaseApi = {
   async liberarAcesso(processoId) {
     return chamarFuncao('liberar-acesso', { processo_id: processoId })
   },
+  // ---------------- Gestão de clientes (vendedores)
+  async listarVendas(mes) {
+    let q = sb.from('vendas').select('*, venda_documentos(id, categoria)').order('data_venda', { ascending: false, nullsFirst: false })
+    if (mes) q = q.eq('mes', mes)
+    const { data, error } = await q
+    if (error) throw error
+    return data
+  },
+  async salvarVenda(v) {
+    const { data, error } = await sb.from('vendas').upsert(limparVenda(v)).select('*, venda_documentos(id, categoria)').single()
+    if (error) throw new Error('Não foi possível salvar: ' + error.message)
+    return data
+  },
+  async excluirVenda(id) {
+    const { data: docs } = await sb.from('venda_documentos').select('arquivo_path').eq('venda_id', id)
+    if (docs?.length) await sb.storage.from('documentos').remove(docs.map((d) => d.arquivo_path))
+    const { error } = await sb.from('vendas').delete().eq('id', id)
+    if (error) throw error
+  },
+  async documentosVenda(vendaId) {
+    const { data, error } = await sb.from('venda_documentos').select('*').eq('venda_id', vendaId).order('criado_em')
+    if (error) throw error
+    return data
+  },
+  async enviarDocumentoVenda(vendaId, categoria, arquivo) {
+    validarArquivoPasta(arquivo)
+    const seguro = arquivo.name.normalize('NFD').replace(/[^\w.-]+/g, '_')
+    const caminho = `vendas/${vendaId}/${Date.now()}-${seguro}`
+    const up = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: arquivo.type })
+    if (up.error) throw up.error
+    const { error } = await sb.from('venda_documentos').insert({ venda_id: vendaId, categoria, titulo: arquivo.name, arquivo_path: caminho, tipo_mime: arquivo.type })
+    if (error) throw error
+  },
+  async excluirDocumentoVenda(doc) {
+    await sb.storage.from('documentos').remove([doc.arquivo_path])
+    const { error } = await sb.from('venda_documentos').delete().eq('id', doc.id)
+    if (error) throw error
+  },
+  async urlDocumentoVenda(doc) {
+    const { data, error } = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 600)
+    if (error) throw error
+    return data.signedUrl
+  },
+  async arquivoDocumentoVenda(doc) {
+    return (await fetch(await this.urlDocumentoVenda(doc))).arrayBuffer()
+  },
+  async fecharPasta(vendaId) {
+    const { error } = await sb.from('vendas').update({ pasta_fechada_em: new Date().toISOString() }).eq('id', vendaId)
+    if (error) throw error
+  },
   async enviarParaAssinatura(processoId, documentoId, tipo) {
     return chamarFuncao('zapsign-enviar', { processo_id: processoId, documento_id: documentoId, tipo })
   },
@@ -269,7 +319,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v13'
+const CHAVE_DEMO = 'portal-airam-demo-v16'
 let memoria = null
 const ouvintes = new Set()
 
@@ -325,6 +375,40 @@ function limparControle(c) {
   const out = { id: c.id }
   for (const k of CAMPOS_CONTROLE) out[k] = c[k] === '' || c[k] === undefined ? null : typeof c[k] === 'string' ? c[k].trim() || null : c[k]
   return out
+}
+
+// Gestão de clientes: campos da venda que o vendedor edita
+const CAMPOS_VENDA = [
+  'mes', 'codigo', 'cliente_nome', 'vendedor', 'captacao', 'loja', 'data_venda', 'financeira', 'forma_pagamento',
+  'valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'vencimento_primeira', 'meios', 'prazo_tipo',
+  'previsao_imovel', 'envio_email', 'assinatura_inicial', 'avaliacao_google', 'bruto_promob', 'pedido_fabrica',
+  'assinatura_projeto_final', 'prazo_limite_entrega', 'medicao_realizada', 'limite_projeto_final', 'observacao', 'situacao',
+]
+const NUMEROS_VENDA = ['valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'bruto_promob']
+function limparVenda(v) {
+  const out = v.id ? { id: v.id } : {}
+  for (const k of CAMPOS_VENDA) {
+    let x = v[k]
+    if (typeof x === 'string') x = x.trim()
+    if (x === '' || x === undefined) x = null
+    if (NUMEROS_VENDA.includes(k) && x !== null) {
+      // aceita 1234.56 (campo numérico) e 1.234,56 (digitado no formato brasileiro)
+      const t = String(x)
+      x = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+      if (!Number.isFinite(x)) x = null
+    }
+    out[k] = x
+  }
+  out.meios = Array.isArray(v.meios) ? v.meios : []
+  if (!out.mes && out.data_venda) out.mes = out.data_venda.slice(0, 7)
+  if (!out.cliente_nome) throw new Error('Informe o nome do cliente.')
+  if (!out.mes) throw new Error('Informe a data da venda ou o mês do controle.')
+  return out
+}
+const TIPOS_PASTA = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+function validarArquivoPasta(arquivo) {
+  if (!TIPOS_PASTA.includes(arquivo.type)) throw new Error('Envie PDF ou foto (JPG, PNG ou WEBP).')
+  if (arquivo.size > TAMANHO_MAXIMO) throw new Error('O arquivo passa de 50 MB.')
 }
 
 // Mesma regra do servidor: e-mail, CPF ou telefone do processo. Telefone usado por
@@ -477,6 +561,64 @@ const demoApi = {
   },
   async urlDocumento(doc) {
     return doc.arquivo_path
+  },
+  // ---------------- Gestão de clientes (vendedores)
+  async listarVendas(mes) {
+    const d = db()
+    const docs = d.vendaDocs || []
+    return (d.vendas || [])
+      .filter((v) => !mes || v.mes === mes)
+      .map((v) => ({ ...v, venda_documentos: docs.filter((x) => x.venda_id === v.id).map(({ id, categoria }) => ({ id, categoria })) }))
+      .sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || ''))
+  },
+  async salvarVenda(v) {
+    const d = db()
+    d.vendas = d.vendas || []
+    const limpo = limparVenda(v)
+    if (limpo.id) d.vendas = d.vendas.map((x) => (x.id === limpo.id ? { ...x, ...limpo, atualizado_em: new Date().toISOString() } : x))
+    else d.vendas.unshift({ ...limpo, id: novoId(), pasta_fechada_em: null, criado_em: new Date().toISOString() })
+    gravar()
+    const id = limpo.id || d.vendas[0].id
+    return (await this.listarVendas()).find((x) => x.id === id)
+  },
+  async excluirVenda(id) {
+    const d = db()
+    d.vendas = (d.vendas || []).filter((x) => x.id !== id)
+    d.vendaDocs = (d.vendaDocs || []).filter((x) => x.venda_id !== id)
+    gravar()
+  },
+  async documentosVenda(vendaId) {
+    return (db().vendaDocs || []).filter((x) => x.venda_id === vendaId)
+  },
+  async enviarDocumentoVenda(vendaId, categoria, arquivo) {
+    validarArquivoPasta(arquivo)
+    const dataUrl = await new Promise((ok, erro) => {
+      const r = new FileReader()
+      r.onload = () => ok(r.result)
+      r.onerror = erro
+      r.readAsDataURL(arquivo)
+    })
+    const d = db()
+    d.vendaDocs = d.vendaDocs || []
+    d.vendaDocs.push({ id: novoId(), venda_id: vendaId, categoria, titulo: arquivo.name, arquivo_path: dataUrl, tipo_mime: arquivo.type, criado_em: new Date().toISOString() })
+    gravar()
+  },
+  async excluirDocumentoVenda(doc) {
+    const d = db()
+    d.vendaDocs = (d.vendaDocs || []).filter((x) => x.id !== doc.id)
+    gravar()
+  },
+  async urlDocumentoVenda(doc) {
+    return doc.arquivo_path
+  },
+  async arquivoDocumentoVenda(doc) {
+    return (await fetch(doc.arquivo_path)).arrayBuffer()
+  },
+  async fecharPasta(vendaId) {
+    const d = db()
+    const v = (d.vendas || []).find((x) => x.id === vendaId)
+    if (v) v.pasta_fechada_em = new Date().toISOString()
+    gravar()
   },
   async liberarAcesso(processoId) {
     const d = db()
