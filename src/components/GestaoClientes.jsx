@@ -14,6 +14,7 @@ import CampoData from './CampoData.jsx'
 import PlanilhaFiltravel from './PlanilhaFiltravel.jsx'
 import ConfirmarExclusao from './ConfirmarExclusao.jsx'
 import { Acesso } from './AdminHome.jsx'
+import ContratoEditor from './ContratoEditor.jsx'
 
 const CHIP_SIT = { pendente: 'chip-sit-andamento', resolvido: 'chip-sit-ok', cancelado: 'chip-sit-atraso' }
 const CHIP_STATUS = { montado: 'chip-sit-ok', assinado: 'chip-sit-andamento', conferido: 'chip-sit-andamento', medido: 'chip-sit-neutro', aguarda: 'chip-sit-neutro', cancelado: 'chip-sit-atraso' }
@@ -33,6 +34,7 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
   const [erro, setErro] = useState('')
   const [ficha, setFicha] = useState(null) // linha da gestão ou 'novo'
   const [pasta, setPasta] = useState(null)
+  const [contrato, setContrato] = useState(null)
   const [periodos, setPeriodos] = useState({ resultados: periodoRapido('mes') })
   const [filtros, setFiltros] = useState({})
   const [ordens, setOrdens] = useState({})
@@ -45,6 +47,7 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
   useEffect(() => {
     setFicha(null)
     setPasta(null)
+    setContrato(null)
   }, [aba])
 
   // Resultados e Controle de pastas usam o mesmo período (um leva ao outro)
@@ -66,10 +69,13 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
   if (erro) return <p className="erro">{erro}</p>
   if (!lista) return <div className="carregando">Carregando…</div>
 
+  if (contrato)
+    return <ContratoEditor g={contrato} perfil={perfil} onFechar={() => { const id = contrato.id; setContrato(null); carregar(); api.clienteGestao(id).then((g) => setFicha(linhaGestao(g))) }} />
   if (ficha)
     return (
       <FichaCliente g={ficha === 'novo' ? null : ficha.g} perfil={perfil} lista={lista} onFechar={fecharFicha}
-        onAbrirPasta={(g) => { setFicha(null); setPasta(g) }} onAbrirProcesso={onAbrirProcesso} />
+        onAbrirPasta={(g) => { setFicha(null); setPasta(g) }} onAbrirProcesso={onAbrirProcesso}
+        onAbrirContrato={(g) => { setFicha(null); setContrato(g); window.scrollTo(0, 0) }} />
     )
   if (pasta) return <PastaCliente g={pasta} onFechar={() => { setPasta(null); carregar() }} onFicha={(g) => { setPasta(null); setFicha(linhaGestao(g)) }} />
 
@@ -351,7 +357,7 @@ function Texto({ id, rotulo, valor, onChange, obrigatorio, ...resto }) {
 
 const SIM_NAO = [[null, '—'], [true, 'Sim'], [false, 'Não']]
 
-function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbrirProcesso }) {
+function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbrirProcesso, onAbrirContrato }) {
   const [g, setG] = useState(inicial)
   const ehVendedor = !temPermissao(perfil, 'ver_todos')
   const podeExcluir = temPermissao(perfil, 'excluir')
@@ -412,6 +418,7 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
         setMsg('Capa gerada')
       } else if (tipo === 'pasta') return onAbrirPasta(salvo)
       else if (tipo === 'processo') return onAbrirProcesso?.(salvo.id)
+      else if (tipo === 'contrato') return onAbrirContrato(salvo)
       else setMsg(g ? 'Cliente salvo' : 'Cliente cadastrado')
       setTimeout(() => setMsg(''), 2500)
     } catch (err) {
@@ -607,6 +614,7 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
         <div className="acoes acoes-venda">
           <button className="btn btn-principal" disabled={!!salvando}>{salvando === 'salvar' ? 'Salvando…' : g ? 'Salvar' : 'Cadastrar cliente'}</button>
           <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('capa')}>{salvando === 'capa' ? 'Gerando capa…' : 'Fazer capa'}</button>
+          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('contrato')}>{g?.comercial?.contrato ? 'Contrato' : 'Criar contrato'}</button>
           <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('pasta')}>Controle de pastas</button>
           {onAbrirProcesso && <button type="button" className="btn btn-leve" disabled={!!salvando} onClick={() => acao('processo')}>Processo, anexos e renders →</button>}
           {g && podeExcluir && <button type="button" className="btn btn-perigo-leve" onClick={() => setExcluir(true)}>Excluir cliente</button>}

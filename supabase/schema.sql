@@ -879,3 +879,6 @@ drop trigger if exists auditoria on public.comercial;
 create trigger auditoria after insert or update or delete on public.comercial for each row execute function public.registrar_atividade();
 drop trigger if exists auditoria on public.pasta_documentos;
 create trigger auditoria after insert or update or delete on public.pasta_documentos for each row execute function public.registrar_atividade();
+
+-- Contrato feito pelo portal (dados do cliente, ambientes e pagamento); só a gestão vê
+alter table public.comercial add column if not exists contrato jsonb;

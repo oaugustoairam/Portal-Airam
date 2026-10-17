@@ -442,7 +442,7 @@ function limparControle(c) {
 const CAMPOS_COMERCIAL = [
   'vendedor_nome', 'captacao', 'loja', 'financeira', 'forma_pagamento', 'valor_venda', 'valor_deflacionado', 'valor_entrada',
   'valor_parcela', 'vencimento_primeira', 'meios', 'situacao', 'observacao', 'cliente_meu', 'envio_email', 'assinatura_inicial',
-  'avaliacao_google', 'bruto_promob', 'pedido_fabrica',
+  'avaliacao_google', 'bruto_promob', 'pedido_fabrica', 'contrato',
 ]
 const NUMEROS_COMERCIAL = ['valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'bruto_promob']
 export function numeroBR(x) {

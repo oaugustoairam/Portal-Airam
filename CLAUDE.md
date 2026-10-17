@@ -30,6 +30,10 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
     e o estado de cada pasta) e Controle de pastas (mesmo período dos Resultados)
     (`pasta_documentos`, arquivos em `documentos/<pid>/pasta/`; "Fechar venda" → PDF com pdf-lib em `src/lib/pastaPdf.js`).
     Planilha com filtro/ordenação por coluna e período de qualquer dia (`PlanilhaFiltravel.jsx`; cartões no celular).
+    **Contrato** (ficha do cliente → "Criar contrato", `ContratoEditor.jsx`, regras em `src/lib/contrato.js`): dados do cliente
+    (inclui nome da mãe), endereço de entrega, ambientes (tipo, fornecedor, linha, descrição, corpo, porta, complemento,
+    puxador, modelo, observações, valor, prazo) e parcelas; salva em `comercial.contrato` e atualiza o cadastro do portal.
+    O PDF (`relatorio/PdfContrato.jsx`) repete o modelo e o texto do contrato da loja; só os dados mudam.
     Importa a aba 01 CLIENTES (`registrosDaPlanilha`, `lerPlanilha` em `src/lib/xlsx.js`). **Fazer capa** preenche
     `capa-envelope.xlsx` (`src/lib/planilhas.js`, via `paraVenda`). Excluir cliente pede digitar EXCLUIR (`ConfirmarExclusao.jsx`).
   - **Processos**: Geral e pastas Financeiro, Medição, Conferência, Assinatura do projeto final, Entregas, Vistoria,
