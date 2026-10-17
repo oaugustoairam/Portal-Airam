@@ -1335,3 +1335,38 @@ figure.recado::before { color: var(--marca); }
 .chip-sit-andamento { background: var(--andamento-suave); color: var(--andamento); }
 .chip-sit-neutro { background: var(--neutro-suave); color: var(--tinta-2); }
 .chip-sit-ok, .chip-sit-atraso, .chip-sit-andamento, .chip-sit-neutro { margin-left: 0; }
+
+/* =====================================================================
+   TIPOGRAFIA: Albert Sans em todo o portal
+   Leve e moderna, rótulos em caixa normal e sem espaçamento extra entre letras.
+   ===================================================================== */
+:root {
+  --f-display: 'Albert Sans', 'Helvetica Neue', Arial, sans-serif;
+  --f-texto: 'Albert Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-dado: 'Albert Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+body { letter-spacing: 0; font-feature-settings: 'ss01' off; }
+.num, .tabela td, .jn-data, .doc-data, .indicador-valor, .anel-valor, .jd-numero, .garantia-prazo, .senha-valor { font-variant-numeric: tabular-nums; }
+
+/* Títulos leves */
+.titulo-grande, .titulo-entrada, .hero-nome, .vitrine-frase, .jd h3, .contagem-titulo, .resumo-valor,
+.cartao-assinar strong, .aniv-cartao-nome, .calendario-topo strong, .tipo-prazo strong, .cartao-ass h3,
+.slide-legenda strong, .cartao strong, .marca-nome, .obra-titulo, .indicador-valor, .anel-valor, .jd-numero, .garantia-prazo {
+  font-weight: 300; letter-spacing: -.02em; text-transform: none;
+}
+
+/* Rótulos, selos e abas: caixa normal, sem tracking */
+.rotulo, .rotulo-mono, .titulo-secao, .secao-mono, .grupo legend, .tabela th, .hero-dados dt, .jd-status, .hero-eyebrow, .hero-tag,
+.vitrine-ambiente, .marca-sub, .painel-nav-item, .obra-rotulo, .login-eyebrow, .indicador .rotulo, .chip, .pilula, .faixa-demo,
+.entrada-rodape, .aviso-canal, .calendario-semana span, .recado figcaption, .garantia-prazo small, .garantia-numero small,
+.doc-data, .doc-tipo, .toast, .topo-aba, .info-cliente-dados dt, .btn-principal, .aba-qtd, .jd-numero small, .jd-quando, .jn-data {
+  text-transform: none; letter-spacing: 0;
+}
+.rotulo, .rotulo-mono, .tabela th, .info-cliente-dados dt, .hero-dados dt { font-size: 12.5px; font-weight: 500; }
+.grupo legend { font-size: 13px; font-weight: 600; }
+.titulo-secao, .secao-mono { font-size: 15px; font-weight: 500; }
+.chip { font-size: 12px; font-weight: 500; }
+.topo-aba, .painel-nav-item { font-size: 14px; font-weight: 500; }
+.faixa-demo, .entrada-rodape { font-size: 12.5px; }
+.toast { font-size: 13px; font-weight: 500; }
+.btn, .btn-principal { font-weight: 500; letter-spacing: 0; }

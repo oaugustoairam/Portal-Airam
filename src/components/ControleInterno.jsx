@@ -92,7 +92,7 @@ export default function ControleInterno({ processo: p }) {
           </div>
           {data('pendencia_resolvida_em', 'Pendência resolvida em',
             <Sugestao data={dataDe(p.financeiro_ok_em)} texto="Solução financeira marcada" valor={f.pendencia_resolvida_em} onUsar={set('pendencia_resolvida_em')} />)}
-          {data('email_enviado_em', 'E-mail enviado em')}
+          {data('email_enviado_em', 'E-mail de formalização interna enviado em')}
           {data('inicial_assinado_em', 'Projeto inicial assinado em',
             <Sugestao data={dataDe(p.projeto_inicial_em)} texto="Projeto inicial marcado" valor={f.inicial_assinado_em} onUsar={set('inicial_assinado_em')} />)}
           {data('medido_em', 'Medido em',
@@ -131,7 +131,7 @@ export default function ControleInterno({ processo: p }) {
             <input id="ci-montador" value={f.montador || ''} onChange={set('montador')} />
           </div>
           <div className="campo">
-            <span className="rotulo-campo" id="ci-att-rotulo">Tem ATT?</span>
+            <span className="rotulo-campo" id="ci-att-rotulo">Tem ATT (assistência técnica)?</span>
             <div className="segmentado" role="radiogroup" aria-labelledby="ci-att-rotulo">
               {[[null, 'A definir'], [true, 'Sim'], [false, 'Não']].map(([v, t]) => (
                 <button key={t} type="button" role="radio" aria-checked={f.tem_att === v}
@@ -140,8 +140,8 @@ export default function ControleInterno({ processo: p }) {
             </div>
           </div>
           {data('vistoria_em', 'Vistoria feita em')}
-          {data('assistencia_retorno_max', 'Assistência: retorno máximo',
-            f.assistencia_retorno_max && !f.vistoria_em && <SituacaoPrazo prazo={f.assistencia_retorno_max} />)}
+          {f.tem_att === true && data('assistencia_retorno_max', 'Assistência técnica: retorno máximo',
+            f.assistencia_retorno_max && <SituacaoPrazo prazo={f.assistencia_retorno_max} />)}
         </div>
       </fieldset>
 

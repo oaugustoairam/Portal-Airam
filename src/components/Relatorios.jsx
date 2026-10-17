@@ -6,7 +6,6 @@ import {
   montarRelatorio, linhaLista, COLUNAS_LISTA, valorColuna, csvLista, baixarArquivo, nomeArquivo, imagemParaJpeg, dataCurta,
 } from '../lib/relatorio.js'
 
-const CATEGORIAS_IMAGEM = ['render', 'projeto_inicial', 'projeto_final', 'outro']
 
 // Carrega o gerador de PDF só quando precisa (deixa o portal leve)
 const gerador = () => import('./relatorio/PdfRelatorios.jsx')
@@ -40,20 +39,17 @@ function RelatorioUm({ processo }) {
 
   if (!dados) return erro ? <p className="erro">{erro}</p> : <div className="carregando">Carregando…</div>
   const { p } = dados
-  const imagensDisponiveis = dados.documentos.filter((d) => d.tipo_mime?.startsWith('image/') && CATEGORIAS_IMAGEM.includes(d.categoria))
+  // foto do topo: o primeiro render anexado; sem render, uma foto de ambiente da Airam
+  const render = dados.documentos.find((d) => d.categoria === 'render' && d.tipo_mime?.startsWith('image/'))
 
   async function gerar() {
     setErro('')
     setEstado('gerando')
     try {
-      const docs = imagensDisponiveis.slice(0, 6)
-      const imagens = (await Promise.all(docs.map(async (d) => {
-        const img = await imagemParaJpeg(await api.urlDocumento(d))
-        return img && { ...img, titulo: d.titulo, categoria: d.categoriaNome, render: d.categoria === 'render' }
-      }))).filter(Boolean)
-      const foto = imagens.find((i) => i.render) || (await imagemParaJpeg(fotoDoProcesso(p.ambientes || '').src))
+      const foto = (render && (await imagemParaJpeg(await api.urlDocumento(render), 1400)))
+        || (await imagemParaJpeg(fotoDoProcesso(p.ambientes || '').src, 1400))
       const { gerarPdfCliente } = await gerador()
-      const blob = await gerarPdfCliente({ r: dados, foto, imagens, interno, geradoEm: hojeISO() })
+      const blob = await gerarPdfCliente({ r: dados, foto, interno, geradoEm: hojeISO() })
       const nome = `relatorio-${nomeArquivo(`${p.codigo}-${p.cliente_nome}`)}.pdf`
       setArquivo({ blob, nome })
       baixarArquivo(blob, nome)
@@ -76,15 +72,14 @@ function RelatorioUm({ processo }) {
 
       <div className="relatorio-capa">
         <div className="relatorio-capa-info">
-          <span className="rotulo">PDF com a identidade da Airam</span>
+          <span className="rotulo">Resumo em uma página, com a identidade da Airam</span>
           <ul className="relatorio-conteudo">
-            <li><strong>Capa</strong> com foto do projeto, progresso e prazo máximo</li>
-            <li><strong>Visão geral</strong> com gráfico de progresso e dados do cliente</li>
-            <li><strong>Linha do tempo</strong> e <strong>cronograma</strong> com a duração de cada fase</li>
-            <li><strong>Prazos</strong> de conferência, PDF e entrega, com a situação de cada um</li>
+            <li><strong>Topo</strong> com {render ? 'o render do projeto' : 'foto de ambiente'}, nome e código do cliente</li>
+            <li><strong>Progresso</strong>, etapa atual, prazo máximo e situação</li>
+            <li><strong>Etapas</strong> e <strong>cronograma</strong> com a duração de cada fase</li>
+            <li><strong>Prazos</strong> de conferência, PDF e entrega{dados.c.tem_att ? ', e retorno da assistência técnica' : ''}</li>
             <li><strong>Passo a passo</strong> com datas previstas e reais</li>
-            {interno && <li><strong>Controle interno</strong>: liberador, montador, ATT, vistoria, assistência e documentos</li>}
-            {imagensDisponiveis.length > 0 && <li><strong>Imagens do projeto</strong> ({Math.min(6, imagensDisponiveis.length)} anexadas)</li>}
+            {interno && <li><strong>Controle interno</strong>: liberador, montador, ATT, vistoria e observações</li>}
           </ul>
         </div>
         <div className="relatorio-resumo">
@@ -97,7 +92,7 @@ function RelatorioUm({ processo }) {
 
       <label className="check check-destaque">
         <input type="checkbox" checked={interno} onChange={(e) => setInterno(e.target.checked)} />
-        Incluir controle interno (liberador, montador, ATT, vistoria, documentos). Desmarque para enviar ao cliente.
+        Incluir controle interno (liberador, montador, ATT, vistoria, observações). Desmarque para enviar ao cliente.
       </label>
 
       <div className="acoes">
