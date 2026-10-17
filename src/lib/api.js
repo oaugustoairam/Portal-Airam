@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { criarDadosDemo, SENHA_DEMO } from './demo.js'
 import { calcularTipoPrazo } from './constants.js'
+import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -34,7 +35,7 @@ const CAMPOS = [
   'id', 'codigo', 'cliente_nome', 'cliente_cpf', 'cliente_email', 'cliente_telefone', 'endereco',
   'ambientes', 'data_venda', 'data_disponivel_medicao', 'solucao_financeira', 'data_medicao',
   'medicao_concluida', 'data_conferencia', 'conferencia_concluida', 'data_assinatura_projeto',
-  'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente',
+  'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente', 'notificar',
 ]
 function limpar(p) {
   const out = {}
@@ -154,10 +155,19 @@ const supabaseApi = {
     const { error } = await sb.from('assinaturas').update({ status: 'cancelado' }).eq('id', id)
     if (error) throw error
   },
+  async listarAvisos(processoId) {
+    const { data, error } = await sb.from('notificacoes').select('*')
+      .eq('processo_id', processoId).order('criado_em', { ascending: false }).limit(100)
+    if (error) throw error
+    return data
+  },
+  async reenviarAviso(id) {
+    return chamarFuncao('enviar-notificacoes', { id })
+  },
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v3'
+const CHAVE_DEMO = 'portal-airam-demo-v4'
 let memoria = null
 const ouvintes = new Set()
 
@@ -178,6 +188,18 @@ function gravar() {
 const avisar = () => ouvintes.forEach((cb) => cb(db().sessao))
 const novoId = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 const comTipo = (p) => ({ ...p, tipo_prazo: calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao) })
+
+// simula a fila de avisos do servidor (um aviso por canal)
+function simularAvisos(p, eventos) {
+  if (p.notificar === false || !eventos.length) return 0
+  const d = db()
+  d.avisos = d.avisos || []
+  const canais = [['email', p.cliente_email], ['whatsapp', telefoneWhatsApp(p.cliente_telefone)]].filter(([, dest]) => dest)
+  for (const e of eventos)
+    for (const [canal, destino] of canais)
+      d.avisos.unshift({ id: novoId(), processo_id: p.id, ...e, canal, destino, status: 'simulado', criado_em: new Date().toISOString() })
+  return eventos.length
+}
 
 const demoApi = {
   aoMudarSessao(cb) {
@@ -239,7 +261,10 @@ const demoApi = {
     )
     if (conflito) throw new Error('Já existe um processo com esse código ou CPF.')
     if (campos.id) {
-      d.processos = d.processos.map((x) => (x.id === campos.id ? { ...x, ...campos } : x))
+      const antes = d.processos.find((x) => x.id === campos.id)
+      const depois = { ...antes, ...campos }
+      d.processos = d.processos.map((x) => (x.id === campos.id ? depois : x))
+      campos.avisos = simularAvisos(depois, avisosDaMudanca(antes, depois))
     } else {
       Object.assign(campos, {
         id: novoId(),
@@ -312,6 +337,7 @@ const demoApi = {
       status: 'pendente',
       criado_em: new Date().toISOString(),
     })
+    simularAvisos(d.processos.find((x) => x.id === processoId), [avisoAssinatura(tipo, 'pendente')])
     gravar()
   },
   async cancelarAssinatura(id) {
@@ -336,6 +362,16 @@ const demoApi = {
     }
     d.documentos.push(doc)
     Object.assign(a, { status: 'assinado', assinado_em: new Date().toISOString(), documento_assinado_id: doc.id })
+    simularAvisos(d.processos.find((x) => x.id === a.processo_id), [avisoAssinatura(a.tipo, 'assinado')])
+    gravar()
+  },
+  async listarAvisos(processoId) {
+    return (db().avisos || []).filter((a) => a.processo_id === processoId)
+  },
+  async reenviarAviso(id) {
+    const d = db()
+    const a = (d.avisos || []).find((x) => x.id === id)
+    if (a) d.avisos.unshift({ ...a, id: novoId(), criado_em: new Date().toISOString() })
     gravar()
   },
   contasDemo() {

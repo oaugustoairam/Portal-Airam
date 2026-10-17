@@ -14,6 +14,8 @@ Sistema de processos pós-venda da Airam, com duas áreas:
 - Cadastro: código + nome do cliente, CPF, datas com calendário, prazo obrigatório
 - Anexos: Medição (somente a loja vê), projeto inicial, renders, projeto final
 - Envio para assinatura (ZapSign), liberação de acesso com senha provisória e "Ver como cliente"
+- Filtros: situação, prazo, etapa atual, financeiro, período de entrega, busca por nome/código/CPF/telefone
+- Avisos automáticos ao cliente por WhatsApp e e-mail a cada etapa: veja [AVISOS.md](AVISOS.md)
 
 ## Rodar no computador
 

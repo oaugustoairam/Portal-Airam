@@ -143,6 +143,15 @@ export function criarDadosDemo() {
       doc('d11', p3, 'contrato', 'Contrato AIR-0158', 'pdf', -20),
       doc('d12', p3, 'contrato', 'Contrato assinado', 'pdf', -19, { assinado: true }),
     ],
+    avisos: [
+      ['entrega_reagendada', 'Nova data de entrega', `A entrega prevista dos seus móveis agora é ${dia(18).split('-').reverse().join('/')}.`, -20],
+      ['producao_iniciada', 'Seus móveis entraram em produção', 'Projeto final assinado! Seus móveis entraram em produção na fábrica.', -27],
+      ['conferencia_realizada', 'Conferência concluída', 'A conferência do seu projeto final foi concluída. Em breve ele estará pronto para assinatura.', -30],
+      ['medicao_realizada', 'Medição concluída', 'A medição dos seus ambientes foi concluída. Agora preparamos o seu projeto final.', -48],
+    ].flatMap(([evento, titulo, mensagem, dias], i) => [
+      { id: `av${i}w`, processo_id: p1, evento, titulo, mensagem, canal: 'whatsapp', destino: '5511900000154', status: 'enviado', criado_em: quando(dias) },
+      { id: `av${i}e`, processo_id: p1, evento, titulo, mensagem, canal: 'email', destino: 'marina@exemplo.com', status: 'enviado', criado_em: quando(dias) },
+    ]),
     assinaturas: [
       { id: 'a1', processo_id: p1, tipo: 'contrato', documento_id: 'd1', status: 'assinado', assinado_em: quando(-57), documento_assinado_id: 'd2', criado_em: quando(-58) },
       { id: 'a2', processo_id: p1, tipo: 'projeto_final', documento_id: 'd8', status: 'assinado', assinado_em: quando(-27), documento_assinado_id: 'd9', criado_em: quando(-29) },

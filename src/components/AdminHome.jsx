@@ -15,24 +15,62 @@ import {
 } from '../lib/constants.js'
 import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
+import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
 // ============================================================ Lista de processos
+const ETAPAS_FILTRO = [
+  ['contrato', 'Assinatura do contrato'],
+  ['financeiro', 'Solução financeira'],
+  ['medicao', 'Medição'],
+  ['conferencia', 'Conferência do projeto final'],
+  ['assinatura_projeto', 'Assinatura do projeto final'],
+  ['producao', 'Produção'],
+  ['entrega', 'Entrega e montagem'],
+]
+const FILTROS_VAZIOS = { busca: '', situacao: 'ativos', prazo: '', etapa: '', financeiro: '', de: '', ate: '', ordem: 'entrega' }
+const CHAVE_FILTROS = 'airam-filtros-processos'
+
+function lerFiltros() {
+  try {
+    return { ...FILTROS_VAZIOS, ...JSON.parse(sessionStorage.getItem(CHAVE_FILTROS) || '{}') }
+  } catch {
+    return FILTROS_VAZIOS
+  }
+}
+
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
 export default function AdminHome() {
   const [processos, setProcessos] = useState(null)
   const [editando, setEditando] = useState(null) // id ou 'novo'
-  const [busca, setBusca] = useState('')
-  const [filtro, setFiltro] = useState('todos')
+  const [filtros, setFiltros] = useState(lerFiltros)
+  const [abertoMobile, setAbertoMobile] = useState(false)
 
   const recarregar = () => api.listarProcessos().then(setProcessos)
   useEffect(() => {
     recarregar()
   }, [])
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CHAVE_FILTROS, JSON.stringify(filtros))
+    } catch {}
+  }, [filtros])
 
   const linhas = useMemo(
     () =>
       (processos || []).map((p) => {
         const etapas = linhaDoTempo(p, p.assinaturas)
-        return { ...p, atual: etapaAtual(etapas), concluido: p.entrega_concluida }
+        const atual = etapaAtual(etapas)
+        const dEntrega = diasAte(p.data_entrega_prevista)
+        return {
+          ...p,
+          atual,
+          etapasAtuais: etapas.filter((e) => e.status === 'atual').map((e) => e.id),
+          concluido: p.entrega_concluida,
+          aguardandoAssinatura: p.assinaturas?.some((a) => a.status === 'pendente'),
+          atrasado: !p.entrega_concluida && (etapas.some((e) => e.atrasada) || (dEntrega !== null && dEntrega < 0)),
+          dEntrega,
+        }
       }),
     [processos]
   )
@@ -50,20 +88,47 @@ export default function AdminHome() {
       />
     )
 
+  const set = (k) => (v) => setFiltros((f) => ({ ...f, [k]: v?.target ? v.target.value : v }))
   const ativos = linhas.filter((p) => !p.concluido)
   const indicadores = [
-    ['Processos ativos', ativos.length],
-    ['Aguardando assinatura', ativos.filter((p) => p.assinaturas?.some((a) => a.status === 'pendente')).length],
-    ['Financeiro pendente', ativos.filter((p) => p.solucao_financeira === 'pendente').length],
-    ['Entregas em 30 dias', ativos.filter((p) => { const d = diasAte(p.data_entrega_prevista); return d !== null && d <= 30 }).length],
+    ['ativos', 'Processos ativos', ativos.length],
+    ['assinatura', 'Aguardando assinatura', ativos.filter((p) => p.aguardandoAssinatura).length],
+    ['financeiro', 'Financeiro pendente', ativos.filter((p) => p.solucao_financeira === 'pendente').length],
+    ['atrasados', 'Com atraso', ativos.filter((p) => p.atrasado).length],
+    ['entrega30', 'Entregas em 30 dias', ativos.filter((p) => p.dEntrega !== null && p.dEntrega >= 0 && p.dEntrega <= 30).length],
   ]
 
-  const termo = busca.trim().toLowerCase()
-  const visiveis = linhas.filter(
-    (p) =>
-      (filtro === 'todos' || (filtro === 'concluidos' ? p.concluido : !p.concluido && p.tipo_prazo === filtro)) &&
-      (!termo || p.codigo.toLowerCase().includes(termo) || p.cliente_nome.toLowerCase().includes(termo))
-  )
+  const termo = semAcento(filtros.busca.trim())
+  const termoNum = filtros.busca.replace(/\D/g, '')
+  const f = filtros
+  const visiveis = linhas
+    .filter((p) => {
+      if (f.situacao === 'ativos' && p.concluido) return false
+      if (f.situacao === 'entregues' && !p.concluido) return false
+      if (f.situacao === 'assinatura' && (p.concluido || !p.aguardandoAssinatura)) return false
+      if (f.situacao === 'financeiro' && (p.concluido || p.solucao_financeira !== 'pendente')) return false
+      if (f.situacao === 'atrasados' && !p.atrasado) return false
+      if (f.situacao === 'entrega30' && (p.concluido || p.dEntrega === null || p.dEntrega < 0 || p.dEntrega > 30)) return false
+      if (f.prazo && p.tipo_prazo !== f.prazo) return false
+      if (f.etapa && (p.concluido || !p.etapasAtuais.includes(f.etapa))) return false
+      if (f.financeiro && p.solucao_financeira !== f.financeiro) return false
+      if (f.de && (!p.data_entrega_prevista || p.data_entrega_prevista < f.de)) return false
+      if (f.ate && (!p.data_entrega_prevista || p.data_entrega_prevista > f.ate)) return false
+      if (termo) {
+        const texto = semAcento([p.codigo, p.cliente_nome, p.ambientes, p.endereco, p.cliente_email].join(' '))
+        const numeros = (p.cliente_cpf || '') + ' ' + String(p.cliente_telefone || '').replace(/\D/g, '')
+        if (!texto.includes(termo) && !(termoNum.length >= 3 && numeros.includes(termoNum))) return false
+      }
+      return true
+    })
+    .sort((a, b) => {
+      if (f.ordem === 'recentes') return (b.criado_em || '').localeCompare(a.criado_em || '')
+      if (f.ordem === 'codigo') return a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true })
+      if (f.ordem === 'cliente') return a.cliente_nome.localeCompare(b.cliente_nome, 'pt-BR')
+      return (a.data_entrega_prevista || '9999').localeCompare(b.data_entrega_prevista || '9999')
+    })
+
+  const ativosFiltro = ['prazo', 'etapa', 'financeiro', 'de', 'ate'].filter((k) => f[k]).length + (f.busca ? 1 : 0)
 
   return (
     <section>
@@ -74,27 +139,51 @@ export default function AdminHome() {
 
       {processos && (
         <div className="indicadores">
-          {indicadores.map(([t, v]) => (
-            <div key={t} className="indicador">
+          {indicadores.map(([k, t, v]) => (
+            <button key={k} type="button" className={`indicador ${f.situacao === k ? 'indicador-ativo' : ''}`}
+              aria-pressed={f.situacao === k} onClick={() => set('situacao')(f.situacao === k ? 'ativos' : k)}>
               <span className="indicador-valor num">{v}</span>
               <span className="rotulo">{t}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
-      <div className="filtros">
-        <input id="busca" type="search" autoCapitalize="none" autoCorrect="off" placeholder="Buscar por nome ou código" value={busca}
-          onChange={(e) => setBusca(e.target.value)} aria-label="Buscar processo" />
-        <div className="segmentado" role="group" aria-label="Filtrar por prazo">
-          {[['todos', 'Todos'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro'], ['concluidos', 'Entregues']].map(([k, t]) => (
-            <button key={k} type="button" className={filtro === k ? 'ativo' : ''} onClick={() => setFiltro(k)}>{t}</button>
-          ))}
+      <div className="painel-filtros">
+        <div className="filtros-linha">
+          <input id="busca" type="search" autoCapitalize="none" autoCorrect="off" placeholder="Buscar por nome, código, CPF ou telefone"
+            value={f.busca} onChange={set('busca')} aria-label="Buscar processo" />
+          <button type="button" className="btn btn-contorno so-mobile" aria-expanded={abertoMobile}
+            onClick={() => setAbertoMobile(!abertoMobile)}>
+            Filtros{ativosFiltro ? ` (${ativosFiltro})` : ''}
+          </button>
+        </div>
+        <div className={`filtros-grade ${abertoMobile ? 'aberto' : ''}`}>
+          <Filtro id="f-situacao" rotulo="Situação" valor={f.situacao} onChange={set('situacao')} opcoes={[
+            ['ativos', 'Em andamento'], ['todos', 'Todos'], ['atrasados', 'Com atraso'], ['assinatura', 'Aguardando assinatura'],
+            ['financeiro', 'Financeiro pendente'], ['entrega30', 'Entregas em 30 dias'], ['entregues', 'Entregues'],
+          ]} />
+          <Filtro id="f-prazo" rotulo="Prazo" valor={f.prazo} onChange={set('prazo')}
+            opcoes={[['', 'Normal e futuro'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro']]} />
+          <Filtro id="f-etapa" rotulo="Etapa atual" valor={f.etapa} onChange={set('etapa')}
+            opcoes={[['', 'Todas as etapas'], ...ETAPAS_FILTRO]} />
+          <Filtro id="f-fin" rotulo="Solução financeira" valor={f.financeiro} onChange={set('financeiro')}
+            opcoes={[['', 'OK e pendente'], ['ok', 'OK'], ['pendente', 'Pendente']]} />
+          <CampoData id="f-de" rotulo="Entrega a partir de" valor={f.de} onChange={set('de')} />
+          <CampoData id="f-ate" rotulo="Entrega até" valor={f.ate} onChange={set('ate')} />
+          <Filtro id="f-ordem" rotulo="Ordenar por" valor={f.ordem} onChange={set('ordem')}
+            opcoes={[['entrega', 'Entrega mais próxima'], ['recentes', 'Vendas mais recentes'], ['codigo', 'Código'], ['cliente', 'Nome do cliente']]} />
+        </div>
+        <div className="filtros-rodape">
+          <span className="num">{processos ? `Mostrando ${visiveis.length} de ${linhas.length} processos` : ''}</span>
+          {JSON.stringify(f) !== JSON.stringify(FILTROS_VAZIOS) && (
+            <button type="button" className="btn btn-leve" onClick={() => setFiltros(FILTROS_VAZIOS)}>Limpar filtros</button>
+          )}
         </div>
       </div>
 
       {!processos && <div className="carregando">Carregando…</div>}
-      {processos && !visiveis.length && <p className="vazio">Nenhum processo encontrado.</p>}
+      {processos && !visiveis.length && <p className="vazio">Nenhum processo com esses filtros.</p>}
       {visiveis.length > 0 && (
         <div className="tabela-wrap">
           <table className="tabela">
@@ -109,34 +198,46 @@ export default function AdminHome() {
               </tr>
             </thead>
             <tbody>
-              {visiveis.map((p) => {
-                const atraso = !p.concluido && diasAte(p.data_entrega_prevista) < 0
-                return (
-                  <tr key={p.id} onClick={() => setEditando(p.id)} tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && setEditando(p.id)}>
-                    <td className="num"><strong>{p.codigo}</strong></td>
-                    <td>{p.cliente_nome}<span className="celula-sub">{p.ambientes}</span></td>
-                    <td><span className={`chip chip-prazo-${p.tipo_prazo}`}>{TIPOS_PRAZO[p.tipo_prazo]?.nome}</span></td>
-                    <td>{p.concluido ? 'Entregue' : p.atual.nome}</td>
-                    <td>
-                      <span className={`chip ${p.solucao_financeira === 'ok' ? 'chip-concluida' : 'chip-atraso'}`}>
-                        {p.solucao_financeira === 'ok' ? 'OK' : 'Pendente'}
-                      </span>
-                    </td>
-                    <td className="num">
-                      {formatarData(p.data_entrega_prevista)}
-                      <span className={`celula-sub ${atraso ? 'texto-atraso' : ''}`}>
-                        {p.concluido ? 'Entregue' : prazoTexto(p.data_entrega_prevista)}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
+              {visiveis.map((p) => (
+                <tr key={p.id} onClick={() => setEditando(p.id)} tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && setEditando(p.id)}>
+                  <td className="num"><strong>{p.codigo}</strong></td>
+                  <td>{p.cliente_nome}<span className="celula-sub">{p.ambientes}</span></td>
+                  <td><span className={`chip chip-prazo-${p.tipo_prazo}`}>{TIPOS_PRAZO[p.tipo_prazo]?.nome}</span></td>
+                  <td>
+                    {p.concluido ? 'Entregue' : p.atual.nome}
+                    {p.aguardandoAssinatura && !p.concluido && <span className="celula-sub">Aguardando assinatura</span>}
+                    {p.atrasado && <span className="celula-sub texto-atraso">Com atraso</span>}
+                  </td>
+                  <td>
+                    <span className={`chip ${p.solucao_financeira === 'ok' ? 'chip-concluida' : 'chip-atraso'}`}>
+                      {p.solucao_financeira === 'ok' ? 'OK' : 'Pendente'}
+                    </span>
+                  </td>
+                  <td className="num">
+                    {formatarData(p.data_entrega_prevista)}
+                    <span className={`celula-sub ${!p.concluido && p.dEntrega < 0 ? 'texto-atraso' : ''}`}>
+                      {p.concluido ? 'Entregue' : prazoTexto(p.data_entrega_prevista)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
     </section>
+  )
+}
+
+function Filtro({ id, rotulo, valor, onChange, opcoes }) {
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{rotulo}</label>
+      <select id={id} value={valor} onChange={onChange} className={valor && id !== 'f-ordem' && valor !== 'ativos' ? 'filtro-ativo' : ''}>
+        {opcoes.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+      </select>
+    </div>
   )
 }
 
@@ -147,6 +248,7 @@ function proximoCodigo(codigos) {
 }
 
 const VAZIO = {
+  notificar: true,
   codigo: '', cliente_nome: '', cliente_cpf: '', cliente_email: '', cliente_telefone: '', endereco: '', ambientes: '',
   data_venda: '', data_disponivel_medicao: '', data_entrega_prevista: '', solucao_financeira: 'pendente',
   data_medicao: '', medicao_concluida: false, data_conferencia: '', conferencia_concluida: false,
@@ -183,7 +285,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
 
       {id && (
         <div className="abas">
-          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
+          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
             <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>{t}</button>
           ))}
         </div>
@@ -196,13 +298,14 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
           onSalvo={async (salvo) => {
             if (!id) onCriado(salvo.id)
             else await recarregar()
-            avisar('Processo salvo')
+            avisar(salvo.avisos ? 'Processo salvo · cliente avisado por WhatsApp e e-mail' : 'Processo salvo')
           }}
           onExcluido={onFechar}
         />
       )}
       {aba === 'anexos' && <Anexos processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
       {aba === 'assinaturas' && <Assinaturas processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'avisos' && <Avisos processo={processo} />}
       {aba === 'acesso' && <Acesso processo={processo} />}
       {aba === 'cliente' && (
         <div className="preview-cliente">
@@ -333,6 +436,13 @@ function FormDados({ processo, onSalvo, onExcluido }) {
             feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Entregue e montado" obrigatorio />
         </div>
         <p className="dica">A produção aparece para o cliente automaticamente depois da assinatura do projeto final, até a entrega.</p>
+        <label className="check check-destaque">
+          <input type="checkbox" checked={f.notificar !== false} onChange={set('notificar')} />
+          Avisar o cliente por WhatsApp e e-mail a cada etapa
+        </label>
+        {f.notificar !== false && !telefoneWhatsApp(f.cliente_telefone) && (
+          <p className="dica">Sem um telefone válido com DDD, o cliente recebe os avisos só por e-mail.</p>
+        )}
       </fieldset>
 
       <Campo id="p-recado" rotulo="Recado para o cliente (aparece no topo do portal)">
@@ -599,6 +709,65 @@ function Acesso({ processo }) {
             <button className="btn btn-contorno" onClick={copiar}>{copiado ? 'Copiado' : 'Copiar mensagem'}</button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================ Avisos enviados ao cliente
+const CANAL = { whatsapp: 'WhatsApp', email: 'E-mail' }
+
+function Avisos({ processo }) {
+  const [avisos, setAvisos] = useState(null)
+  const [msg, setMsg] = useState('')
+  const carregar = () => api.listarAvisos(processo.id).then(setAvisos)
+  useEffect(() => {
+    carregar()
+  }, [processo.id])
+
+  async function reenviar(a) {
+    setMsg('')
+    try {
+      await api.reenviarAviso(a.id)
+      setMsg(`Aviso reenviado por ${CANAL[a.canal]}.`)
+      await carregar()
+    } catch (err) {
+      setMsg('Não foi possível reenviar: ' + err.message)
+    }
+  }
+
+  return (
+    <div className="form">
+      <p className="dica">
+        A cada etapa (medição agendada e concluída, conferência, documento para assinar, produção, nova data de
+        entrega, entrega concluída) o cliente recebe uma mensagem no WhatsApp e um e-mail automaticamente.
+        {processo.notificar === false && <strong> Os avisos estão desligados neste processo (aba Dados e prazos).</strong>}
+      </p>
+      {msg && <p className="toast" role="status">{msg}</p>}
+      {!avisos && <div className="carregando">Carregando…</div>}
+      {avisos && !avisos.length && <p className="vazio">Nenhum aviso enviado ainda. O primeiro sai na próxima mudança de etapa.</p>}
+      {avisos?.length > 0 && (
+        <ul className="avisos">
+          {avisos.map((a) => (
+            <li key={a.id} className="aviso-item">
+              <span className={`aviso-canal aviso-${a.canal}`}>{CANAL[a.canal]}</span>
+              <div className="aviso-corpo">
+                <div className="aviso-topo">
+                  <strong>{a.titulo}</strong>
+                  <span className={`chip chip-mini chip-aviso-${a.status}`}>{ROTULO_STATUS_AVISO[a.status]}</span>
+                </div>
+                <p>{a.mensagem}</p>
+                <span className="doc-data num">
+                  {new Date(a.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · {a.destino}
+                </span>
+                {a.erro && <span className="aviso-erro">{a.erro}</span>}
+              </div>
+              {a.status !== 'pendente' && (
+                <button className="btn btn-leve" onClick={() => reenviar(a)}>Reenviar</button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

@@ -221,3 +221,130 @@ end $$;
 --    (com senha) e depois rode, trocando o e-mail:
 -- update public.perfis set papel = 'admin', nome = 'Seu nome' where email = 'voce@airam.arq.br';
 -- Para funcionários: papel = 'equipe'.
+
+-- 9. Avisos ao cliente (WhatsApp + e-mail) -----------------------------------
+-- Cada mudança de etapa gera uma linha por canal nesta fila. A função do servidor
+-- `enviar-notificacoes` envia os pendentes (agendada a cada minuto; veja AVISOS.md).
+alter table public.processos add column if not exists notificar boolean not null default true;
+
+create table if not exists public.notificacoes (
+  id uuid primary key default gen_random_uuid(),
+  processo_id uuid not null references public.processos on delete cascade,
+  evento text not null,
+  canal text not null check (canal in ('email', 'whatsapp')),
+  destino text not null,
+  titulo text not null,
+  mensagem text not null,
+  status text not null default 'pendente' check (status in ('pendente', 'enviado', 'erro', 'ignorado')),
+  tentativas int not null default 0,
+  erro text,
+  criado_em timestamptz not null default now(),
+  enviado_em timestamptz
+);
+create index if not exists notificacoes_fila_idx on public.notificacoes (status, criado_em);
+alter table public.notificacoes enable row level security;
+drop policy if exists "equipe le avisos" on public.notificacoes;
+create policy "equipe le avisos" on public.notificacoes for select using (public.eh_equipe());
+-- sem insert/update pelo app: só os gatilhos abaixo e o servidor mexem na fila
+
+-- Telefone brasileiro no formato do WhatsApp: 55 + DDD + número
+create or replace function public.telefone_whatsapp(t text)
+returns text language sql immutable as $$
+  select case
+    when length(regexp_replace(coalesce(t, ''), '\D', '', 'g')) in (10, 11)
+      then '55' || regexp_replace(t, '\D', '', 'g')
+    when regexp_replace(coalesce(t, ''), '\D', '', 'g') ~ '^55[0-9]{10,11}$'
+      then regexp_replace(t, '\D', '', 'g')
+  end;
+$$;
+
+create or replace function public.enfileirar_aviso(p public.processos, ev text, titulo text, msg text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not p.notificar then return; end if;
+  if p.cliente_email is not null then
+    insert into public.notificacoes (processo_id, evento, canal, destino, titulo, mensagem)
+    values (p.id, ev, 'email', lower(p.cliente_email), titulo, msg);
+  end if;
+  if public.telefone_whatsapp(p.cliente_telefone) is not null then
+    insert into public.notificacoes (processo_id, evento, canal, destino, titulo, mensagem)
+    values (p.id, ev, 'whatsapp', public.telefone_whatsapp(p.cliente_telefone), titulo, msg);
+  end if;
+end $$;
+
+-- Mudanças feitas pela equipe no processo
+create or replace function public.avisos_processo()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  dt text;
+begin
+  if new.solucao_financeira = 'ok' and old.solucao_financeira <> 'ok' then
+    perform public.enfileirar_aviso(new, 'financeiro_aprovado', 'Solução financeira aprovada',
+      'Sua solução financeira foi aprovada. Seguimos para a próxima etapa do seu processo.');
+  end if;
+  if new.data_medicao is not null and new.data_medicao is distinct from old.data_medicao and not new.medicao_concluida then
+    dt := to_char(new.data_medicao, 'DD/MM/YYYY');
+    perform public.enfileirar_aviso(new, 'medicao_agendada', 'Medição agendada',
+      'Sua medição está agendada para ' || dt || '. Nossa equipe vai até o local nessa data.');
+  end if;
+  if new.medicao_concluida and not old.medicao_concluida then
+    perform public.enfileirar_aviso(new, 'medicao_realizada', 'Medição concluída',
+      'A medição dos seus ambientes foi concluída. Agora preparamos o seu projeto final.');
+  end if;
+  if new.data_conferencia is not null and new.data_conferencia is distinct from old.data_conferencia and not new.conferencia_concluida then
+    dt := to_char(new.data_conferencia, 'DD/MM/YYYY');
+    perform public.enfileirar_aviso(new, 'conferencia_agendada', 'Conferência do projeto final',
+      'A conferência do seu projeto final está marcada para ' || dt || '.');
+  end if;
+  if new.conferencia_concluida and not old.conferencia_concluida then
+    perform public.enfileirar_aviso(new, 'conferencia_realizada', 'Conferência concluída',
+      'A conferência do seu projeto final foi concluída. Em breve ele estará pronto para assinatura.');
+  end if;
+  if new.projeto_assinado_manual and not old.projeto_assinado_manual then
+    perform public.enfileirar_aviso(new, 'producao_iniciada', 'Seus móveis entraram em produção',
+      'Projeto final assinado! Seus móveis entraram em produção na fábrica.');
+  end if;
+  if new.data_entrega_prevista is distinct from old.data_entrega_prevista and not new.entrega_concluida then
+    dt := to_char(new.data_entrega_prevista, 'DD/MM/YYYY');
+    perform public.enfileirar_aviso(new, 'entrega_reagendada', 'Nova data de entrega',
+      'A entrega prevista dos seus móveis agora é ' || dt || '.');
+  end if;
+  if new.entrega_concluida and not old.entrega_concluida then
+    perform public.enfileirar_aviso(new, 'entrega_concluida', 'Entrega concluída',
+      'Entrega e montagem concluídas! Obrigado por confiar na Airam. Seus móveis têm 10 anos de garantia.');
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists avisos on public.processos;
+create trigger avisos after update on public.processos
+  for each row execute function public.avisos_processo();
+
+-- Assinaturas: documento liberado para assinar e documento assinado
+create or replace function public.avisos_assinatura()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  p public.processos;
+  doc text := case new.tipo when 'contrato' then 'contrato' else 'projeto final' end;
+begin
+  select * into p from public.processos where id = new.processo_id;
+  -- o link do ZapSign acabou de ser criado: o cliente já pode assinar
+  if new.status = 'pendente' and new.sign_url is not null and (tg_op = 'INSERT' or old.sign_url is null) then
+    perform public.enfileirar_aviso(p, new.tipo || '_disponivel', 'Documento para assinar',
+      'Seu ' || doc || ' está pronto para assinatura. Entre no Portal Airam e assine em poucos minutos.');
+  end if;
+  if new.status = 'assinado' and (tg_op = 'INSERT' or old.status <> 'assinado') then
+    if new.tipo = 'contrato' then
+      perform public.enfileirar_aviso(p, 'contrato_assinado', 'Contrato assinado',
+        'Recebemos seu contrato assinado. Obrigado por escolher a Airam! A cópia assinada está no portal.');
+    elsif not p.projeto_assinado_manual then
+      perform public.enfileirar_aviso(p, 'producao_iniciada', 'Seus móveis entraram em produção',
+        'Projeto final assinado! Seus móveis entraram em produção na fábrica.');
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists avisos on public.assinaturas;
+create trigger avisos after insert or update on public.assinaturas
+  for each row execute function public.avisos_assinatura();
