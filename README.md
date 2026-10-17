@@ -65,3 +65,12 @@ solução financeira, ou do imóvel pronto na entrega futura) · entrega em 45 d
 assinatura do projeto final · montagem iniciada em até 7 dias úteis após a entrega e concluída em até 10 dias úteis.
 O cadastro sugere essas datas (botão "Usar"), descontando fins de semana e feriados nacionais. Feriados municipais
 não entram no cálculo.
+
+## Meu perfil (cliente)
+
+O cliente tem as abas **Meu processo** e **Meu perfil**. No perfil ele adiciona a foto (cortada e reduzida no
+próprio celular antes do envio), como prefere ser chamado, celular/WhatsApp, outro telefone, data de nascimento,
+endereço para correspondência (com busca pelo CEP), melhor horário e informações do imóvel para a montagem, além
+da preferência de novidades e da troca de senha. E-mail de acesso e CPF ficam só para consulta.
+O celular, a data de nascimento e a preferência de novidades atualizam o processo automaticamente (avisos,
+aniversários e e-mail marketing). A equipe vê tudo em Processos > Dados e prazos.

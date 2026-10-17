@@ -3,8 +3,9 @@ import { api } from '../lib/api.js'
 import { linhaDoTempo, etapaAtual, formatarData, ROTULO_PRAZO } from '../lib/constants.js'
 import ProcessoView from './ProcessoView.jsx'
 import BotaoWhatsApp from './BotaoWhatsApp.jsx'
+import MeuPerfil from './MeuPerfil.jsx'
 
-export default function ClienteHome() {
+export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
   const [processos, setProcessos] = useState(null)
   const [aberto, setAberto] = useState(null)
 
@@ -21,6 +22,14 @@ export default function ClienteHome() {
   }, [])
 
   if (!processos) return <div className="carregando">Carregando seu processo…</div>
+
+  if (aba === 'perfil')
+    return (
+      <>
+        <MeuPerfil processo={aberto || processos[0]} onAtualizado={onPerfilAtualizado} />
+        <BotaoWhatsApp nome={processos[0]?.cliente_nome} codigo={processos[0]?.codigo} />
+      </>
+    )
 
   if (!processos.length)
     return (

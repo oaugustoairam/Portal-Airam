@@ -478,3 +478,62 @@ create policy "equipe le envios" on public.campanha_envios for select using (pub
 
 -- 13. Número do contrato (o mesmo do contrato impresso, ex.: 100000503-1)
 alter table public.processos add column if not exists numero_contrato text;
+
+-- 14. Perfil do cliente (preenchido pelo próprio cliente no portal) -----------
+create table if not exists public.perfil_cliente (
+  id uuid primary key references auth.users on delete cascade,
+  nome_preferido text,
+  telefone text,
+  telefone_2 text,
+  nascimento date,
+  cep text, endereco text, numero text, complemento text, bairro text, cidade text, uf text,
+  melhor_horario text,
+  observacoes text,                       -- portaria, elevador, vaga, animais etc.
+  receber_novidades boolean not null default true,
+  foto_path text,
+  atualizado_em timestamptz not null default now(),
+  constraint cep_numeros check (cep is null or cep ~ '^[0-9]{8}$'),
+  constraint textos_curtos check (coalesce(length(observacoes), 0) <= 1000 and coalesce(length(nome_preferido), 0) <= 80)
+);
+alter table public.perfil_cliente enable row level security;
+drop policy if exists "cliente le perfil" on public.perfil_cliente;
+create policy "cliente le perfil" on public.perfil_cliente for select using (id = auth.uid() or public.eh_equipe());
+drop policy if exists "cliente cria perfil" on public.perfil_cliente;
+create policy "cliente cria perfil" on public.perfil_cliente for insert with check (id = auth.uid());
+drop policy if exists "cliente edita perfil" on public.perfil_cliente;
+create policy "cliente edita perfil" on public.perfil_cliente for update using (id = auth.uid()) with check (id = auth.uid());
+
+-- O que o cliente atualiza vai para os processos dele (avisos, aniversários, novidades)
+create or replace function public.sincronizar_perfil_cliente()
+returns trigger language plpgsql security definer set search_path = public, auth as $$
+declare
+  email_cliente text;
+begin
+  new.atualizado_em := now();
+  select lower(email) into email_cliente from auth.users where id = new.id and email_confirmed_at is not null;
+  if email_cliente is not null then
+    update public.processos set
+      cliente_telefone = coalesce(nullif(new.telefone, ''), cliente_telefone),
+      cliente_nascimento = coalesce(new.nascimento, cliente_nascimento),
+      aceita_marketing = new.receber_novidades
+    where lower(cliente_email) = email_cliente;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists sincronizar on public.perfil_cliente;
+create trigger sincronizar before insert or update on public.perfil_cliente
+  for each row execute function public.sincronizar_perfil_cliente();
+
+-- Fotos de perfil: bucket privado, até 2 MB, só imagens; caminho <user_id>/foto.jpg
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatares', 'avatares', false, 2097152, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "avatar proprio" on storage.objects;
+create policy "avatar proprio" on storage.objects for all
+  using (bucket_id = 'avatares' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatares' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "equipe ve avatares" on storage.objects;
+create policy "equipe ve avatares" on storage.objects for select
+  using (bucket_id = 'avatares' and public.eh_equipe());

@@ -16,6 +16,16 @@ const EXTENSOES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg']
 const TAMANHO_MAXIMO = 50 * 1024 * 1024
 const ERRO_LOGIN = 'E-mail/CPF ou senha incorretos.'
 
+// campos do "Meu perfil" que o próprio cliente edita
+const CAMPOS_PERFIL = ['nome_preferido', 'telefone', 'telefone_2', 'nascimento', 'cep', 'endereco', 'numero', 'complemento',
+  'bairro', 'cidade', 'uf', 'melhor_horario', 'observacoes', 'receber_novidades', 'foto_path']
+function limparPerfil(d) {
+  const out = {}
+  for (const k of CAMPOS_PERFIL) if (k in d) out[k] = d[k] === '' ? null : d[k]
+  if (out.cep) out.cep = String(out.cep).replace(/\D/g, '') || null
+  return out
+}
+
 function validarArquivo(arquivo) {
   const nome = arquivo.name.toLowerCase()
   const extOk = EXTENSOES_PERMITIDAS.some((e) => nome.endsWith(e))
@@ -179,6 +189,42 @@ const supabaseApi = {
     const { error } = await sb.from('assinaturas').update({ status: 'cancelado' }).eq('id', id)
     if (error) throw error
   },
+  async meuPerfil() {
+    const { data: u } = await sb.auth.getUser()
+    if (!u.user) return null
+    const { data } = await sb.from('perfil_cliente').select('*').eq('id', u.user.id).maybeSingle()
+    return { ...(data || { receber_novidades: true }), email: u.user.email }
+  },
+  async salvarMeuPerfil(dados) {
+    const { data: u } = await sb.auth.getUser()
+    const { data, error } = await sb.from('perfil_cliente').upsert({ id: u.user.id, ...limparPerfil(dados) }).select().single()
+    if (error) throw new Error('Não foi possível salvar: ' + error.message)
+    return { ...data, email: u.user.email }
+  },
+  async enviarFotoPerfil(blob) {
+    const { data: u } = await sb.auth.getUser()
+    const caminho = `${u.user.id}/foto.jpg`
+    const up = await sb.storage.from('avatares').upload(caminho, blob, { contentType: 'image/jpeg', upsert: true })
+    if (up.error) throw new Error('Não foi possível enviar a foto: ' + up.error.message)
+    await sb.from('perfil_cliente').upsert({ id: u.user.id, foto_path: caminho })
+    return caminho
+  },
+  async removerFotoPerfil() {
+    const { data: u } = await sb.auth.getUser()
+    await sb.storage.from('avatares').remove([`${u.user.id}/foto.jpg`])
+    await sb.from('perfil_cliente').upsert({ id: u.user.id, foto_path: null })
+  },
+  async urlFotoPerfil(caminho) {
+    if (!caminho) return null
+    const { data } = await sb.storage.from('avatares').createSignedUrl(caminho, 3600)
+    return data?.signedUrl ? `${data.signedUrl}&v=${Date.now()}` : null
+  },
+  async perfilDoCliente(email) {
+    const { data: perfil } = await sb.from('perfis').select('id').ilike('email', email).maybeSingle()
+    if (!perfil) return null
+    const { data } = await sb.from('perfil_cliente').select('*').eq('id', perfil.id).maybeSingle()
+    return data
+  },
   async listarAvisos(processoId) {
     const { data, error } = await sb.from('notificacoes').select('*')
       .eq('processo_id', processoId).order('criado_em', { ascending: false }).limit(100)
@@ -206,7 +252,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v8'
+const CHAVE_DEMO = 'portal-airam-demo-v9'
 let memoria = null
 const ouvintes = new Set()
 
@@ -458,6 +504,45 @@ const demoApi = {
   },
   async listarCampanhas() {
     return db().campanhas || []
+  },
+  async meuPerfil() {
+    const d = db()
+    const email = d.sessao?.email
+    return { receber_novidades: true, ...(d.perfisCliente?.[email] || {}), email }
+  },
+  async salvarMeuPerfil(dados) {
+    const d = db()
+    const email = d.sessao.email
+    d.perfisCliente = d.perfisCliente || {}
+    const novo = { ...(d.perfisCliente[email] || {}), ...limparPerfil(dados), atualizado_em: new Date().toISOString() }
+    d.perfisCliente[email] = novo
+    // mesma sincronização do gatilho do banco
+    d.processos.filter((p) => p.cliente_email === email).forEach((p) => {
+      if (novo.telefone) p.cliente_telefone = novo.telefone
+      if (novo.nascimento) p.cliente_nascimento = novo.nascimento
+      p.aceita_marketing = novo.receber_novidades !== false
+    })
+    gravar()
+    return { ...novo, email }
+  },
+  async enviarFotoPerfil(blob) {
+    const dataUrl = await new Promise((ok, erro) => {
+      const r = new FileReader()
+      r.onload = () => ok(r.result)
+      r.onerror = erro
+      r.readAsDataURL(blob)
+    })
+    await this.salvarMeuPerfil({ foto_path: dataUrl })
+    return dataUrl
+  },
+  async removerFotoPerfil() {
+    await this.salvarMeuPerfil({ foto_path: null })
+  },
+  async urlFotoPerfil(caminho) {
+    return caminho || null
+  },
+  async perfilDoCliente(email) {
+    return db().perfisCliente?.[email] || null
   },
   async salvarCampanha(c) {
     const d = db()

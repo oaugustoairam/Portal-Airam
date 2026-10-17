@@ -168,6 +168,14 @@ export function criarDadosDemo() {
       { id: `av${i}w`, processo_id: p1, evento, titulo, mensagem, canal: 'whatsapp', destino: '5511900000154', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
       { id: `av${i}e`, processo_id: p1, evento, titulo, mensagem, canal: 'email', destino: 'marina@exemplo.com', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
     ]),
+    perfisCliente: {
+      'marina@exemplo.com': {
+        nome_preferido: 'Marina', telefone: '(11) 90000-0154', telefone_2: '', nascimento: null,
+        cep: '03164000', endereco: 'Rua das Acácias', numero: '120', complemento: 'ap. 82', bairro: 'Mooca', cidade: 'São Paulo', uf: 'SP',
+        melhor_horario: 'Manhã, das 9h às 12h', observacoes: 'Portaria 24h. Elevador de serviço disponível das 8h às 17h. Tenho um gato.',
+        receber_novidades: true, foto_path: null,
+      },
+    },
     campanhas: [
       {
         id: 'c1', status: 'enviada', total: 3, enviados: 3, falhas: 0, simulada: true,

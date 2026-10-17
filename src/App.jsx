@@ -7,12 +7,16 @@ import PainelEquipe from './components/PainelEquipe.jsx'
 import BotaoWhatsApp from './components/BotaoWhatsApp.jsx'
 import InstalarApp from './components/InstalarApp.jsx'
 import Entrada from './components/Entrada.jsx'
+import Avatar from './components/Avatar.jsx'
 import logoBranco from './assets/logo-branco.png'
 
 export const NOME_EMPRESA = 'Airam Arquitetura & Marcenaria'
 
 export default function App() {
   const [perfil, setPerfil] = useState(undefined)
+  const [abaCliente, setAbaCliente] = useState('processo')
+  const [fotoCliente, setFotoCliente] = useState(null)
+  const carregarFoto = () => api.meuPerfil().then((p) => setFotoCliente(p?.foto_path || null)).catch(() => {})
 
   useEffect(() => {
     const carregar = () => api.perfil().then(setPerfil).catch(() => setPerfil(null))
@@ -24,6 +28,16 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [perfil?.email, perfil?.precisa_trocar_senha])
+
+  useEffect(() => {
+    if (perfil && perfil.papel === 'cliente' && !perfil.precisa_trocar_senha) carregarFoto()
+    setAbaCliente('processo')
+  }, [perfil?.email, perfil?.precisa_trocar_senha])
+
+  const irPara = (aba) => {
+    setAbaCliente(aba)
+    window.scrollTo(0, 0)
+  }
 
   if (perfil === undefined) return <div className="carregando">Carregando…</div>
 
@@ -52,17 +66,34 @@ export default function App() {
           </div>
           {perfil && (
             <div className="topo-usuario">
-              <span className="topo-email">{perfil.nome || perfil.email}</span>
+              {!equipe ? (
+                <button className="topo-perfil" onClick={() => irPara('perfil')} aria-label="Abrir meu perfil">
+                  <Avatar caminho={fotoCliente} nome={perfil.nome || perfil.email} tamanho={34} />
+                  <span className="topo-email">{perfil.nome || perfil.email}</span>
+                </button>
+              ) : (
+                <span className="topo-email">{perfil.nome || perfil.email}</span>
+              )}
               <button className="btn btn-leve" onClick={() => api.sair()}>
                 Sair
               </button>
             </div>
           )}
         </div>
+        {!equipe && (
+          <nav className="topo-abas" aria-label="Áreas do cliente">
+            <div className="topo-abas-in">
+              {[['processo', 'Meu processo'], ['perfil', 'Meu perfil']].map(([k, t]) => (
+                <button key={k} className={`topo-aba ${abaCliente === k ? 'ativa' : ''}`} aria-current={abaCliente === k ? 'page' : undefined}
+                  onClick={() => irPara(k)}>{t}</button>
+              ))}
+            </div>
+          </nav>
+        )}
         {faixaDemo}
       </header>
       <main className={`conteudo ${equipe ? '' : 'conteudo-cliente'}`}>
-        {equipe ? <PainelEquipe /> : <ClienteHome />}
+        {equipe ? <PainelEquipe /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
         {!equipe && <InstalarApp />}
       </main>
     </div>

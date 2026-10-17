@@ -16,6 +16,7 @@ import {
 } from '../lib/constants.js'
 import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
+import Avatar from './Avatar.jsx'
 import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
 // ============================================================ Lista de processos
@@ -293,6 +294,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
         </div>
       )}
 
+      {aba === 'dados' && id && <InfoDoCliente processo={processo} />}
       {aba === 'dados' && (
         <FormDados
           key={processo.id || 'novo'}
@@ -891,6 +893,38 @@ function CronogramaInterno({ processo: p }) {
           return ultimo ? `${Math.round((new Date(ultimo) - new Date(p.data_venda + 'T00:00:00')) / 86400000)} dias até a última etapa concluída` : 'nenhuma etapa concluída ainda'
         })()
       }.</p>
+    </div>
+  )
+}
+
+// ============================================================ O que o cliente preencheu em "Meu perfil"
+function InfoDoCliente({ processo }) {
+  const [p, setP] = useState(undefined)
+  useEffect(() => {
+    api.perfilDoCliente(processo.cliente_email).then(setP).catch(() => setP(null))
+  }, [processo.cliente_email])
+  if (p === undefined) return null
+  if (!p) return <p className="dica">O cliente ainda não preencheu o perfil no portal.</p>
+  const endereco = [p.endereco && `${p.endereco}${p.numero ? ', ' + p.numero : ''}`, p.complemento, p.bairro, p.cidade && `${p.cidade}${p.uf ? '/' + p.uf : ''}`,
+    p.cep && `CEP ${String(p.cep).replace(/(\d{5})(\d{3})/, '$1-$2')}`].filter(Boolean).join(' · ')
+  const linhas = [
+    ['Prefere ser chamado(a)', p.nome_preferido],
+    ['Celular', p.telefone],
+    ['Outro telefone', p.telefone_2],
+    ['Melhor horário', p.melhor_horario],
+    ['Novidades por e-mail', p.receber_novidades === false ? 'Não quer receber' : 'Aceita'],
+    ['Endereço para correspondência', endereco, true],
+    ['Informações sobre o imóvel', p.observacoes, true],
+  ].filter(([, v]) => v)
+  return (
+    <div className="info-cliente">
+      <Avatar caminho={p.foto_path} nome={processo.cliente_nome} tamanho={64} />
+      <dl className="info-cliente-dados">
+        <div className="largo"><dt>Preenchido pelo cliente no portal</dt></div>
+        {linhas.map(([k, v, largo]) => (
+          <div key={k} className={largo ? 'largo' : ''}><dt>{k}</dt><dd>{v}</dd></div>
+        ))}
+      </dl>
     </div>
   )
 }
