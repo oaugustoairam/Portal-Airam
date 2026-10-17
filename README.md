@@ -8,8 +8,8 @@ recebe um código por SMS ou e-mail e redefine sozinho)
   projeto final · assinatura (PDF assinado pelo portal) → fabricação (ícone animado) → montagem
 - O contrato é assinado na loja, antes do acesso; no portal ele aparece em Anexos como "Contrato assinado"
 - Prazo máximo para entrega com contagem de dias
-- Entrega futura: contagem regressiva animada (prédio em obra + guindaste) até a previsão do imóvel pronto
-- Garantia Airam (madeira 10 anos, ferragens 1 ano, 90 dias fabricação/montagem) com datas de validade após a montagem
+- Entrega futura: contagem regressiva com o logo da Airam "carregando" como um relógio até a previsão do imóvel pronto
+- Garantia Airam de 10 anos na madeira, com a data de validade após a montagem
 - O tipo do contrato (normal / entrega futura) é só interno
 - Prazo do processo: **Prazo normal** (medição disponível em até 90 dias após a venda) ou **Projeto futuro** (acima de 90)
 - Anexos: contrato assinado, projeto inicial (PDF), renders e projeto final
