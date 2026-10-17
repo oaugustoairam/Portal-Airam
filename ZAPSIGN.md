@@ -1,18 +1,20 @@
 # Assinatura ZapSign dentro do Portal Airam
 
-O cliente assina o **contrato** e o **projeto final** sem sair do portal. A tela do ZapSign abre
-dentro da página da Airam, com a cor da marca.
+O cliente assina o **PDF do projeto final** sem sair do portal. A tela do ZapSign abre dentro da
+página da Airam, com a cor da marca.
+
+O **contrato** não passa pelo portal: ele é assinado na loja, antes de o cliente receber o acesso.
+A equipe só anexa o PDF já assinado (Anexos > "Contrato assinado").
 
 ## Como funciona
 
-1. A equipe anexa o PDF (aba **Anexos**, tipo *Contrato* ou *Projeto final*).
+1. A equipe anexa o PDF do projeto final (aba **Anexos**, tipo *Projeto final*).
 2. Na aba **Assinaturas**, a equipe clica em **Enviar para assinatura**. O servidor manda o PDF ao
    ZapSign, com nome, e-mail e CPF do cliente travados, e guarda o link de assinatura.
-3. O cliente entra no portal e vê **"Seu contrato está pronto para assinatura → Assinar agora"**.
+3. O cliente entra no portal e vê **"O PDF do seu projeto final está pronto para assinatura → Assinar agora"**.
    Ele lê, desenha a assinatura e confirma com um código que chega no e-mail dele.
 4. O ZapSign avisa o portal (webhook). O PDF assinado é salvo nos anexos com o selo "Assinado" e a
-   etapa do cronograma fica concluída. Na assinatura do projeto final, a data também é preenchida e
-   a **Produção** começa a aparecer para o cliente.
+   etapa "Projeto final · Assinatura" fica concluída. A **Fabricação** começa a aparecer para o cliente.
 
 O token do ZapSign fica só no servidor (Supabase Edge Functions). Ele nunca vai para o site.
 

@@ -19,13 +19,13 @@ import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
 // ============================================================ Lista de processos
 const ETAPAS_FILTRO = [
-  ['contrato', 'Assinatura do contrato'],
   ['financeiro', 'Solução financeira'],
+  ['projeto_inicial', 'Projeto inicial'],
   ['medicao', 'Medição'],
-  ['conferencia', 'Conferência do projeto final'],
-  ['assinatura_projeto', 'Assinatura do projeto final'],
-  ['producao', 'Produção'],
-  ['entrega', 'Entrega e montagem'],
+  ['conferencia', 'Projeto final · Conferência'],
+  ['assinatura_projeto', 'Projeto final · Assinatura'],
+  ['producao', 'Fabricação'],
+  ['entrega', 'Montagem'],
 ]
 const FILTROS_VAZIOS = { busca: '', situacao: 'ativos', prazo: '', etapa: '', financeiro: '', de: '', ate: '', ordem: 'entrega' }
 const CHAVE_FILTROS = 'airam-filtros-processos'
@@ -95,7 +95,7 @@ export default function AdminHome() {
     ['assinatura', 'Aguardando assinatura', ativos.filter((p) => p.aguardandoAssinatura).length],
     ['financeiro', 'Financeiro pendente', ativos.filter((p) => p.solucao_financeira === 'pendente').length],
     ['atrasados', 'Com atraso', ativos.filter((p) => p.atrasado).length],
-    ['entrega30', 'Entregas em 30 dias', ativos.filter((p) => p.dEntrega !== null && p.dEntrega >= 0 && p.dEntrega <= 30).length],
+    ['entrega30', 'Prazo máximo em 30 dias', ativos.filter((p) => p.dEntrega !== null && p.dEntrega >= 0 && p.dEntrega <= 30).length],
   ]
 
   const termo = semAcento(filtros.busca.trim())
@@ -161,7 +161,7 @@ export default function AdminHome() {
         <div className={`filtros-grade ${abertoMobile ? 'aberto' : ''}`}>
           <Filtro id="f-situacao" rotulo="Situação" valor={f.situacao} onChange={set('situacao')} opcoes={[
             ['ativos', 'Em andamento'], ['todos', 'Todos'], ['atrasados', 'Com atraso'], ['assinatura', 'Aguardando assinatura'],
-            ['financeiro', 'Financeiro pendente'], ['entrega30', 'Entregas em 30 dias'], ['entregues', 'Entregues'],
+            ['financeiro', 'Financeiro pendente'], ['entrega30', 'Prazo máximo em 30 dias'], ['entregues', 'Montagem concluída'],
           ]} />
           <Filtro id="f-prazo" rotulo="Prazo" valor={f.prazo} onChange={set('prazo')}
             opcoes={[['', 'Normal e futuro'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro']]} />
@@ -169,10 +169,10 @@ export default function AdminHome() {
             opcoes={[['', 'Todas as etapas'], ...ETAPAS_FILTRO]} />
           <Filtro id="f-fin" rotulo="Solução financeira" valor={f.financeiro} onChange={set('financeiro')}
             opcoes={[['', 'OK e pendente'], ['ok', 'OK'], ['pendente', 'Pendente']]} />
-          <CampoData id="f-de" rotulo="Entrega a partir de" valor={f.de} onChange={set('de')} />
-          <CampoData id="f-ate" rotulo="Entrega até" valor={f.ate} onChange={set('ate')} />
+          <CampoData id="f-de" rotulo="Prazo máximo a partir de" valor={f.de} onChange={set('de')} />
+          <CampoData id="f-ate" rotulo="Prazo máximo até" valor={f.ate} onChange={set('ate')} />
           <Filtro id="f-ordem" rotulo="Ordenar por" valor={f.ordem} onChange={set('ordem')}
-            opcoes={[['entrega', 'Entrega mais próxima'], ['recentes', 'Vendas mais recentes'], ['codigo', 'Código'], ['cliente', 'Nome do cliente']]} />
+            opcoes={[['entrega', 'Prazo máximo mais próximo'], ['recentes', 'Vendas mais recentes'], ['codigo', 'Código'], ['cliente', 'Nome do cliente']]} />
         </div>
         <div className="filtros-rodape">
           <span className="num">{processos ? `Mostrando ${visiveis.length} de ${linhas.length} processos` : ''}</span>
@@ -194,7 +194,7 @@ export default function AdminHome() {
                 <th>Prazo</th>
                 <th>Etapa atual</th>
                 <th>Financeiro</th>
-                <th>Entrega prevista</th>
+                <th>Prazo máximo</th>
               </tr>
             </thead>
             <tbody>
@@ -205,7 +205,7 @@ export default function AdminHome() {
                   <td>{p.cliente_nome}<span className="celula-sub">{p.ambientes}</span></td>
                   <td><span className={`chip chip-prazo-${p.tipo_prazo}`}>{TIPOS_PRAZO[p.tipo_prazo]?.nome}</span></td>
                   <td>
-                    {p.concluido ? 'Entregue' : p.atual.nome}
+                    {p.concluido ? 'Montagem concluída' : p.atual.nome}
                     {p.aguardandoAssinatura && !p.concluido && <span className="celula-sub">Aguardando assinatura</span>}
                     {p.atrasado && <span className="celula-sub texto-atraso">Com atraso</span>}
                   </td>
@@ -217,7 +217,7 @@ export default function AdminHome() {
                   <td className="num">
                     {formatarData(p.data_entrega_prevista)}
                     <span className={`celula-sub ${!p.concluido && p.dEntrega < 0 ? 'texto-atraso' : ''}`}>
-                      {p.concluido ? 'Entregue' : prazoTexto(p.data_entrega_prevista)}
+                      {p.concluido ? 'Concluído' : prazoTexto(p.data_entrega_prevista)}
                     </span>
                   </td>
                 </tr>
@@ -285,7 +285,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
 
       {id && (
         <div className="abas">
-          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
+          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['cronograma', 'Cronograma interno'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
             <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>{t}</button>
           ))}
         </div>
@@ -305,6 +305,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
       )}
       {aba === 'anexos' && <Anexos processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
       {aba === 'assinaturas' && <Assinaturas processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'cronograma' && <CronogramaInterno processo={processo} />}
       {aba === 'avisos' && <Avisos processo={processo} />}
       {aba === 'acesso' && <Acesso processo={processo} />}
       {aba === 'cliente' && (
@@ -395,7 +396,7 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           <CampoData id="p-venda" rotulo="Data da venda" obrigatorio valor={f.data_venda} onChange={set('data_venda')} />
           <CampoData id="p-disp" rotulo="Disponível para medição" obrigatorio valor={f.data_disponivel_medicao}
             onChange={set('data_disponivel_medicao')} ajuda="Quando o imóvel fica pronto para medir" />
-          <CampoData id="p-entrega" rotulo="Prazo do cliente (entrega prevista)" obrigatorio
+          <CampoData id="p-entrega" rotulo="Prazo máximo para entrega" obrigatorio
             valor={f.data_entrega_prevista} onChange={set('data_entrega_prevista')} />
         </div>
         <div className={`tipo-prazo ${tipo ? 'tipo-prazo-' + tipo : ''}`} aria-live="polite">
@@ -424,18 +425,20 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           </div>
         </div>
         <div className="grade grade-etapas">
+          <EtapaData id="p-pi" rotulo="Envio do projeto inicial" valor={f.data_projeto_inicial} onData={set('data_projeto_inicial')}
+            feito={f.projeto_inicial_enviado} onFeito={set('projeto_inicial_enviado')} textoFeito="Projeto inicial enviado" />
           <EtapaData id="p-med" rotulo="Dia da medição" valor={f.data_medicao} onData={set('data_medicao')}
             feito={f.medicao_concluida} onFeito={set('medicao_concluida')} textoFeito="Medição feita" />
-          <EtapaData id="p-conf" rotulo="Dia da conferência do projeto final" valor={f.data_conferencia} onData={set('data_conferencia')}
+          <EtapaData id="p-conf" rotulo="Projeto final · Conferência" valor={f.data_conferencia} onData={set('data_conferencia')}
             feito={f.conferencia_concluida} onFeito={set('conferencia_concluida')} textoFeito="Conferência feita" />
-          <EtapaData id="p-assproj" rotulo="Dia da assinatura do projeto final" valor={f.data_assinatura_projeto}
+          <EtapaData id="p-assproj" rotulo="Projeto final · Assinatura" valor={f.data_assinatura_projeto}
             onData={set('data_assinatura_projeto')} feito={projetoAssinadoZapSign || f.projeto_assinado_manual}
             travado={projetoAssinadoZapSign} onFeito={set('projeto_assinado_manual')}
             textoFeito={projetoAssinadoZapSign ? 'Assinado pelo portal' : 'Assinado fora do portal'} />
-          <EtapaData id="p-entr" rotulo="Dia previsto para entrega" valor={f.data_entrega_prevista} onData={set('data_entrega_prevista')}
-            feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Entregue e montado" obrigatorio />
+          <EtapaData id="p-entr" rotulo="Montagem (prazo máximo para entrega)" valor={f.data_entrega_prevista} onData={set('data_entrega_prevista')}
+            feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Montagem concluída" obrigatorio />
         </div>
-        <p className="dica">A produção aparece para o cliente automaticamente depois da assinatura do projeto final, até a entrega.</p>
+        <p className="dica">Ao anexar o PDF do projeto inicial, a etapa é marcada como enviada sozinha. A fabricação aparece para o cliente depois da assinatura do projeto final, até a montagem.</p>
         <label className="check check-destaque">
           <input type="checkbox" checked={f.notificar !== false} onChange={set('notificar')} />
           Avisar o cliente por WhatsApp e e-mail a cada etapa
@@ -566,8 +569,8 @@ function Anexos({ processo, onMudou }) {
 }
 
 // ============================================================ Assinaturas (ZapSign)
+// O contrato é assinado na loja antes do acesso ao portal (anexe o PDF assinado em Anexos).
 const TIPOS_ASSINATURA = [
-  { tipo: 'contrato', nome: 'Contrato', categoria: 'contrato' },
   { tipo: 'projeto_final', nome: 'Projeto final', categoria: 'projeto_final' },
 ]
 
@@ -575,7 +578,7 @@ function Assinaturas({ processo, onMudou }) {
   return (
     <div className="form">
       <p className="dica">
-        O documento vai para o ZapSign e o cliente assina dentro do Portal Airam, com código de confirmação no e-mail.
+        O PDF do projeto final vai para o ZapSign e o cliente assina dentro do Portal Airam, com código de confirmação no e-mail. O contrato não passa por aqui: ele é assinado na loja e entra em Anexos como "Contrato assinado".
         Quando todos assinarem, o PDF assinado entra sozinho nos anexos.
       </p>
       {TIPOS_ASSINATURA.map((t) => (
@@ -769,6 +772,98 @@ function Avisos({ processo }) {
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+// ============================================================ Cronograma interno (só a loja vê)
+function dataHora(iso) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+const EVENTOS_DA_ETAPA = {
+  venda: [],
+  financeiro: ['financeiro_aprovado'],
+  projeto_inicial: ['projeto_inicial'],
+  medicao: ['medicao_agendada', 'medicao_realizada'],
+  conferencia: ['conferencia_agendada', 'conferencia_realizada'],
+  assinatura_projeto: ['projeto_final_disponivel', 'producao_iniciada'],
+  entrega: ['entrega_reagendada', 'entrega_concluida'],
+}
+
+function CronogramaInterno({ processo: p }) {
+  const [avisos, setAvisos] = useState([])
+  useEffect(() => {
+    api.listarAvisos(p.id).then(setAvisos)
+  }, [p.id])
+
+  const projetoAssinado = p.assinaturas?.find((a) => a.tipo === 'projeto_final' && a.status === 'assinado')
+  const linhas = [
+    { id: 'venda', nome: 'Venda / processo criado', previsto: p.data_venda, feito: p.criado_em },
+    { id: 'financeiro', nome: 'Solução financeira', previsto: null, feito: p.financeiro_ok_em },
+    { id: 'projeto_inicial', nome: 'Projeto inicial', previsto: p.data_projeto_inicial, feito: p.projeto_inicial_em },
+    { id: 'medicao', nome: 'Medição', previsto: p.data_medicao, feito: p.medicao_concluida_em },
+    { id: 'conferencia', nome: 'Projeto final · Conferência', previsto: p.data_conferencia, feito: p.conferencia_concluida_em },
+    { id: 'assinatura_projeto', nome: 'Projeto final · Assinatura', previsto: p.data_assinatura_projeto, feito: projetoAssinado?.assinado_em || p.projeto_assinado_em },
+    { id: 'producao', nome: 'Fabricação', previsto: null, feito: null, inicio: projetoAssinado?.assinado_em || p.projeto_assinado_em },
+    { id: 'entrega', nome: 'Montagem', previsto: p.data_entrega_prevista, feito: p.montagem_concluida_em },
+  ]
+
+  const avisosDe = (id) => avisos.filter((a) => (EVENTOS_DA_ETAPA[id] || []).includes(a.evento) && ['enviado', 'simulado'].includes(a.status))
+
+  return (
+    <div className="form">
+      <p className="dica">
+        Uso interno: o cliente não vê esta tela. As datas de conclusão são registradas sozinhas quando a etapa é marcada,
+        e os avisos mostram quando o e-mail e o WhatsApp foram enviados.
+      </p>
+      <div className="tabela-wrap">
+        <table className="tabela tabela-cronograma">
+          <thead>
+            <tr>
+              <th>Etapa</th>
+              <th>Previsto</th>
+              <th>Concluído em</th>
+              <th>Dias</th>
+              <th>Avisos ao cliente</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((l, i) => {
+              const anterior = linhas.slice(0, i).reverse().find((x) => x.feito)?.feito
+              const dias = l.feito && anterior ? Math.max(0, Math.round((new Date(l.feito) - new Date(anterior)) / 86400000)) : null
+              const atrasada = !l.feito && l.previsto && diasAte(l.previsto) < 0
+              const env = avisosDe(l.id)
+              return (
+                <tr key={l.id} className={l.feito ? 'linha-feita' : ''}>
+                  <td><strong>{l.nome}</strong></td>
+                  <td className="num">{l.previsto ? formatarData(l.previsto) : '—'}</td>
+                  <td className="num">
+                    {l.feito ? dataHora(l.feito)
+                      : l.inicio && !p.entrega_concluida ? <span className="chip chip-mini chip-em_andamento">Em fabricação desde {formatarData(l.inicio.slice(0, 10))}</span>
+                      : <span className={atrasada ? 'texto-atraso' : 'celula-sub'}>{atrasada ? 'Atrasada' : 'Pendente'}</span>}
+                  </td>
+                  <td className="num">{dias !== null && i > 0 ? `${dias} ${dias === 1 ? 'dia' : 'dias'}` : '—'}</td>
+                  <td>
+                    {env.length ? env.map((a) => (
+                      <span key={a.id} className="celula-sub num">
+                        {a.canal === 'whatsapp' ? 'WhatsApp' : 'E-mail'} · {dataHora(a.enviado_em || a.criado_em)}
+                      </span>
+                    )) : <span className="celula-sub">—</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="dica">"Dias" é o tempo desde a etapa concluída anterior. Total desde a venda: {
+        (() => {
+          const ultimo = [...linhas].reverse().find((l) => l.feito && l.id !== 'venda')?.feito
+          return ultimo ? `${Math.round((new Date(ultimo) - new Date(p.data_venda + 'T00:00:00')) / 86400000)} dias até a última etapa concluída` : 'nenhuma etapa concluída ainda'
+        })()
+      }.</p>
     </div>
   )
 }

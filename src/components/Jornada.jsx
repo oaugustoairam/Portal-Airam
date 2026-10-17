@@ -5,18 +5,18 @@ import IconeCubo from './IconeCubo.jsx'
 
 // O que cada etapa significa, na linguagem do cliente.
 const SOBRE = {
-  contrato: 'O contrato formaliza tudo o que combinamos. Depois de assinado, a cópia fica guardada em Documentos.',
   financeiro: 'Confirmação da forma de pagamento escolhida por você.',
+  projeto_inicial: 'O primeiro desenho dos seus ambientes. O PDF fica disponível em Documentos.',
   medicao: 'Nossa equipe vai até o imóvel e mede cada ambiente com precisão, para tudo encaixar perfeitamente.',
   conferencia: 'Revisamos juntos o projeto final: medidas, cores, acabamentos e ferragens.',
-  assinatura_projeto: 'Você aprova o projeto final. A partir daqui seus móveis seguem para a fábrica.',
+  assinatura_projeto: 'Você assina o PDF do projeto final aqui pelo portal. A partir daí seus móveis seguem para a fábrica.',
   producao: 'Seus móveis estão sendo fabricados.',
-  entrega: 'Entregamos e montamos tudo no seu imóvel. Seus móveis têm 10 anos de garantia.',
+  entrega: 'Montamos tudo no seu imóvel. Seus móveis têm 10 anos de garantia.',
 }
 
 const tracos = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }
 const ICONES = {
-  contrato: <><path d="M7 3h7l4 4v14H7z" {...tracos} /><path d="M14 3v4h4M10 12h5M10 16h3" {...tracos} /></>,
+  projeto_inicial: <><path d="M7 3h7l4 4v14H7z" {...tracos} /><path d="M14 3v4h4M10 12h5M10 16h3" {...tracos} /></>,
   financeiro: <><rect x="3" y="6" width="18" height="12" rx="2" {...tracos} /><path d="M3 10h18M7 15h3" {...tracos} /></>,
   medicao: <><path d="m3 17 14-14 4 4L7 21z" {...tracos} /><path d="m7 13 2 2M10 10l2 2M13 7l2 2" {...tracos} /></>,
   conferencia: <><circle cx="11" cy="11" r="6" {...tracos} /><path d="m20 20-4.5-4.5M8.5 11l1.8 1.8 3.2-3.3" {...tracos} /></>,
@@ -31,7 +31,7 @@ function Icone({ etapa }) {
 }
 
 function textoStatus(e) {
-  if (e.producao && e.status === 'atual') return 'Em produção'
+  if (e.producao && e.status === 'atual') return 'Em fabricação'
   if (e.atrasada) return 'Atrasada'
   return { concluida: 'Concluída', atual: 'Etapa atual', futura: 'Próxima' }[e.status]
 }

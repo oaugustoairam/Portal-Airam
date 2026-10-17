@@ -5,18 +5,19 @@ equipe precisar enviar.
 
 | Quando acontece | Mensagem |
 |---|---|
-| Contrato ou projeto final enviado para assinatura | "Seu contrato está pronto para assinatura. Entre no Portal Airam…" |
-| Contrato assinado | "Recebemos seu contrato assinado…" |
 | Solução financeira marcada como OK | "Sua solução financeira foi aprovada…" |
+| Projeto inicial anexado (ou marcado como enviado) | "Seu projeto inicial está disponível no Portal Airam…" |
 | Dia da medição preenchido ou alterado | "Sua medição está agendada para 25/10/2026…" |
 | Medição marcada como feita | "A medição dos seus ambientes foi concluída…" |
 | Dia da conferência preenchido ou alterado | "A conferência do seu projeto final está marcada para…" |
 | Conferência marcada como feita | "A conferência do seu projeto final foi concluída…" |
-| Projeto final assinado (portal ou manual) | "Projeto final assinado! Seus móveis entraram em produção…" |
-| Data de entrega alterada | "A entrega prevista dos seus móveis agora é…" |
-| Entrega marcada como concluída | "Entrega e montagem concluídas! Obrigado por confiar na Airam…" |
+| PDF do projeto final enviado para assinatura | "Seu projeto final está pronto para assinatura…" |
+| Projeto final assinado (portal ou manual) | "Projeto final assinado! Seus móveis entraram em fabricação." |
+| Prazo máximo para entrega alterado | "O prazo máximo para entrega dos seus móveis agora é…" |
+| Montagem marcada como concluída | "Montagem concluída! Obrigado por confiar na Airam…" |
 
 - Cada processo tem a opção **"Avisar o cliente por WhatsApp e e-mail a cada etapa"** (aba Dados e prazos).
+- A aba **Cronograma interno** mostra, por etapa, o dia em que foi concluída e quando o e-mail e o WhatsApp saíram.
 - A aba **Avisos** mostra tudo o que foi enviado, se chegou ou falhou, e tem um botão **Reenviar**.
 - Os textos ficam em `supabase/schema.sql` (seção 9). Para mudar uma frase, edite ali e rode o SQL de novo.
 

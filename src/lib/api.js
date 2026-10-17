@@ -34,6 +34,7 @@ function caminhoArquivo(processoId, categoria, nome) {
 const CAMPOS = [
   'id', 'codigo', 'cliente_nome', 'cliente_cpf', 'cliente_email', 'cliente_telefone', 'endereco',
   'ambientes', 'data_venda', 'data_disponivel_medicao', 'solucao_financeira', 'data_medicao',
+  'projeto_inicial_enviado', 'data_projeto_inicial',
   'medicao_concluida', 'data_conferencia', 'conferencia_concluida', 'data_assinatura_projeto',
   'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente', 'notificar',
 ]
@@ -73,6 +74,28 @@ const supabaseApi = {
     const { data, error } = await sb.functions.invoke('entrar-cpf', { body: { cpf: id, senha } })
     if (error || !data?.access_token) throw new Error(ERRO_LOGIN)
     await sb.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token })
+  },
+  async recuperarSenha(identificador, canal) {
+    const { data, error } = await sb.functions.invoke('recuperar-senha', { body: { identificador, canal } })
+    if (error) {
+      let msg = 'Não foi possível enviar o código agora. Tente de novo em instantes.'
+      try {
+        msg = (await error.context.json()).erro || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    return data.mensagem
+  },
+  async redefinirSenha(identificador, codigo, senha) {
+    const { data, error } = await sb.functions.invoke('redefinir-senha', { body: { identificador, codigo, senha } })
+    if (error) {
+      let msg = 'Não foi possível redefinir a senha.'
+      try {
+        msg = (await error.context.json()).erro || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    if (data?.access_token) await sb.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token })
   },
   async trocarSenha(nova) {
     const { error } = await sb.auth.updateUser({ password: nova })
@@ -167,7 +190,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v4'
+const CHAVE_DEMO = 'portal-airam-demo-v5'
 let memoria = null
 const ouvintes = new Set()
 
@@ -188,6 +211,19 @@ function gravar() {
 const avisar = () => ouvintes.forEach((cb) => cb(db().sessao))
 const novoId = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 const comTipo = (p) => ({ ...p, tipo_prazo: calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao) })
+
+// mesma regra do gatilho marcar_datas_etapas: guarda o dia em que cada etapa foi concluída
+function marcarDatas(a, n) {
+  const agora = new Date().toISOString()
+  const regra = (feito, antes, campo) => (!feito ? null : antes ? a[campo] || agora : agora)
+  n.financeiro_ok_em = regra(n.solucao_financeira === 'ok', a.solucao_financeira === 'ok', 'financeiro_ok_em')
+  n.projeto_inicial_em = regra(n.projeto_inicial_enviado, a.projeto_inicial_enviado, 'projeto_inicial_em')
+  n.medicao_concluida_em = regra(n.medicao_concluida, a.medicao_concluida, 'medicao_concluida_em')
+  n.conferencia_concluida_em = regra(n.conferencia_concluida, a.conferencia_concluida, 'conferencia_concluida_em')
+  n.montagem_concluida_em = regra(n.entrega_concluida, a.entrega_concluida, 'montagem_concluida_em')
+  if (n.projeto_assinado_manual && !a.projeto_assinado_manual) n.projeto_assinado_em = a.projeto_assinado_em || agora
+  return n
+}
 
 // simula a fila de avisos do servidor (um aviso por canal)
 function simularAvisos(p, eventos) {
@@ -213,6 +249,26 @@ const demoApi = {
       (c) => c.email === id || (c.cpf && c.cpf === id.replace(/\D/g, '') && id.replace(/\D/g, '').length === 11)
     )
     if (!conta || conta.senha !== senha) throw new Error(ERRO_LOGIN)
+    d.sessao = { email: conta.email }
+    gravar()
+    avisar()
+  },
+  async recuperarSenha(identificador, canal) {
+    const d = db()
+    const id = identificador.trim().toLowerCase()
+    const conta = d.contas.find((c) => c.papel === 'cliente' && (c.email === id || (c.cpf && c.cpf === id.replace(/\D/g, ''))))
+    d.codigoDemo = conta ? { email: conta.email, codigo: '123456', canal } : null
+    gravar()
+    return 'Se o cadastro existir, enviamos um código de 6 dígitos. Ele vale por 10 minutos. (Demonstração: use 123456)'
+  },
+  async redefinirSenha(identificador, codigo, senha) {
+    const d = db()
+    if (!d.codigoDemo || codigo !== d.codigoDemo.codigo) throw new Error('Código incorreto. Na demonstração, use 123456.')
+    if (senha.length < 8 || !/[A-Za-z]/.test(senha) || !/\d/.test(senha))
+      throw new Error('A nova senha precisa de 8 caracteres ou mais, com letras e números.')
+    const conta = d.contas.find((c) => c.email === d.codigoDemo.email)
+    Object.assign(conta, { senha, precisa_trocar_senha: false })
+    d.codigoDemo = null
     d.sessao = { email: conta.email }
     gravar()
     avisar()
@@ -262,7 +318,7 @@ const demoApi = {
     if (conflito) throw new Error('Já existe um processo com esse código ou CPF.')
     if (campos.id) {
       const antes = d.processos.find((x) => x.id === campos.id)
-      const depois = { ...antes, ...campos }
+      const depois = marcarDatas(antes, { ...antes, ...campos })
       d.processos = d.processos.map((x) => (x.id === campos.id ? depois : x))
       campos.avisos = simularAvisos(depois, avisosDaMudanca(antes, depois))
     } else {
@@ -271,6 +327,7 @@ const demoApi = {
         criado_em: new Date().toISOString(),
         solucao_financeira: campos.solucao_financeira || 'pendente',
       })
+      marcarDatas({}, campos)
       d.processos.unshift(campos)
     }
     gravar()
@@ -301,6 +358,13 @@ const demoApi = {
       tipo_mime: arquivo.type,
       criado_em: new Date().toISOString(),
     })
+    // anexar o projeto inicial marca a etapa como enviada (como o gatilho do banco)
+    const p = d.processos.find((x) => x.id === processoId)
+    if (categoria === 'projeto_inicial' && !p.projeto_inicial_enviado) {
+      const antes = { ...p }
+      marcarDatas(antes, Object.assign(p, { projeto_inicial_enviado: true }))
+      simularAvisos(p, avisosDaMudanca(antes, p))
+    }
     gravar()
   },
   async excluirDocumento(doc) {
@@ -362,6 +426,8 @@ const demoApi = {
     }
     d.documentos.push(doc)
     Object.assign(a, { status: 'assinado', assinado_em: new Date().toISOString(), documento_assinado_id: doc.id })
+    const proc = d.processos.find((x) => x.id === a.processo_id)
+    if (a.tipo === 'projeto_final' && proc) proc.projeto_assinado_em = proc.projeto_assinado_em || a.assinado_em
     simularAvisos(d.processos.find((x) => x.id === a.processo_id), [avisoAssinatura(a.tipo, 'assinado')])
     gravar()
   },

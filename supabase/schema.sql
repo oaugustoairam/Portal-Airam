@@ -287,6 +287,10 @@ begin
     perform public.enfileirar_aviso(new, 'medicao_agendada', 'Medição agendada',
       'Sua medição está agendada para ' || dt || '. Nossa equipe vai até o local nessa data.');
   end if;
+  if new.projeto_inicial_enviado and not old.projeto_inicial_enviado then
+    perform public.enfileirar_aviso(new, 'projeto_inicial', 'Seu projeto inicial chegou',
+      'Seu projeto inicial está disponível no Portal Airam, em Documentos.');
+  end if;
   if new.medicao_concluida and not old.medicao_concluida then
     perform public.enfileirar_aviso(new, 'medicao_realizada', 'Medição concluída',
       'A medição dos seus ambientes foi concluída. Agora preparamos o seu projeto final.');
@@ -301,17 +305,17 @@ begin
       'A conferência do seu projeto final foi concluída. Em breve ele estará pronto para assinatura.');
   end if;
   if new.projeto_assinado_manual and not old.projeto_assinado_manual then
-    perform public.enfileirar_aviso(new, 'producao_iniciada', 'Seus móveis entraram em produção',
-      'Projeto final assinado! Seus móveis entraram em produção na fábrica.');
+    perform public.enfileirar_aviso(new, 'producao_iniciada', 'Seus móveis entraram em fabricação',
+      'Projeto final assinado! Seus móveis entraram em fabricação.');
   end if;
   if new.data_entrega_prevista is distinct from old.data_entrega_prevista and not new.entrega_concluida then
     dt := to_char(new.data_entrega_prevista, 'DD/MM/YYYY');
-    perform public.enfileirar_aviso(new, 'entrega_reagendada', 'Nova data de entrega',
-      'A entrega prevista dos seus móveis agora é ' || dt || '.');
+    perform public.enfileirar_aviso(new, 'entrega_reagendada', 'Prazo máximo para entrega',
+      'O prazo máximo para entrega dos seus móveis agora é ' || dt || '.');
   end if;
   if new.entrega_concluida and not old.entrega_concluida then
-    perform public.enfileirar_aviso(new, 'entrega_concluida', 'Entrega concluída',
-      'Entrega e montagem concluídas! Obrigado por confiar na Airam. Seus móveis têm 10 anos de garantia.');
+    perform public.enfileirar_aviso(new, 'entrega_concluida', 'Montagem concluída',
+      'Montagem concluída! Obrigado por confiar na Airam. Seus móveis têm 10 anos de garantia.');
   end if;
   return new;
 end $$;
@@ -337,9 +341,12 @@ begin
     if new.tipo = 'contrato' then
       perform public.enfileirar_aviso(p, 'contrato_assinado', 'Contrato assinado',
         'Recebemos seu contrato assinado. Obrigado por escolher a Airam! A cópia assinada está no portal.');
-    elsif not p.projeto_assinado_manual then
-      perform public.enfileirar_aviso(p, 'producao_iniciada', 'Seus móveis entraram em produção',
-        'Projeto final assinado! Seus móveis entraram em produção na fábrica.');
+    else
+      update public.processos set projeto_assinado_em = coalesce(projeto_assinado_em, now()) where id = new.processo_id;
+      if not p.projeto_assinado_manual then
+        perform public.enfileirar_aviso(p, 'producao_iniciada', 'Seus móveis entraram em fabricação',
+          'Projeto final assinado! Seus móveis entraram em fabricação.');
+      end if;
     end if;
   end if;
   return new;
@@ -348,3 +355,75 @@ end $$;
 drop trigger if exists avisos on public.assinaturas;
 create trigger avisos after insert or update on public.assinaturas
   for each row execute function public.avisos_assinatura();
+
+-- 10. Cronograma interno e projeto inicial -------------------------------------
+-- O contrato é assinado na loja, antes do acesso ao portal; no portal ele só aparece
+-- como anexo "Contrato assinado". A jornada do cliente começa na solução financeira.
+alter table public.processos add column if not exists projeto_inicial_enviado boolean not null default false;
+alter table public.processos add column if not exists data_projeto_inicial date;
+-- dia em que cada etapa foi concluída (preenchido sozinho; uso interno da loja)
+alter table public.processos add column if not exists financeiro_ok_em timestamptz;
+alter table public.processos add column if not exists projeto_inicial_em timestamptz;
+alter table public.processos add column if not exists medicao_concluida_em timestamptz;
+alter table public.processos add column if not exists conferencia_concluida_em timestamptz;
+alter table public.processos add column if not exists projeto_assinado_em timestamptz;
+alter table public.processos add column if not exists montagem_concluida_em timestamptz;
+
+create or replace function public.marcar_datas_etapas()
+returns trigger language plpgsql as $$
+declare
+  vazio public.processos;  -- no INSERT, compara com um registro sem nada marcado
+  a public.processos := case when tg_op = 'UPDATE' then old else vazio end;
+begin
+  new.financeiro_ok_em := case when new.solucao_financeira <> 'ok' then null
+    when coalesce(a.solucao_financeira, '') <> 'ok' then now() else a.financeiro_ok_em end;
+  new.projeto_inicial_em := case when not new.projeto_inicial_enviado then null
+    when not coalesce(a.projeto_inicial_enviado, false) then now() else a.projeto_inicial_em end;
+  new.medicao_concluida_em := case when not new.medicao_concluida then null
+    when not coalesce(a.medicao_concluida, false) then now() else a.medicao_concluida_em end;
+  new.conferencia_concluida_em := case when not new.conferencia_concluida then null
+    when not coalesce(a.conferencia_concluida, false) then now() else a.conferencia_concluida_em end;
+  new.montagem_concluida_em := case when not new.entrega_concluida then null
+    when not coalesce(a.entrega_concluida, false) then now() else a.montagem_concluida_em end;
+  if new.projeto_assinado_manual and not coalesce(a.projeto_assinado_manual, false) then
+    new.projeto_assinado_em := coalesce(a.projeto_assinado_em, now());
+  elsif tg_op = 'UPDATE' then
+    new.projeto_assinado_em := coalesce(new.projeto_assinado_em, a.projeto_assinado_em);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists datas_etapas on public.processos;
+create trigger datas_etapas before insert or update on public.processos
+  for each row execute function public.marcar_datas_etapas();
+
+-- Anexar o PDF do projeto inicial marca a etapa como enviada (e avisa o cliente)
+create or replace function public.projeto_inicial_anexado()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.categoria = 'projeto_inicial' then
+    update public.processos set projeto_inicial_enviado = true
+    where id = new.processo_id and not projeto_inicial_enviado;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists projeto_inicial on public.documentos;
+create trigger projeto_inicial after insert on public.documentos
+  for each row execute function public.projeto_inicial_anexado();
+
+-- 11. Redefinição de senha pelo próprio cliente (código por SMS ou e-mail) --------
+-- Só as funções do servidor (recuperar-senha / redefinir-senha) leem e gravam aqui.
+create table if not exists public.codigos_verificacao (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  canal text not null check (canal in ('email', 'sms')),
+  codigo_hash text not null,              -- o código em si nunca é guardado
+  expira_em timestamptz not null,
+  tentativas int not null default 0,
+  usado_em timestamptz,
+  criado_em timestamptz not null default now()
+);
+create index if not exists codigos_usuario_idx on public.codigos_verificacao (user_id, criado_em desc);
+alter table public.codigos_verificacao enable row level security;
+-- sem políticas: ninguém acessa pelo app

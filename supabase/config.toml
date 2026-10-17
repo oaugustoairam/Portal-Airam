@@ -4,3 +4,9 @@ verify_jwt = false   # o ZapSign chama sem login; a função confere o header x-
 
 [functions.enviar-notificacoes]
 verify_jwt = false   # chamada pelo agendador do banco; a função confere o segredo ou o login da equipe
+
+[functions.recuperar-senha]
+verify_jwt = false   # o cliente ainda não está logado
+
+[functions.redefinir-senha]
+verify_jwt = false   # o cliente ainda não está logado; a função confere o código

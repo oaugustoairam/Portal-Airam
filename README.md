@@ -2,18 +2,22 @@
 
 Sistema de processos pós-venda da Airam, com duas áreas:
 
-**Cliente** (entra com e-mail ou CPF e senha; no primeiro acesso cria a própria senha)
-- Cronograma: assinatura do contrato → solução financeira → medição → conferência do projeto final →
-  assinatura do projeto final → produção (ícone animado) → entrega e montagem
+**Cliente** (entra com e-mail ou CPF e senha; no primeiro acesso cria a própria senha; se esquecer,
+recebe um código por SMS ou e-mail e redefine sozinho)
+- Jornada: solução financeira → projeto inicial → medição → projeto final · conferência →
+  projeto final · assinatura (PDF assinado pelo portal) → fabricação (ícone animado) → montagem
+- O contrato é assinado na loja, antes do acesso; no portal ele aparece em Anexos como "Contrato assinado"
+- Prazo máximo para entrega com contagem de dias
 - Prazo do processo: **Prazo normal** (medição disponível em até 90 dias após a venda) ou **Projeto futuro** (acima de 90)
-- Contrato, projeto inicial, renders e projeto final
-- Assinatura eletrônica ZapSign dentro do portal
+- Anexos: contrato assinado, projeto inicial (PDF), renders e projeto final
+- Assinatura eletrônica do projeto final pelo ZapSign, dentro do portal
 
 **Equipe** (gerência = `admin`, funcionários = `equipe`)
 - Lista de processos com indicadores, busca por nome ou código e filtro Normal/Futuro
 - Cadastro: código + nome do cliente, CPF, datas com calendário, prazo obrigatório
 - Anexos: Medição (somente a loja vê), projeto inicial, renders, projeto final
-- Envio para assinatura (ZapSign), liberação de acesso com senha provisória e "Ver como cliente"
+- Cronograma interno: dia em que cada etapa foi concluída, dias entre etapas e quando cada e-mail/WhatsApp saiu
+- Envio do projeto final para assinatura (ZapSign), liberação de acesso com senha provisória e "Ver como cliente"
 - Filtros: situação, prazo, etapa atual, financeiro, período de entrega, busca por nome/código/CPF/telefone
 - Avisos automáticos ao cliente por WhatsApp e e-mail a cada etapa: veja [AVISOS.md](AVISOS.md)
 

@@ -8,13 +8,14 @@ import {
   progresso,
   diasAte,
   formatarData,
+  ROTULO_PRAZO,
 } from '../lib/constants.js'
 import { fotoDoProcesso } from '../lib/fotos.js'
 import { useContador, useRevelar } from '../lib/movimento.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
 
-const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'Seu projeto final' }
+const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'O PDF do seu projeto final' }
 
 // O que o cliente vê. A equipe usa a mesma tela em "Ver como cliente" (visualizacao = true).
 export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
@@ -36,7 +37,7 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
               </span>
               <div>
                 <strong>{NOME_ASSINATURA[a.tipo]} está pronto para assinatura</strong>
-                <span>Leva menos de 2 minutos e é feito aqui mesmo, pelo portal.</span>
+                <span>Confira e assine aqui mesmo pelo portal. Leva menos de 2 minutos.</span>
               </div>
               <button className="btn btn-principal" disabled={visualizacao} onClick={() => setAssinando(a)}
                 title={visualizacao ? 'Disponível só para o cliente' : undefined}>
@@ -99,7 +100,7 @@ function Hero({ processo, etapas, documentos }) {
       <div className="hero-in">
         <div className="hero-texto">
           <span className="hero-eyebrow">
-            Processo {processo.codigo}
+            Código do cliente {processo.codigo}
             {tipo && <span className="hero-tag">{tipo.nome}</span>}
           </span>
           <h1 className="hero-nome">{processo.cliente_nome}</h1>
@@ -117,10 +118,10 @@ function Hero({ processo, etapas, documentos }) {
           <dl className="hero-dados">
             <div>
               <dt>Etapa atual</dt>
-              <dd>{processo.entrega_concluida ? 'Entregue' : atual.nome}</dd>
+              <dd>{processo.entrega_concluida ? 'Montagem concluída' : atual.nome}</dd>
             </div>
             <div>
-              <dt>Entrega prevista</dt>
+              <dt>{ROTULO_PRAZO}</dt>
               <dd className="num">{formatarData(processo.data_entrega_prevista)}</dd>
             </div>
             {!processo.entrega_concluida && dias !== null && (

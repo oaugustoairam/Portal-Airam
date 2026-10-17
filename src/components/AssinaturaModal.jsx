@@ -39,7 +39,7 @@ export default function AssinaturaModal({ assinatura, documento, nomeCliente, on
         <header className="modal-assinatura-topo">
           <div>
             <span className="rotulo">Assinatura eletrônica</span>
-            <strong>Assinar {NOMES[assinatura.tipo]}</strong>
+            <strong>Assinar o {NOMES[assinatura.tipo]}</strong>
           </div>
           <button className="btn btn-leve" onClick={onFechar}>Fechar</button>
         </header>

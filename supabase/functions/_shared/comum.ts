@@ -43,3 +43,36 @@ export function gerarSenhaProvisoria() {
   const bytes = crypto.getRandomValues(new Uint8Array(10))
   return Array.from(bytes, (b) => letras[b % letras.length]).join('')
 }
+
+// Encontra a conta do cliente pelo e-mail ou CPF. Retorna { userId, email, telefone, nome } ou null.
+export async function acharCliente(sb, identificador) {
+  const id = String(identificador ?? '').trim().toLowerCase()
+  const cpf = somenteNumeros(id)
+  let consulta = sb.from('processos').select('cliente_email, cliente_telefone, cliente_nome').limit(1)
+  if (id.includes('@')) consulta = consulta.ilike('cliente_email', id)
+  else if (cpf.length === 11) consulta = consulta.eq('cliente_cpf', cpf)
+  else return null
+  const { data: proc } = await consulta.maybeSingle()
+  if (!proc) return null
+  const { data: perfil } = await sb.from('perfis').select('id, papel').ilike('email', proc.cliente_email).maybeSingle()
+  if (!perfil || perfil.papel !== 'cliente') return null
+  return { userId: perfil.id, email: proc.cliente_email.toLowerCase(), telefone: proc.cliente_telefone, nome: proc.cliente_nome }
+}
+
+export async function hashCodigo(codigo, userId) {
+  const dados = new TextEncoder().encode(`${codigo}:${userId}:${Deno.env.get('CODIGO_PEPPER') ?? 'airam'}`)
+  const h = await crypto.subtle.digest('SHA-256', dados)
+  return Array.from(new Uint8Array(h), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+export function senhaForte(s) {
+  return typeof s === 'string' && s.length >= 8 && /[A-Za-z]/.test(s) && /\d/.test(s)
+}
+
+// Telefone brasileiro em E.164 (+55DDDNÚMERO)
+export function telefoneE164(t) {
+  const n = somenteNumeros(t)
+  if (n.length === 10 || n.length === 11) return '+55' + n
+  if (/^55\d{10,11}$/.test(n)) return '+' + n
+  return null
+}

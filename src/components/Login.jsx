@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { api, MODO_DEMO } from '../lib/api.js'
 import { formatarCpf } from '../lib/constants.js'
 import logoVermelho from '../assets/logo-vermelho.png'
+import RecuperarSenha from './RecuperarSenha.jsx'
 
 export default function Login() {
   const [id, setId] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  const [recuperando, setRecuperando] = useState(false)
 
   async function entrar(e) {
     e.preventDefault()
@@ -28,6 +30,7 @@ export default function Login() {
   }
 
   const demo = MODO_DEMO ? api.contasDemo() : null
+  if (recuperando) return <RecuperarSenha inicial={id} onVoltar={() => setRecuperando(false)} />
 
   return (
     <section className="login">
@@ -53,7 +56,7 @@ export default function Login() {
           {ocupado ? 'Entrando…' : 'Entrar'}
         </button>
         {erro && <p className="erro" role="alert">{erro}</p>}
-        <p className="dica">Esqueceu a senha? Fale com a Airam pelo WhatsApp e geramos uma nova.</p>
+        <button type="button" className="link-esqueci" onClick={() => setRecuperando(true)}>Esqueci minha senha</button>
       </form>
 
       {demo && (

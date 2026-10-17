@@ -5,6 +5,7 @@
 | Camada | O que faz | Onde está |
 |---|---|---|
 | **Login com senha** | O cliente entra com e-mail ou CPF e senha. A equipe gera uma senha provisória e o cliente é obrigado a trocá-la no primeiro acesso. O login por CPF roda no servidor e não revela se o CPF existe. | Supabase Auth + `entrar-cpf` |
+| **Esqueci minha senha** | O cliente pede um código de 6 dígitos por SMS ou e-mail e cria a nova senha sozinho. O código vale 10 minutos e é guardado só como *hash*. São no máximo 5 tentativas por código e 3 códigos a cada 15 minutos. A resposta é a mesma exista ou não o cadastro. | `recuperar-senha` + `redefinir-senha` |
 | **Isolamento por cliente** | O banco só entrega um processo, um documento, uma assinatura ou um arquivo se o e-mail **confirmado** do usuário for o e-mail cadastrado no projeto. A regra fica no banco, então nem um app adulterado consegue burlar. | `supabase/schema.sql` (Row Level Security) |
 | **Cliente só lê** | Clientes não criam, editam nem apagam nada. Medição é interna: o cliente não vê nem o registro nem o arquivo. | `schema.sql` |
 | **Assinaturas** | Só o servidor marca um documento como assinado, depois do aviso do ZapSign. O webhook confere um segredo, e nem a equipe consegue forjar um "assinado". | `zapsign-*` |
@@ -39,3 +40,11 @@ Essas regras foram testadas num Postgres local: um cliente vê só o próprio pr
 - **2FA para administradores no próprio portal**: código do Google Authenticator para quem acessa o painel do escritório. O Supabase oferece isso nativamente, e dá para exigir no banco que o admin só altere dados com 2FA ativo.
 - **Tela de registro de atividades** no painel, em vez de consultar pelo Supabase.
 - **Marca d'água** com o nome do cliente nos PDFs de projeto, para desestimular repasse.
+
+## SMS do "Esqueci minha senha" (Twilio)
+
+1. Crie uma conta em https://www.twilio.com e compre um número com SMS, ou peça um remetente para o Brasil.
+2. Cadastre no Supabase: `supabase secrets set TWILIO_ACCOUNT_SID=... TWILIO_AUTH_TOKEN=... TWILIO_FROM=+1... CODIGO_PEPPER=<texto-longo>`
+3. Publique: `supabase functions deploy recuperar-senha` e `supabase functions deploy redefinir-senha`
+
+Sem a Twilio configurada, o cliente ainda recupera a senha por e-mail (Resend).

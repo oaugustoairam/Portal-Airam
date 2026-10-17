@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
-import { linhaDoTempo, etapaAtual, formatarData } from '../lib/constants.js'
+import { linhaDoTempo, etapaAtual, formatarData, ROTULO_PRAZO } from '../lib/constants.js'
 import ProcessoView from './ProcessoView.jsx'
 
 export default function ClienteHome() {
@@ -25,7 +25,7 @@ export default function ClienteHome() {
     return (
       <div className="vazio-grande">
         <h1 className="titulo-grande">Nenhum processo por aqui ainda</h1>
-        <p>Seu processo aparece assim que a Airam cadastrá-lo com este e-mail.</p>
+        <p>Seu processo aparece assim que a Airam cadastrá-lo com este e-mail ou CPF.</p>
       </div>
     )
 
@@ -48,7 +48,7 @@ export default function ClienteHome() {
             <button className="cartao" onClick={() => abrir(p.id)}>
               <strong>{p.codigo}</strong>
               <span>Etapa atual: {etapaAtual(linhaDoTempo(p, p.assinaturas)).nome}</span>
-              <span className="num">Entrega prevista: {formatarData(p.data_entrega_prevista)}</span>
+              <span className="num">{ROTULO_PRAZO}: {formatarData(p.data_entrega_prevista)}</span>
             </button>
           </li>
         ))}
