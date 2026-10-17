@@ -1,6 +1,6 @@
 // Envia um PDF do processo (contrato ou projeto final) para o ZapSign e guarda o link
 // de assinatura do cliente. O cliente assina dentro do Portal Airam (iframe do ZapSign).
-import { cors, resposta, clienteServidor, exigirEquipe, somenteNumeros } from '../_shared/comum.ts'
+import { cors, resposta, clienteServidor, exigirEquipe, somenteNumeros, regraDoUsuario } from '../_shared/comum.ts'
 
 const API = Deno.env.get('ZAPSIGN_API_URL') ?? 'https://sandbox.api.zapsign.com.br' // produção: https://api.zapsign.com.br
 const NOMES = { contrato: 'Contrato', projeto_final: 'Projeto final' }
@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
   const { processo_id, documento_id, tipo } = await req.json()
   if (!NOMES[tipo]) return resposta({ erro: 'Tipo de assinatura inválido' }, 400)
+  if (!(await regraDoUsuario(req, 'pode_gerir', { pid: processo_id }))) return resposta({ erro: 'Este cliente não é seu.' }, 403)
 
   const sb = clienteServidor()
   const { data: proc } = await sb.from('processos').select('*').eq('id', processo_id).maybeSingle()

@@ -1,6 +1,6 @@
 // Cria (ou renova) o acesso do cliente com uma senha provisória.
 // Chamado pela equipe no painel. No primeiro login o cliente é obrigado a trocar a senha.
-import { cors, resposta, clienteServidor, exigirEquipe, gerarSenhaProvisoria } from '../_shared/comum.ts'
+import { cors, resposta, clienteServidor, exigirEquipe, gerarSenhaProvisoria, regraDoUsuario } from '../_shared/comum.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -8,9 +8,11 @@ Deno.serve(async (req) => {
   if (!equipe) return resposta({ erro: 'Acesso negado' }, 403)
 
   const { processo_id } = await req.json()
+  if (!(await regraDoUsuario(req, 'pode_gerir', { pid: processo_id }))) return resposta({ erro: 'Este cliente não é seu.' }, 403)
   const sb = clienteServidor()
   const { data: proc } = await sb.from('processos').select('*').eq('id', processo_id).maybeSingle()
   if (!proc) return resposta({ erro: 'Processo não encontrado' }, 404)
+  if (!proc.cliente_email) return resposta({ erro: 'Cadastre o e-mail do cliente antes de liberar o acesso.' }, 400)
 
   const email = proc.cliente_email.toLowerCase()
   const senha = gerarSenhaProvisoria()

@@ -5,6 +5,7 @@ import ProcessoView, { ABAS_DOCUMENTOS } from './ProcessoView.jsx'
 import BotaoWhatsApp from './BotaoWhatsApp.jsx'
 import MeuPerfil from './MeuPerfil.jsx'
 import NossasLojas from './NossasLojas.jsx'
+import QuemSomos from './QuemSomos.jsx'
 
 export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
   const [processos, setProcessos] = useState(null)
@@ -28,6 +29,14 @@ export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
     return (
       <>
         <NossasLojas />
+        <BotaoWhatsApp nome={processos[0]?.cliente_nome} codigo={processos[0]?.codigo} />
+      </>
+    )
+
+  if (aba === 'quem_somos')
+    return (
+      <>
+        <QuemSomos />
         <BotaoWhatsApp nome={processos[0]?.cliente_nome} codigo={processos[0]?.codigo} />
       </>
     )

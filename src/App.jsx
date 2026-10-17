@@ -62,33 +62,36 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topo">
-        <div className="topo-in">
-          <div className="marca">
-            <img className="marca-logo" src={logoBranco} alt={NOME_EMPRESA} />
-            <span className="marca-sub">{equipe ? 'Gestão de processos' : 'Portal do cliente'}</span>
-          </div>
-          {perfil && (
-            <div className="topo-usuario">
-              {!equipe ? (
-                <button className="topo-perfil" onClick={() => irPara('perfil')} aria-label="Abrir meu perfil">
-                  <Avatar caminho={fotoCliente} nome={perfil.nome || perfil.email} tamanho={34} />
-                  <span className="topo-email">{perfil.nome || perfil.email}</span>
-                </button>
-              ) : (
-                <span className="topo-email">{perfil.nome || perfil.email}</span>
-              )}
-              <button className="btn btn-leve" onClick={() => api.sair()}>
-                Sair
-              </button>
+      <header className={`topo ${equipe ? '' : 'topo-cliente'}`}>
+        {equipe ? (
+          <div className="topo-in">
+            <div className="marca">
+              <img className="marca-logo" src={logoBranco} alt={NOME_EMPRESA} />
+              <span className="marca-sub">Gestão de processos</span>
             </div>
-          )}
-        </div>
+            <div className="topo-usuario">
+              <span className="topo-email">{perfil.nome || perfil.email}</span>
+              <button className="btn btn-leve" onClick={() => api.sair()}>Sair</button>
+            </div>
+          </div>
+        ) : (
+          // cliente: logo no centro da barra, perfil à esquerda e sair à direita
+          <div className="topo-in topo-in-cliente">
+            <button className="topo-perfil" onClick={() => irPara('perfil')} aria-label="Abrir meu perfil">
+              <Avatar caminho={fotoCliente} nome={perfil.nome || perfil.email} tamanho={34} />
+              <span className="topo-email">{(perfil.nome || perfil.email).split(' ')[0]}</span>
+            </button>
+            <button type="button" className="marca marca-centro" onClick={() => irPara('processo')} aria-label="Ir para meu processo">
+              <img className="marca-logo" src={logoBranco} alt={NOME_EMPRESA} />
+            </button>
+            <button className="btn btn-leve topo-sair" onClick={() => api.sair()}>Sair</button>
+          </div>
+        )}
         {!equipe && (
           <nav className="topo-abas" aria-label="Áreas do cliente">
             <div className="topo-abas-in">
               {[['perfil', 'Meu perfil'], ['processo', 'Meu processo'], ['contrato', 'Contrato'], ['projeto_inicial', 'Projeto inicial'],
-                ['render', 'Renders'], ['projeto_final', 'Projeto final'], ['lojas', 'Nossas lojas']].map(([k, t]) => (
+                ['render', 'Renders'], ['projeto_final', 'Projeto final'], ['quem_somos', 'Quem somos'], ['lojas', 'Nossas lojas']].map(([k, t]) => (
                 <button key={k} className={`topo-aba ${abaCliente === k ? 'ativa' : ''}`} aria-current={abaCliente === k ? 'page' : undefined}
                   onClick={() => irPara(k)}>{t}</button>
               ))}
@@ -99,7 +102,7 @@ export default function App() {
         )}
         {faixaDemo}
       </header>
-      <main className={`conteudo ${equipe ? '' : 'conteudo-cliente'}`}>
+      <main className={`conteudo ${equipe ? 'conteudo-equipe' : 'conteudo-cliente'}`}>
         {equipe ? <PainelEquipe perfil={perfil} /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
         {!equipe && <InstalarApp />}
       </main>

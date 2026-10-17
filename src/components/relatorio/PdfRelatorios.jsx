@@ -1,6 +1,7 @@
 // Layouts dos relatórios em PDF (gerados no navegador com @react-pdf/renderer).
 // Este arquivo só é carregado quando alguém pede um relatório.
 import { Document, Page, View, Text, Image, Svg, Path, Circle, Rect, Defs, LinearGradient, Stop, Font, StyleSheet, pdf } from '@react-pdf/renderer'
+import { financeira } from '../../lib/vendas.js'
 import { dataCurta, dataMini, dataExtenso, COLUNAS_LISTA, valorColuna } from '../../lib/relatorio.js'
 import { diasEntre } from '../../lib/constants.js'
 import logoBranco from '../../assets/logo-branco.png'
@@ -422,15 +423,13 @@ function RelatorioLista({ linhas, geradoEm }) {
 // ============================================================ PDF do controle mensal de vendas
 const SIT_PDF = { resolvido: ['ok', 'Resolvido'], pendente: ['andamento', 'Pendente'], cancelado: ['atraso', 'Cancelado'] }
 const real = (v) => (v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
-const NOMES_FIN = { avista: 'À vista', dubai: 'Dubai', airam: 'Airam / Especiais', santander: 'Santander', cartao: 'Cartão de crédito' }
 const COL_V = [
   ['codigo', 'Cód.', 58], ['cliente_nome', 'Cliente', 0], ['vendedor', 'Vendedor', 74], ['captacao', 'Captação', 62],
   ['data_venda', 'Data', 46], ['financeira', 'Financeira', 82], ['valor_venda', 'Valor', 62], ['valor_deflacionado', 'Deflacionado', 66], ['situacao', 'Situação', 58],
 ]
 
-function RelatorioVendas({ vendas, mes, resumo, porVendedor, porCaptacao, geradoEm }) {
-  const [a, m] = mes.split('-')
-  const nome = new Date(Number(a), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+function RelatorioVendas({ vendas, titulo, resumo, porVendedor, porCaptacao, geradoEm }) {
+  const nome = titulo
   const maxV = Math.max(1, ...porVendedor.map((x) => x.valor))
   const maxC = Math.max(1, ...porCaptacao.map((x) => x.valor))
   const Ranking = ({ titulo, itens, max }) => (
@@ -491,7 +490,7 @@ function RelatorioVendas({ vendas, mes, resumo, porVendedor, porCaptacao, gerado
                     {v.observacao ? <Text style={{ fontSize: 6.3, color: COR.tinta2, marginTop: 1 }}>{v.observacao}</Text> : null}
                   </View>
                 )
-              const txt = k === 'data_venda' ? dataMini(v.data_venda) : k === 'financeira' ? [NOMES_FIN[v.financeira], v.forma_pagamento].filter(Boolean).join(' · ') || '—'
+              const txt = k === 'data_venda' ? dataMini(v.data_venda) : k === 'financeira' ? [financeira(v.financeira)?.nome, v.forma_pagamento].filter(Boolean).join(' · ') || '—'
                 : k.startsWith('valor') ? real(v[k]) : v[k] || '—'
               return <Text key={k} style={[est, k === 'codigo' && { fontWeight: 600 }]}>{txt}</Text>
             })}

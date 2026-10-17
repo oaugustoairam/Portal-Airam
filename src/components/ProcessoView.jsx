@@ -17,6 +17,68 @@ import AvancoEtapa from './AvancoEtapa.jsx'
 import ContagemObra from './ContagemObra.jsx'
 import Garantia from './Garantia.jsx'
 
+// Baixa o arquivo de verdade (o atributo download não vale para links de outro domínio)
+const EXT_MIME = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+export function nomeComExtensao(doc) {
+  const base = String(doc.titulo || 'arquivo').replace(/[\\/:*?"<>|]+/g, '-').trim()
+  const ext = EXT_MIME[doc.tipo_mime] || (doc.arquivo_path?.startsWith('data:') ? null : doc.arquivo_path?.split('.').pop())
+  return ext && !base.toLowerCase().endsWith('.' + ext.toLowerCase()) ? `${base}.${ext}` : base
+}
+async function blobDoDocumento(doc) {
+  const r = await fetch(await api.urlDocumento(doc))
+  if (!r.ok) throw new Error('Não foi possível baixar o arquivo.')
+  return r.blob()
+}
+export async function baixarDocumento(doc) {
+  const blob = await blobDoDocumento(doc)
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = nomeComExtensao(doc)
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+async function baixarTodos(docs, nomeZip) {
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  const usados = new Set()
+  for (const d of docs) {
+    let nome = nomeComExtensao(d)
+    for (let n = 2; usados.has(nome); n++) nome = nomeComExtensao(d).replace(/(\.\w+)?$/, ` (${n})$1`)
+    usados.add(nome)
+    zip.file(nome, await blobDoDocumento(d))
+  }
+  const blob = await zip.generateAsync({ type: 'blob' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = nomeZip
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+}
+
+function BotaoBaixar({ doc, rotulo = 'Baixar', className = 'btn btn-contorno', docs, nomeZip }) {
+  const [estado, setEstado] = useState('')
+  async function baixar(e) {
+    e.stopPropagation()
+    setEstado('baixando')
+    try {
+      await (docs ? baixarTodos(docs, nomeZip) : baixarDocumento(doc))
+      setEstado('')
+    } catch {
+      setEstado('erro')
+      setTimeout(() => setEstado(''), 3000)
+    }
+  }
+  return (
+    <button type="button" className={className} onClick={baixar} disabled={estado === 'baixando'}>
+      {estado === 'baixando' ? 'Baixando…' : estado === 'erro' ? 'Tente de novo' : rotulo}
+    </button>
+  )
+}
+
 const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'O PDF do seu projeto final' }
 
 // O que o cliente vê. A equipe usa a mesma tela em "Ver como cliente" (visualizacao = true).
@@ -210,7 +272,15 @@ function DocumentosCategoria({ documentos, categoria }) {
     <section className="bloco documentos">
       {!lista.length && <p className="vazio">{ABAS_DOCUMENTOS[categoria].vazio}</p>}
       {lista.length > 0 && (categoria === 'render' ? (
-        <Carrossel itens={lista} onAbrir={(i) => setAberto(i)} />
+        <>
+          {lista.length > 1 && (
+            <div className="baixar-todos">
+              <span>{lista.length} renders</span>
+              <BotaoBaixar docs={lista} nomeZip="renders-airam.zip" rotulo="Baixar todos (.zip)" />
+            </div>
+          )}
+          <Carrossel itens={lista} onAbrir={(i) => setAberto(i)} />
+        </>
       ) : (
         <ul className="docs">
           {lista.map((d, i) => <LinhaDoc key={d.id} doc={d} indice={i} />)}
@@ -265,15 +335,18 @@ function Carrossel({ itens, onAbrir }) {
 function Slide({ doc, onAbrir }) {
   const url = useUrl(doc)
   return (
-    <button className="slide" onClick={onAbrir}>
-      <span className="slide-img">
+    <div className="slide">
+      <button type="button" className="slide-img" onClick={onAbrir} aria-label={`Ampliar ${doc.titulo}`}>
         {url && doc.tipo_mime?.startsWith('image/') ? <img src={url} alt={doc.titulo} loading="lazy" /> : <span>{extensao(doc)}</span>}
-      </span>
+      </button>
       <span className="slide-legenda">
-        <strong>{doc.titulo}</strong>
-        <span>Toque para ampliar</span>
+        <span>
+          <strong>{doc.titulo}</strong>
+          <span>Toque na imagem para ampliar</span>
+        </span>
+        <BotaoBaixar doc={doc} className="btn btn-leve slide-baixar" />
       </span>
-    </button>
+    </div>
   )
 }
 
@@ -334,10 +407,10 @@ export function LinhaDoc({ doc, acoes, indice = 0 }) {
         </span>
         <span className="doc-data num">Enviado em {formatarData(doc.criado_em?.slice(0, 10))}</span>
       </div>
-      <a className="btn btn-contorno" href={url || '#'} target="_blank" rel="noreferrer" aria-disabled={!url}
-        download={abreNoNavegador(doc) ? undefined : doc.titulo}>
-        {abreNoNavegador(doc) ? 'Abrir' : 'Baixar'}
-      </a>
+      <span className="doc-botoes">
+        {abreNoNavegador(doc) && <a className="btn btn-leve" href={url || '#'} target="_blank" rel="noreferrer" aria-disabled={!url}>Abrir</a>}
+        <BotaoBaixar doc={doc} />
+      </span>
       {acoes}
     </li>
   )
@@ -379,7 +452,10 @@ function Visualizador({ itens, inicio, onFechar }) {
         {url && <img src={url} alt={doc.titulo} draggable="false" />}
         <figcaption>
           <span><span className="num">{i + 1}/{itens.length}</span> · {doc.titulo}</span>
-          {url && <a className="btn btn-leve" href={url} target="_blank" rel="noreferrer">Abrir original</a>}
+          <span className="modal-acoes">
+            {url && <a className="btn btn-leve" href={url} target="_blank" rel="noreferrer">Abrir original</a>}
+            <BotaoBaixar doc={doc} className="btn btn-leve" />
+          </span>
         </figcaption>
       </figure>
       {itens.length > 1 && (

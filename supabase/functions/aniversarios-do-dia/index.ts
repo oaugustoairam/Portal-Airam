@@ -1,4 +1,4 @@
-// Todo dia de manhã (agendador do banco), avisa a equipe por e-mail quem faz aniversário hoje.
+// Todo dia às 9h (agendador do banco), avisa a equipe por WhatsApp e por e-mail quem faz aniversário hoje.
 import { clienteServidor } from '../_shared/comum.ts'
 import { escapar } from '../_shared/email.ts'
 
@@ -13,6 +13,32 @@ Deno.serve(async (req) => {
   const vistos = new Set()
   const hojeLista = (data ?? []).filter((p) => p.cliente_nascimento.slice(5) === hoje && !vistos.has(p.cliente_email) && vistos.add(p.cliente_email))
   if (!hojeLista.length) return new Response(JSON.stringify({ aniversariantes: 0 }), { headers: { 'Content-Type': 'application/json' } })
+
+  // WhatsApp para o dono/equipe: modelo aprovado na Meta com 2 variáveis ({{1}} quantidade, {{2}} nomes)
+  const token = Deno.env.get('WHATSAPP_TOKEN')
+  const numeroId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID')
+  const destinos = (Deno.env.get('AVISOS_EQUIPE_WHATSAPP') ?? '').split(',').map((s) => s.replace(/\D/g, '')).filter(Boolean)
+  const whatsapp = []
+  if (token && numeroId && destinos.length) {
+    const nomes = hojeLista.map((p) => `${p.cliente_nome} (${p.codigo})`).join(', ').slice(0, 900)
+    for (const to of destinos) {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${numeroId}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to,
+          type: 'template',
+          template: {
+            name: Deno.env.get('WHATSAPP_TEMPLATE_ANIVERSARIOS') ?? 'aniversarios_do_dia',
+            language: { code: 'pt_BR' },
+            components: [{ type: 'body', parameters: [{ type: 'text', text: String(hojeLista.length) }, { type: 'text', text: nomes }] }],
+          },
+        }),
+      })
+      whatsapp.push(r.ok ? 'enviado' : `erro ${r.status}: ${(await r.text()).slice(0, 200)}`)
+    }
+  }
 
   const para = (Deno.env.get('AVISOS_EQUIPE_EMAIL') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   const chave = Deno.env.get('RESEND_API_KEY')
@@ -30,5 +56,5 @@ Deno.serve(async (req) => {
       }),
     })
   }
-  return new Response(JSON.stringify({ aniversariantes: hojeLista.length }), { headers: { 'Content-Type': 'application/json' } })
+  return new Response(JSON.stringify({ aniversariantes: hojeLista.length, whatsapp }), { headers: { 'Content-Type': 'application/json' } })
 })

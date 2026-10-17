@@ -1,95 +1,180 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
-  FINANCEIRAS, financeira, MEIOS, CAPTACOES, VENDEDORES, LOJAS_VENDA, SITUACOES, DOCS_PASTA, VENDA_VAZIA,
-  mesAtual, somarMes, nomeMes, moeda, oQueFalta, resumoVendas, ranking,
+  FINANCEIRAS, financeira, financeiraPorNome, MEIOS, CAPTACOES, LIBERADORES, LOJAS_VENDA, SITUACOES, DOCS_PASTA,
+  moeda, resumoVendas, ranking,
 } from '../lib/vendas.js'
+import {
+  ABAS_GESTAO, STATUS, POS_VISTORIA, linhaGestao, paraVenda, oQueFalta, proximoCodigo, periodoRapido, zonaDoCep, registrosDaPlanilha,
+} from '../lib/gestao.js'
+import { temPermissao } from '../lib/permissoes.js'
+import { cpfValido, formatarCpf, formatarTelefone, somarDiasUteis } from '../lib/constants.js'
 import { baixarArquivo, nomeArquivo } from '../lib/relatorio.js'
 import CampoData from './CampoData.jsx'
+import PlanilhaFiltravel from './PlanilhaFiltravel.jsx'
+import ConfirmarExclusao from './ConfirmarExclusao.jsx'
+import { Acesso } from './AdminHome.jsx'
 
-const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-const dataCurta = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—')
 const CHIP_SIT = { pendente: 'chip-sit-andamento', resolvido: 'chip-sit-ok', cancelado: 'chip-sit-atraso' }
+const CHIP_STATUS = { montado: 'chip-sit-ok', assinado: 'chip-sit-andamento', conferido: 'chip-sit-andamento', medido: 'chip-sit-neutro', aguarda: 'chip-sit-neutro', cancelado: 'chip-sit-atraso' }
+const dataBR = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '')
+const somarDias = (iso, n) => {
+  const d = new Date(iso + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 
-// Gestão de clientes (só vendedores e gerência): controle mensal e controle de pastas
-export default function GestaoClientes({ aba, perfil }) {
-  const [mes, setMes] = useState(mesAtual)
-  const [vendas, setVendas] = useState(null)
-  const [editando, setEditando] = useState(null) // venda ou 'nova'
-  const [pasta, setPasta] = useState(null) // venda aberta no controle de pastas
+export const PASTAS_GESTAO = [...ABAS_GESTAO.map((a) => [a.id, a.nome]), ['resultados', 'Resultados'], ['pastas', 'Controle de pastas']]
+
+// Gestão de clientes: um cadastro só para a venda, o processo e o acesso do cliente ao portal.
+// O vendedor vê só os clientes dele; quem tem "ver todos" vê a loja inteira.
+export default function GestaoClientes({ aba, perfil, onAbrirProcesso }) {
+  const [lista, setLista] = useState(null)
   const [erro, setErro] = useState('')
+  const [ficha, setFicha] = useState(null) // linha da gestão ou 'novo'
+  const [pasta, setPasta] = useState(null)
+  const [periodos, setPeriodos] = useState({ resultados: periodoRapido('mes') })
+  const [filtros, setFiltros] = useState({})
+  const [ordens, setOrdens] = useState({})
+  const [importar, setImportar] = useState(false)
 
-  const carregar = () => api.listarVendas(mes).then(setVendas).catch((e) => setErro(e.message))
+  const carregar = () => api.listarGestao().then(setLista).catch((e) => setErro(e.message))
   useEffect(() => {
-    setVendas(null)
     carregar()
-  }, [mes])
+  }, [])
   useEffect(() => {
-    setEditando(null)
+    setFicha(null)
     setPasta(null)
   }, [aba])
 
-  if (editando)
-    return (
-      <VendaEditor
-        venda={editando === 'nova' ? { ...VENDA_VAZIA, mes, vendedor: perfil?.papel === 'vendedor' ? perfil.nome || '' : '' } : editando}
-        sugestoesVendedor={[...new Set([...VENDEDORES, ...(vendas || []).map((v) => v.vendedor).filter(Boolean)])]}
-        onFechar={() => { setEditando(null); carregar() }}
-        onAbrirPasta={(v) => { setEditando(null); setPasta(v) }}
-      />
-    )
-  if (pasta) return <PastaVenda venda={pasta} onFechar={() => { setPasta(null); carregar() }} onEditar={(v) => { setPasta(null); setEditando(v) }} />
-
-  const seletorMes = (
-    <div className="seletor-mes" role="group" aria-label="Mês do controle">
-      <button type="button" className="btn btn-leve" onClick={() => setMes(somarMes(mes, -1))} aria-label="Mês anterior">‹</button>
-      <span className="seletor-mes-nome">{nomeMes(mes)}</span>
-      <button type="button" className="btn btn-leve" onClick={() => setMes(somarMes(mes, 1))} aria-label="Próximo mês">›</button>
-    </div>
+  const periodo = periodos[aba] || { de: '', ate: '' }
+  const linhas = useMemo(() => (lista || []).map(linhaGestao), [lista])
+  const doPeriodo = useMemo(
+    () => linhas.filter((l) => (!periodo.de || (l.data_venda && l.data_venda >= periodo.de)) && (!periodo.ate || (l.data_venda && l.data_venda <= periodo.ate))),
+    [linhas, periodo.de, periodo.ate]
   )
+  const verTodos = temPermissao(perfil, 'ver_todos')
 
+  const fecharFicha = (recarregar = true) => {
+    setFicha(null)
+    if (recarregar) carregar()
+    window.scrollTo(0, 0)
+  }
+
+  if (erro) return <p className="erro">{erro}</p>
+  if (!lista) return <div className="carregando">Carregando…</div>
+
+  if (ficha)
+    return (
+      <FichaCliente g={ficha === 'novo' ? null : ficha.g} perfil={perfil} lista={lista} onFechar={fecharFicha}
+        onAbrirPasta={(g) => { setFicha(null); setPasta(g) }} onAbrirProcesso={onAbrirProcesso} />
+    )
+  if (pasta) return <PastaCliente g={pasta} onFechar={() => { setPasta(null); carregar() }} onFicha={(g) => { setPasta(null); setFicha(linhaGestao(g)) }} />
+
+  const barraPeriodo = <BarraPeriodo periodo={periodo} onChange={(p) => setPeriodos((x) => ({ ...x, [aba]: p }))} />
+
+  if (aba === 'resultados') return <Resultados linhas={doPeriodo} periodo={periodo} barraPeriodo={barraPeriodo} verTodos={verTodos} perfil={perfil} />
+  if (aba === 'pastas') return <ListaPastas linhas={doPeriodo} barraPeriodo={barraPeriodo} onAbrir={(l) => setPasta(l.g)} />
+
+  const def = ABAS_GESTAO.find((a) => a.id === aba) || ABAS_GESTAO[0]
+  const daAba = doPeriodo.filter(def.filtro)
   return (
     <section className="gestao">
-      {erro && <p className="erro">{erro}</p>}
-      {aba === 'pastas'
-        ? <ListaPastas vendas={vendas} seletorMes={seletorMes} onAbrir={setPasta} />
-        : <ControleMensal vendas={vendas} mes={mes} seletorMes={seletorMes} onNova={() => setEditando('nova')} onEditar={setEditando}
-            onMudou={carregar} />}
+      <div className="cab-linha">
+        <div className="titulo-processo">
+          <span className="rotulo">Gestão de clientes{verTodos ? '' : ' · só os seus'}</span>
+          <h1 className="titulo-grande">{def.titulo}</h1>
+          <p className="dica">{def.descricao}</p>
+        </div>
+        <div className="acoes">
+          {def.id === 'clientes' && verTodos && <button className="btn btn-leve" onClick={() => setImportar(true)}>Importar planilha</button>}
+          <button className="btn btn-principal" onClick={() => setFicha('novo')}>Novo cliente</button>
+        </div>
+      </div>
+      {barraPeriodo}
+      <Kpis itens={def.kpis(daAba)} />
+      <PlanilhaFiltravel
+        linhas={daAba}
+        colunas={def.colunas}
+        visiveis={def.visiveis}
+        filtros={filtros[def.id] || {}}
+        setFiltros={(f) => setFiltros((x) => ({ ...x, [def.id]: typeof f === 'function' ? f(x[def.id] || {}) : f }))}
+        ordem={ordens[def.id] || { k: 'data_venda', dir: 'desc' }}
+        setOrdem={(o) => setOrdens((x) => ({ ...x, [def.id]: typeof o === 'function' ? o(x[def.id] || { k: 'data_venda', dir: 'desc' }) : o }))}
+        onAbrir={(l) => setFicha(l)}
+        celula={(l, k) => (k === 'situacao' ? <span className={`chip chip-mini ${CHIP_SIT[l.situacao]}`}>{SITUACOES.find(([s]) => s === l.situacao)?.[1]}</span>
+          : k === 'status' ? <span className={`chip chip-mini ${CHIP_STATUS[l.status]}`}>{STATUS[l.status]}</span>
+            : k === 'prazo_maximo' && l.prazo_vencido ? <span className="texto-atraso">{dataBR(l.prazo_maximo)} · vencido</span>
+              : undefined)}
+        rotuloVazio={def.id === 'clientes' ? 'Nenhum cliente ainda. Toque em "Novo cliente".' : 'Nenhum cliente nesta etapa.'}
+      />
+      {importar && <Importar onFechar={(mudou) => { setImportar(false); if (mudou) carregar() }} />}
     </section>
   )
 }
 
-// ============================================================ Controle mensal (como a planilha de feedback)
-function ControleMensal({ vendas, mes, seletorMes, onNova, onEditar, onMudou }) {
-  const [filtro, setFiltro] = useState({ busca: '', situacao: '', vendedor: '', financeira: '' })
+function Kpis({ itens }) {
+  return (
+    <div className="gestao-kpis">
+      {itens.map(([t, v, tom]) => (
+        <div key={t} className={`gestao-kpi ${tom || ''}`}>
+          <span className="rotulo">{t}</span>
+          <strong className="num">{v}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Filtro de período pela data da venda: qualquer dia de início e fim
+function BarraPeriodo({ periodo, onChange }) {
+  const rapidos = [['tudo', 'Tudo'], ['mes', 'Este mês'], ['passado', 'Mês passado'], ['30', 'Últimos 30 dias'], ['ano', 'Este ano']]
+  const igual = (t) => {
+    const p = periodoRapido(t)
+    return p.de === (periodo.de || '') && p.ate === (periodo.ate || '')
+  }
+  return (
+    <div className="gestao-periodo" role="group" aria-label="Período da venda">
+      <span className="rotulo">Data da venda</span>
+      <div className="gestao-periodo-rapidos">
+        {rapidos.map(([k, t]) => (
+          <button key={k} type="button" className={`chip-escolha ${igual(k) ? 'ativo' : ''}`} aria-pressed={igual(k)} onClick={() => onChange(periodoRapido(k))}>{t}</button>
+        ))}
+      </div>
+      <div className="gestao-periodo-datas">
+        <label><span>De</span><input type="date" value={periodo.de || ''} max={periodo.ate || undefined} onChange={(e) => onChange({ ...periodo, de: e.target.value })} /></label>
+        <label><span>Até</span><input type="date" value={periodo.ate || ''} min={periodo.de || undefined} onChange={(e) => onChange({ ...periodo, ate: e.target.value })} /></label>
+      </div>
+    </div>
+  )
+}
+
+function textoPeriodo(p) {
+  if (p.de && p.ate) return `${dataBR(p.de)} a ${dataBR(p.ate)}`
+  if (p.de) return `desde ${dataBR(p.de)}`
+  if (p.ate) return `até ${dataBR(p.ate)}`
+  return 'todo o período'
+}
+
+// ============================================================ Resultados (resumo e ranking, como a planilha de feedback)
+function Resultados({ linhas, periodo, barraPeriodo, verTodos, perfil }) {
   const [gerando, setGerando] = useState('')
   const [erro, setErro] = useState('')
-  const set = (k) => (e) => setFiltro((f) => ({ ...f, [k]: e.target.value }))
-
-  const lista = useMemo(() => {
-    if (!vendas) return []
-    const termo = semAcento(filtro.busca.trim())
-    return vendas.filter((v) => {
-      if (filtro.situacao && v.situacao !== filtro.situacao) return false
-      if (filtro.vendedor && v.vendedor !== filtro.vendedor) return false
-      if (filtro.financeira && v.financeira !== filtro.financeira) return false
-      if (termo && !semAcento([v.cliente_nome, v.codigo, v.observacao].join(' ')).includes(termo)) return false
-      return true
-    })
-  }, [vendas, filtro])
-
-  if (!vendas) return <div className="carregando">Carregando…</div>
+  const vendas = useMemo(() => linhas.map((l) => paraVenda(l.g)), [linhas])
   const resumo = resumoVendas(vendas)
   const porVendedor = ranking(vendas, 'vendedor')
   const porCaptacao = ranking(vendas, 'captacao')
-  const vendedores = [...new Set(vendas.map((v) => v.vendedor).filter(Boolean))].sort()
+  const porFinanceira = ranking(vendas.map((v) => ({ ...v, fin: financeira(v.financeira)?.nome })), 'fin')
+  const titulo = textoPeriodo(periodo)
+  const nomeBase = nomeArquivo(`vendas-${periodo.de || 'inicio'}-${periodo.ate || 'hoje'}`)
 
   async function planilha() {
     setErro('')
     setGerando('planilha')
     try {
-      const { gerarPlanilhaMes } = await import('../lib/planilhas.js')
-      baixarArquivo(await gerarPlanilhaMes(vendas, mes), `feedback-vendas-${mes}.xlsx`)
+      const { gerarPlanilhaVendas } = await import('../lib/planilhas.js')
+      const aba = periodo.de && periodo.ate ? `${dataBR(periodo.de).slice(0, 5)} a ${dataBR(periodo.ate).slice(0, 5)}` : 'VENDAS'
+      baixarArquivo(await gerarPlanilhaVendas(vendas, { titulo, aba }), `${nomeBase}.xlsx`)
     } catch (e) {
       setErro('Não foi possível gerar a planilha: ' + e.message)
     } finally {
@@ -101,17 +186,14 @@ function ControleMensal({ vendas, mes, seletorMes, onNova, onEditar, onMudou }) 
     setGerando('pdf')
     try {
       const { gerarPdfVendas } = await import('./relatorio/PdfRelatorios.jsx')
-      baixarArquivo(await gerarPdfVendas({ vendas, mes, resumo, porVendedor, porCaptacao }), `relatorio-vendas-${mes}.pdf`)
+      const t = titulo.charAt(0).toUpperCase() + titulo.slice(1)
+      baixarArquivo(await gerarPdfVendas({ vendas, titulo: t, resumo, porVendedor, porCaptacao }), `${nomeBase}.pdf`)
     } catch (e) {
       console.error(e)
       setErro('Não foi possível gerar o PDF: ' + e.message)
     } finally {
       setGerando('')
     }
-  }
-  async function mudarSituacao(v, situacao) {
-    await api.salvarVenda({ ...v, situacao })
-    onMudou()
   }
 
   const cards = [
@@ -120,28 +202,21 @@ function ControleMensal({ vendas, mes, seletorMes, onNova, onEditar, onMudou }) 
     ['cancelado', 'Cancelados', resumo.cancelado],
     ['validas', 'Total (sem cancelados)', resumo.validas],
   ]
-  const maxV = Math.max(1, ...porVendedor.map((x) => x.valor))
-  const maxC = Math.max(1, ...porCaptacao.map((x) => x.valor))
-
   return (
-    <>
+    <section className="gestao">
       <div className="cab-linha">
         <div className="titulo-processo">
-          <span className="rotulo">Gestão de clientes</span>
-          <h1 className="titulo-grande">Controle mensal</h1>
+          <span className="rotulo">Gestão de clientes{verTodos ? '' : ` · resultados de ${perfil?.nome || 'você'}`}</span>
+          <h1 className="titulo-grande">Resultados</h1>
+          <p className="dica">Resumo e ranking de {titulo}, pelo valor deflacionado.</p>
         </div>
-        <button className="btn btn-principal" onClick={onNova}>Nova venda</button>
-      </div>
-
-      <div className="gestao-barra">
-        {seletorMes}
         <div className="acoes">
           <button className="btn btn-contorno" onClick={planilha} disabled={!!gerando || !vendas.length}>{gerando === 'planilha' ? 'Gerando…' : 'Baixar planilha'}</button>
           <button className="btn btn-contorno" onClick={pdf} disabled={!!gerando || !vendas.length}>{gerando === 'pdf' ? 'Gerando…' : 'Relatório em PDF'}</button>
         </div>
       </div>
+      {barraPeriodo}
       {erro && <p className="erro" role="alert">{erro}</p>}
-
       <div className="gestao-cards">
         {cards.map(([k, t, r]) => (
           <div key={k} className={`gestao-card gestao-card-${k}`}>
@@ -151,101 +226,40 @@ function ControleMensal({ vendas, mes, seletorMes, onNova, onEditar, onMudou }) 
           </div>
         ))}
       </div>
-
-      {vendas.length > 0 && (
+      {vendas.length ? (
         <div className="gestao-rankings">
-          {[['Ranking por vendedor', porVendedor, maxV], ['Ranking por captação', porCaptacao, maxC]].map(([titulo, itens, max]) => (
-            <div key={titulo} className="gestao-ranking">
-              <h2 className="rotulo">{titulo}</h2>
-              <ol>
-                {itens.map((x, i) => (
-                  <li key={x.nome}>
-                    <span className="gestao-ranking-pos num">{i + 1}</span>
-                    <span className="gestao-ranking-nome">{x.nome}<small className="num">{x.qtd} {x.qtd === 1 ? 'venda' : 'vendas'}</small></span>
-                    <span className="gestao-ranking-barra"><span style={{ width: `${(x.valor / max) * 100}%` }} /></span>
-                    <span className="gestao-ranking-valor num">{moeda(x.valor)}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+          {[verTodos && ['Ranking por vendedor', porVendedor], ['Ranking por captação', porCaptacao], ['Por financeira', porFinanceira]].filter(Boolean).map(([t, itens]) => (
+            <Ranking key={t} titulo={t} itens={itens} />
           ))}
         </div>
-      )}
-
-      <div className="painel-filtros">
-        <div className="filtros-linha">
-          <input type="search" placeholder="Buscar por cliente, código ou observação" value={filtro.busca} onChange={set('busca')} aria-label="Buscar venda" />
-        </div>
-        <div className="filtros-grade aberto">
-          <Filtro rotulo="Situação" valor={filtro.situacao} onChange={set('situacao')} opcoes={[['', 'Todas'], ...SITUACOES]} />
-          <Filtro rotulo="Vendedor" valor={filtro.vendedor} onChange={set('vendedor')} opcoes={[['', 'Todos'], ...vendedores.map((v) => [v, v])]} />
-          <Filtro rotulo="Financeira" valor={filtro.financeira} onChange={set('financeira')} opcoes={[['', 'Todas'], ...FINANCEIRAS.map((f) => [f.id, f.nome])]} />
-        </div>
-        <div className="filtros-rodape"><span className="num">Mostrando {lista.length} de {vendas.length} vendas de {nomeMes(mes)}</span></div>
-      </div>
-
-      {!vendas.length ? (
-        <p className="vazio">Nenhuma venda em {nomeMes(mes)}. Toque em "Nova venda" para começar.</p>
-      ) : (
-        <div className="tabela-wrap">
-          <table className="tabela tabela-vendas">
-            <thead>
-              <tr>
-                <th>Cód.</th><th>Cliente</th><th>Vendedor</th><th>Captação</th><th>Data</th><th>Financeira</th>
-                <th>Valor</th><th>Deflacionado</th><th>Situação</th><th>O que falta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lista.map((v) => {
-                const falta = oQueFalta(v, v.venda_documentos || [])
-                return (
-                  <tr key={v.id} onClick={() => onEditar(v)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onEditar(v)}>
-                    <td className="num"><strong>{v.codigo || '—'}</strong></td>
-                    <td>{v.cliente_nome}{v.observacao && <span className="celula-sub">{v.observacao}</span>}</td>
-                    <td>{v.vendedor || '—'}</td>
-                    <td>{v.captacao || '—'}</td>
-                    <td className="num">{dataCurta(v.data_venda)}</td>
-                    <td>{financeira(v.financeira)?.nome || '—'}{v.forma_pagamento && <span className="celula-sub">{v.forma_pagamento}</span>}</td>
-                    <td className="num">{moeda(v.valor_venda)}</td>
-                    <td className="num">{moeda(v.valor_deflacionado)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <select className={`select-situacao ${CHIP_SIT[v.situacao]}`} value={v.situacao} aria-label={`Situação de ${v.cliente_nome}`}
-                        onChange={(e) => mudarSituacao(v, e.target.value)}>
-                        {SITUACOES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      {v.situacao === 'cancelado' ? <span className="celula-sub">—</span>
-                        : falta.length ? <span className="falta" title={falta.join(', ')}><strong className="num">{falta.length}</strong> {falta.length === 1 ? 'item' : 'itens'}<span className="celula-sub">{falta.slice(0, 2).join(', ')}{falta.length > 2 ? '…' : ''}</span></span>
-                        : <span className="chip chip-mini chip-sit-ok">Completo</span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
+      ) : <p className="vazio">Nenhuma venda em {titulo}.</p>}
+    </section>
   )
 }
 
-function Filtro({ rotulo, valor, onChange, opcoes }) {
-  const id = `fv-${rotulo}`
+function Ranking({ titulo, itens }) {
+  const max = Math.max(1, ...itens.map((x) => x.valor))
   return (
-    <div className="campo">
-      <label htmlFor={id}>{rotulo}</label>
-      <select id={id} value={valor} onChange={onChange} className={valor ? 'filtro-ativo' : ''}>
-        {opcoes.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
-      </select>
+    <div className="gestao-ranking">
+      <h2 className="rotulo">{titulo}</h2>
+      <ol>
+        {itens.map((x, i) => (
+          <li key={x.nome}>
+            <span className="gestao-ranking-pos num">{i + 1}</span>
+            <span className="gestao-ranking-nome">{x.nome}<small className="num">{x.qtd} {x.qtd === 1 ? 'venda' : 'vendas'}</small></span>
+            <span className="gestao-ranking-barra"><span style={{ width: `${(x.valor / max) * 100}%` }} /></span>
+            <span className="gestao-ranking-valor num">{moeda(x.valor)}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
 
-// ============================================================ Ficha da venda (preenche a capa do envelope)
-function Segmentado({ id, rotulo, valor, opcoes, onChange }) {
+// ============================================================ Ficha do cliente (cadastro único)
+function Segmentado({ id, rotulo, valor, opcoes, onChange, largo }) {
   return (
-    <div className="campo">
+    <div className={`campo ${largo ? 'campo-largo' : ''}`}>
       <span className="rotulo-campo" id={id}>{rotulo}</span>
       <div className="segmentado" role="radiogroup" aria-labelledby={id}>
         {opcoes.map(([v, t]) => (
@@ -270,35 +284,79 @@ function Dinheiro({ id, rotulo, valor, onChange, ajuda }) {
   )
 }
 
-function VendaEditor({ venda, sugestoesVendedor, onFechar, onAbrirPasta }) {
-  const [f, setF] = useState(() => ({ ...VENDA_VAZIA, ...venda, meios: venda.meios || [] }))
+function Texto({ id, rotulo, valor, onChange, obrigatorio, ...resto }) {
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{rotulo}{obrigatorio && <span className="obrigatorio" aria-hidden="true"> *</span>}</label>
+      <input id={id} value={valor ?? ''} required={obrigatorio} onChange={(e) => onChange(e.target.value)} {...resto} />
+    </div>
+  )
+}
+
+const SIM_NAO = [[null, '—'], [true, 'Sim'], [false, 'Não']]
+
+function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbrirProcesso }) {
+  const [g, setG] = useState(inicial)
+  const ehVendedor = !temPermissao(perfil, 'ver_todos')
+  const podeExcluir = temPermissao(perfil, 'excluir')
+  const [p, setP] = useState(() => {
+    const { comercial, controle, pasta, assinaturas, documentos, ...x } = g || {}
+    return g
+      ? { ...x, cliente_cpf: formatarCpf(x.cliente_cpf || '') }
+      : { codigo: proximoCodigo(lista), cliente_nome: '', data_venda: new Date().toISOString().slice(0, 10), tipo_prazo: 'normal',
+        solucao_financeira: 'pendente', vendedor_id: ehVendedor ? perfil.id : null }
+  })
+  const [c, setC] = useState(() => ({ situacao: 'pendente', meios: [], cliente_meu: true, ...(g?.comercial || {}),
+    ...(!g && ehVendedor ? { vendedor_nome: perfil.nome } : {}) }))
+  const [ci, setCi] = useState(() => ({ ...(g?.controle || {}) }))
+  const [vendedores, setVendedores] = useState([])
   const [salvando, setSalvando] = useState('')
   const [msg, setMsg] = useState('')
   const [erro, setErro] = useState('')
   const [excluir, setExcluir] = useState(false)
-  const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
-  const fin = financeira(f.financeira)
-  const falta = oQueFalta(f, f.venda_documentos || null)
+  const [acesso, setAcesso] = useState(false)
+  const [futura, setFutura] = useState(g ? g.tipo_prazo === 'futuro' : false)
+
+  useEffect(() => {
+    if (!ehVendedor) api.listarVendedores().then(setVendedores).catch(() => {})
+  }, [])
+
+  const sp = (k) => (v) => setP((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
+  const sc = (k) => (v) => setC((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
+  const si = (k) => (v) => setCi((x) => ({ ...x, [k]: v?.target ? v.target.value : v }))
+  const fin = financeira(c.financeira)
+  const atual = { ...(g || {}), ...p, comercial: c, controle: ci }
+  const falta = c.situacao === 'cancelado' ? [] : oQueFalta(atual, g?.pasta || [])
 
   async function salvar() {
-    setErro('')
-    const salvo = await api.salvarVenda(f)
-    setF((x) => ({ ...x, ...salvo }))
+    if (!p.cliente_nome?.trim()) throw new Error('Informe o nome do cliente.')
+    if (!p.codigo?.trim()) throw new Error('Informe o código.')
+    if (!p.data_venda) throw new Error('Informe a data da venda.')
+    if (p.cliente_cpf && !cpfValido(p.cliente_cpf)) throw new Error('O CPF informado não é válido.')
+    if (futura && !p.data_disponivel_medicao) throw new Error('Na venda futura, informe quando o imóvel fica pronto.')
+    const processo = { ...p, data_disponivel_medicao: futura ? p.data_disponivel_medicao : p.data_venda }
+    const salvo = await api.salvarClienteGestao({ processo, comercial: c, controle: ci })
+    const { comercial, controle, pasta, assinaturas, documentos, ...x } = salvo
+    setG(salvo)
+    setP({ ...x, cliente_cpf: formatarCpf(x.cliente_cpf || '') })
+    setC(comercial)
+    setCi(controle)
     return salvo
   }
   async function acao(tipo, e) {
     e?.preventDefault()
+    setErro('')
     setSalvando(tipo)
     try {
-      const v = await salvar()
+      const salvo = await salvar()
       if (tipo === 'capa') {
         const { gerarCapa } = await import('../lib/planilhas.js')
+        const v = paraVenda(salvo)
         baixarArquivo(await gerarCapa(v), `capa-${nomeArquivo(`${v.codigo || ''}-${v.cliente_nome}`)}.xlsx`)
         setMsg('Capa gerada')
-      } else if (tipo === 'pasta') {
-        onAbrirPasta(v)
-        return
-      } else setMsg('Venda salva')
+      } else if (tipo === 'pasta') return onAbrirPasta(salvo)
+      else if (tipo === 'processo') return onAbrirProcesso?.(salvo.id)
+      else setMsg(g ? 'Cliente salvo' : 'Cliente cadastrado')
       setTimeout(() => setMsg(''), 2500)
     } catch (err) {
       setErro(err.message)
@@ -307,18 +365,27 @@ function VendaEditor({ venda, sugestoesVendedor, onFechar, onAbrirPasta }) {
     }
   }
 
+  const escolherVendedor = (id) => {
+    const v = vendedores.find((x) => x.id === id)
+    setP((x) => ({ ...x, vendedor_id: v ? v.id : null }))
+    if (v) setC((x) => ({ ...x, vendedor_nome: v.nome || v.email }))
+  }
+  const prazoSugerido = ci.projeto_final_assinado_em ? somarDiasUteis(ci.projeto_final_assinado_em, 46) : null
+  const zona = zonaDoCep(p.cep)
+
   return (
-    <section className="gestao">
-      <button className="btn btn-leve voltar" onClick={onFechar}>← Controle mensal</button>
+    <section className="gestao ficha-gestao">
+      <button className="btn btn-leve voltar" onClick={() => onFechar(false)}>← Voltar à planilha</button>
       <div className="cab-linha">
         <div className="titulo-processo">
-          <span className="rotulo">{f.id ? `Venda ${f.codigo || ''}` : 'Nova venda'}</span>
-          <h1 className="titulo-grande">{f.cliente_nome || 'Nova venda'}</h1>
+          <span className="rotulo">{g ? `Cliente ${p.codigo || ''}` : 'Novo cliente'}</span>
+          <h1 className="titulo-grande">{p.cliente_nome || 'Novo cliente'}</h1>
+          {g && <span className={`chip chip-mini ${CHIP_STATUS[linhaGestao(atual).status]}`}>{STATUS[linhaGestao(atual).status]}</span>}
         </div>
         {msg && <span className="toast" role="status">{msg}</span>}
       </div>
 
-      {f.situacao !== 'cancelado' && falta.length > 0 && (
+      {g && falta.length > 0 && (
         <div className="falta-caixa" role="note">
           <strong>O que falta</strong>
           <ul>{falta.map((t) => <li key={t}>{t}</li>)}</ul>
@@ -327,157 +394,274 @@ function VendaEditor({ venda, sugestoesVendedor, onFechar, onAbrirPasta }) {
 
       <form className="form" onSubmit={(e) => acao('salvar', e)}>
         <fieldset className="grupo">
-          <legend>Dados do pedido</legend>
+          <legend>Cliente e acesso ao portal</legend>
+          <p className="dica">É o mesmo cadastro que o cliente usa no portal: ele entra com o e-mail, o CPF ou o celular.</p>
           <div className="grade grade-3">
-            <div className="campo">
-              <label htmlFor="v-cliente">Cliente <span className="obrigatorio" aria-hidden="true">*</span></label>
-              <input id="v-cliente" required value={f.cliente_nome} onChange={set('cliente_nome')} />
-            </div>
-            <div className="campo">
-              <label htmlFor="v-codigo">Código / pedido</label>
-              <input id="v-codigo" value={f.codigo || ''} onChange={set('codigo')} placeholder="100002073" />
-            </div>
-            <CampoData id="v-data" rotulo="Data da venda" valor={f.data_venda} onChange={(v) => setF((x) => ({ ...x, data_venda: v, mes: x.id ? x.mes : (v || '').slice(0, 7) || x.mes }))} />
-            <div className="campo">
-              <label htmlFor="v-mes">Mês do controle</label>
-              <input id="v-mes" type="month" value={f.mes || ''} onChange={set('mes')} />
-            </div>
-            <div className="campo">
-              <label htmlFor="v-vendedor">Vendedor</label>
-              <input id="v-vendedor" list="lista-vendedores" value={f.vendedor || ''} onChange={set('vendedor')} />
-              <datalist id="lista-vendedores">{sugestoesVendedor.map((n) => <option key={n} value={n} />)}</datalist>
-            </div>
-            <div className="campo">
-              <label htmlFor="v-captacao">Captação</label>
-              <input id="v-captacao" list="lista-captacao" value={f.captacao || ''} onChange={set('captacao')} />
-              <datalist id="lista-captacao">{CAPTACOES.map((n) => <option key={n} value={n} />)}</datalist>
-            </div>
+            <Texto id="g-codigo" rotulo="Código" valor={p.codigo} onChange={sp('codigo')} obrigatorio />
+            <Texto id="g-nome" rotulo="Nome do cliente" valor={p.cliente_nome} onChange={sp('cliente_nome')} obrigatorio />
+            <Texto id="g-contrato" rotulo="Nº do contrato" valor={p.numero_contrato} onChange={sp('numero_contrato')} />
+            <Texto id="g-cpf" rotulo="CPF" valor={p.cliente_cpf} inputMode="numeric" onChange={(v) => setP((x) => ({ ...x, cliente_cpf: formatarCpf(v) }))} />
+            <Texto id="g-email" rotulo="E-mail (login do portal)" type="email" valor={p.cliente_email} onChange={sp('cliente_email')} autoComplete="off" />
+            <Texto id="g-tel" rotulo="Celular / WhatsApp" type="tel" valor={p.cliente_telefone} onChange={(v) => setP((x) => ({ ...x, cliente_telefone: formatarTelefone(v) }))} />
+            <CampoData id="g-nasc" rotulo="Nascimento" valor={p.cliente_nascimento} onChange={sp('cliente_nascimento')} />
+            <Texto id="g-end" rotulo="Endereço da obra" valor={p.endereco} onChange={sp('endereco')} />
+            <Texto id="g-amb" rotulo="Ambientes" valor={p.ambientes} onChange={sp('ambientes')} placeholder="Cozinha, dormitório…" />
+            <Texto id="g-cep" rotulo={`CEP${zona ? ` · ${zona}` : ''}`} valor={p.cep} inputMode="numeric" onChange={sp('cep')} />
+            <Texto id="g-bairro" rotulo="Bairro" valor={p.bairro} onChange={sp('bairro')} />
+            <Texto id="g-cidade" rotulo="Cidade" valor={p.cidade} onChange={sp('cidade')} />
           </div>
+          {g && (
+            <div className="acoes">
+              {acesso ? null : (
+                <button type="button" className="btn btn-contorno" disabled={!p.cliente_email && !g.cliente_email}
+                  onClick={() => setAcesso(true)} title={p.cliente_email ? '' : 'Cadastre e salve o e-mail antes'}>Liberar acesso ao portal</button>
+              )}
+              {!g.cliente_email && <span className="celula-sub">Salve o e-mail do cliente para liberar o acesso.</span>}
+            </div>
+          )}
+          {acesso && g?.cliente_email && <Acesso processo={{ ...g, ...p }} />}
+        </fieldset>
+
+        <fieldset className="grupo">
+          <legend>Venda</legend>
           <div className="grade grade-3">
-            <Segmentado id="v-loja" rotulo="Loja" valor={f.loja || null} opcoes={LOJAS_VENDA} onChange={set('loja')} />
-            <Segmentado id="v-sit" rotulo="Situação" valor={f.situacao} opcoes={SITUACOES} onChange={set('situacao')} />
+            {ehVendedor ? (
+              <div className="campo"><span className="rotulo-campo">Vendedor</span><strong>{c.vendedor_nome || perfil.nome}</strong></div>
+            ) : (
+              <div className="campo">
+                <label htmlFor="g-vend">Vendedor</label>
+                <select id="g-vend" value={p.vendedor_id || ''} onChange={(e) => escolherVendedor(e.target.value)}>
+                  <option value="">{c.vendedor_nome && !p.vendedor_id ? `${c.vendedor_nome} (sem acesso)` : 'Escolha'}</option>
+                  {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nome || v.email}</option>)}
+                </select>
+                <span className="ajuda">O vendedor vê só os clientes dele.</span>
+              </div>
+            )}
+            <div className="campo">
+              <label htmlFor="g-capt">Captação</label>
+              <input id="g-capt" list="g-captacoes" value={c.captacao || ''} onChange={(e) => sc('captacao')(e.target.value.toUpperCase())} />
+              <datalist id="g-captacoes">{CAPTACOES.map((n) => <option key={n} value={n} />)}</datalist>
+            </div>
+            <CampoData id="g-data" rotulo="Data da venda" valor={p.data_venda} onChange={sp('data_venda')} obrigatorio />
+            <Segmentado id="g-loja" rotulo="Loja" valor={c.loja || null} opcoes={LOJAS_VENDA} onChange={sc('loja')} />
+            <Segmentado id="g-sit" rotulo="Situação" valor={c.situacao} opcoes={SITUACOES} onChange={sc('situacao')} largo />
+            <Segmentado id="g-meu" rotulo="Cliente meu?" valor={c.cliente_meu ?? null} opcoes={SIM_NAO} onChange={sc('cliente_meu')} />
+            <Segmentado id="g-prazo" rotulo="Prazo" valor={futura} opcoes={[[false, 'Normal'], [true, 'Futura']]} onChange={setFutura} />
+            {futura && <CampoData id="g-pronto" rotulo="Imóvel pronto em" valor={p.data_disponivel_medicao} onChange={sp('data_disponivel_medicao')} ajuda="Acima de 90 dias da venda" />}
+            <Segmentado id="g-fin-ok" rotulo="Solução financeira" valor={p.solucao_financeira} opcoes={[['pendente', 'Pendente'], ['ok', 'Resolvida']]} onChange={sp('solucao_financeira')} />
           </div>
         </fieldset>
 
         <fieldset className="grupo">
-          <legend>Dados financeiros (uso interno)</legend>
+          <legend>Financeiro (uso interno)</legend>
           <div className="grade grade-3">
             <div className="campo">
-              <label htmlFor="v-fin">Financeira</label>
-              <select id="v-fin" value={f.financeira || ''} onChange={(e) => setF((x) => ({ ...x, financeira: e.target.value, forma_pagamento: '' }))}>
+              <label htmlFor="g-fin">Financeira</label>
+              <select id="g-fin" value={c.financeira || ''} onChange={(e) => setC((x) => ({ ...x, financeira: e.target.value, forma_pagamento: '' }))}>
                 <option value="">Escolha</option>
                 {FINANCEIRAS.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
               </select>
             </div>
             <div className="campo">
-              <label htmlFor="v-forma">Forma / condição de pagamento</label>
-              <select id="v-forma" value={f.forma_pagamento || ''} onChange={set('forma_pagamento')} disabled={!fin}>
+              <label htmlFor="g-forma">Forma / condição</label>
+              <select id="g-forma" value={c.forma_pagamento || ''} onChange={sc('forma_pagamento')} disabled={!fin}>
                 <option value="">{fin ? 'Escolha' : 'Escolha a financeira antes'}</option>
                 {fin?.formas.map((x) => <option key={x}>{x}</option>)}
               </select>
               <span className="ajuda">"1 + 3" = entrada + 3 parcelas</span>
             </div>
-            <CampoData id="v-venc" rotulo="Vencimento da 1ª parcela" valor={f.vencimento_primeira} onChange={set('vencimento_primeira')} />
-            <Dinheiro id="v-valor" rotulo="Valor do pedido" valor={f.valor_venda} onChange={set('valor_venda')} />
-            <Dinheiro id="v-defl" rotulo="Valor deflacionado" valor={f.valor_deflacionado} onChange={set('valor_deflacionado')} ajuda="Base do resumo e do ranking" />
-            <Dinheiro id="v-entrada" rotulo="Valor de entrada" valor={f.valor_entrada} onChange={set('valor_entrada')} />
-            <Dinheiro id="v-parcela" rotulo="Valor da parcela" valor={f.valor_parcela} onChange={set('valor_parcela')} />
+            <CampoData id="g-venc" rotulo="Vencimento da 1ª parcela" valor={c.vencimento_primeira} onChange={sc('vencimento_primeira')} />
+            <Dinheiro id="g-valor" rotulo="Valor (à vista)" valor={c.valor_venda} onChange={sc('valor_venda')} />
+            <Dinheiro id="g-defl" rotulo="Valor deflacionado" valor={c.valor_deflacionado} onChange={sc('valor_deflacionado')}
+              ajuda={c.valor_venda && c.valor_deflacionado ? `Diferença ${moeda(c.valor_venda - c.valor_deflacionado)}` : 'Base do resumo e do ranking'} />
+            <Dinheiro id="g-entrada" rotulo="Entrada" valor={c.valor_entrada} onChange={sc('valor_entrada')} />
+            <Dinheiro id="g-parcela" rotulo="Parcela" valor={c.valor_parcela} onChange={sc('valor_parcela')} />
+            <Dinheiro id="g-promob" rotulo="Bruto de Promob" valor={c.bruto_promob} onChange={sc('bruto_promob')} />
           </div>
           <div className="campo">
             <span className="rotulo-campo">Meios de pagamento</span>
             <div className="chips-escolha">
               {MEIOS.map(([k, t]) => {
-                const ativo = f.meios.includes(k)
+                const ativo = (c.meios || []).includes(k)
                 return (
                   <button key={k} type="button" aria-pressed={ativo} className={`chip-escolha ${ativo ? 'ativo' : ''}`}
-                    onClick={() => setF((x) => ({ ...x, meios: ativo ? x.meios.filter((m) => m !== k) : [...x.meios, k] }))}>{t}</button>
+                    onClick={() => setC((x) => ({ ...x, meios: ativo ? x.meios.filter((m) => m !== k) : [...(x.meios || []), k] }))}>{t}</button>
                 )
               })}
             </div>
           </div>
-        </fieldset>
-
-        <fieldset className="grupo">
-          <legend>Informações da loja</legend>
           <div className="grade grade-3">
-            <Segmentado id="v-prazo" rotulo="Prazo" valor={f.prazo_tipo} opcoes={[['45_dias', 'Prazo de 45 dias'], ['futura', 'Venda futura']]} onChange={set('prazo_tipo')} />
-            {f.prazo_tipo === 'futura' && <CampoData id="v-prev" rotulo="Previsão do imóvel" valor={f.previsao_imovel} onChange={set('previsao_imovel')} />}
-            <CampoData id="v-email" rotulo="Envio de e-mail" valor={f.envio_email} onChange={set('envio_email')} />
-            <CampoData id="v-assin" rotulo="Assinatura inicial" valor={f.assinatura_inicial} onChange={set('assinatura_inicial')} />
-            <Segmentado id="v-google" rotulo="Avaliação Google" valor={f.avaliacao_google} opcoes={[[null, 'A definir'], [true, 'Sim'], [false, 'Não']]} onChange={set('avaliacao_google')} />
-            <Dinheiro id="v-promob" rotulo="Bruto de Promob" valor={f.bruto_promob} onChange={set('bruto_promob')} />
+            <CampoData id="g-email-env" rotulo="E-mail de formalização" valor={c.envio_email} onChange={sc('envio_email')} />
+            <CampoData id="g-assin-ini" rotulo="Assinatura inicial" valor={c.assinatura_inicial} onChange={sc('assinatura_inicial')} />
+            <Segmentado id="g-google" rotulo="Avaliação Google" valor={c.avaliacao_google ?? null} opcoes={SIM_NAO} onChange={sc('avaliacao_google')} />
+            <Texto id="g-fab" rotulo="Nº do pedido de fábrica" valor={c.pedido_fabrica} onChange={sc('pedido_fabrica')} />
           </div>
         </fieldset>
 
         <fieldset className="grupo">
-          <legend>Controle do escritório</legend>
+          <legend>Medição, conferência e assinatura</legend>
           <div className="grade grade-3">
+            <CampoData id="g-med" rotulo="Data da medição" valor={ci.medido_em} onChange={si('medido_em')} />
             <div className="campo">
-              <label htmlFor="v-fab">Nº do pedido de fábrica</label>
-              <input id="v-fab" value={f.pedido_fabrica || ''} onChange={set('pedido_fabrica')} />
+              <label htmlFor="g-lib">Liberador</label>
+              <input id="g-lib" list="g-liberadores" value={ci.liberador || ''} onChange={si('liberador')} />
+              <datalist id="g-liberadores">{LIBERADORES.map((n) => <option key={n} value={n} />)}</datalist>
             </div>
-            <CampoData id="v-apf" rotulo="Assinatura do projeto final" valor={f.assinatura_projeto_final} onChange={set('assinatura_projeto_final')} />
-            <CampoData id="v-limite" rotulo="Prazo limite de entrega" valor={f.prazo_limite_entrega} onChange={set('prazo_limite_entrega')} />
-            <CampoData id="v-medicao" rotulo="Medição realizada" valor={f.medicao_realizada} onChange={set('medicao_realizada')} />
-            <CampoData id="v-lpf" rotulo="Limite de prazo do projeto final" valor={f.limite_projeto_final} onChange={set('limite_projeto_final')} />
+            <CampoData id="g-conf" rotulo="Data da conferência" valor={ci.conferido_em} onChange={si('conferido_em')} />
+            <CampoData id="g-assin" rotulo="Assinatura do projeto final" valor={ci.projeto_final_assinado_em} onChange={si('projeto_final_assinado_em')} />
+          </div>
+        </fieldset>
+
+        <fieldset className="grupo">
+          <legend>Entrega e montagem</legend>
+          <div className="grade grade-3">
+            <CampoData id="g-prev" rotulo="Previsão de entrega" valor={ci.previsao_entrega} onChange={si('previsao_entrega')} />
+            <CampoData id="g-max" rotulo="Prazo máximo (contrato)" valor={p.data_entrega_prevista} onChange={sp('data_entrega_prevista')}
+              ajuda={prazoSugerido && prazoSugerido !== p.data_entrega_prevista ? `Pelo contrato: ${dataBR(prazoSugerido)}` : undefined} />
+            <Segmentado id="g-entregue" rotulo="Entregue?" valor={ci.entregue ?? null} opcoes={SIM_NAO} onChange={si('entregue')} />
+            <CampoData id="g-dent" rotulo="Data da entrega" valor={ci.entregue_em} onChange={si('entregue_em')} />
+            <CampoData id="g-mont" rotulo="Início da montagem" valor={ci.montagem_inicio_em} onChange={si('montagem_inicio_em')} />
+            <Texto id="g-montador" rotulo="Montador" valor={ci.montador} onChange={si('montador')} />
+            <Segmentado id="g-montou" rotulo="Já montou?" valor={!!p.entrega_concluida} opcoes={[[false, 'Não'], [true, 'Sim, montado']]} onChange={sp('entrega_concluida')} largo />
+          </div>
+        </fieldset>
+
+        <fieldset className="grupo">
+          <legend>Vistoria e assistência técnica</legend>
+          <div className="grade grade-3">
+            <CampoData id="g-vist" rotulo="Data da vistoria" valor={ci.vistoria_em} onChange={si('vistoria_em')} />
+            <Segmentado id="g-att" rotulo="Assistência?" valor={ci.tem_att ?? null} opcoes={SIM_NAO} onChange={si('tem_att')} />
+            <CampoData id="g-posmax" rotulo="Prazo máximo pós vistoria" valor={ci.assistencia_retorno_max} onChange={si('assistencia_retorno_max')} />
+            <Segmentado id="g-pos" rotulo="Pós vistoria" valor={ci.pos_vistoria || null} opcoes={[[null, '—'], ...POS_VISTORIA]} onChange={si('pos_vistoria')} largo />
+            <CampoData id="g-attfim" rotulo="Assistência concluída" valor={ci.assistencia_concluida_em} onChange={si('assistencia_concluida_em')} />
+          </div>
+          <div className="campo">
+            <label htmlFor="g-vobs">Observação da vistoria</label>
+            <textarea id="g-vobs" rows={2} maxLength={2000} value={ci.vistoria_obs || ''} onChange={si('vistoria_obs')} />
           </div>
         </fieldset>
 
         <div className="campo">
-          <label htmlFor="v-obs">Observação</label>
-          <textarea id="v-obs" rows={3} maxLength={2000} value={f.observacao || ''} onChange={set('observacao')}
+          <label htmlFor="g-obs">Observação</label>
+          <textarea id="g-obs" rows={3} maxLength={2000} value={c.observacao || ''} onChange={sc('observacao')}
             placeholder="Ex.: Gerar 12 boletos pela casa, 1º vencimento em 05/11" />
         </div>
 
         {erro && <p className="erro" role="alert">{erro}</p>}
         <div className="acoes acoes-venda">
-          <button className="btn btn-principal" disabled={!!salvando}>{salvando === 'salvar' ? 'Salvando…' : 'Salvar'}</button>
-          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('capa')}>
-            {salvando === 'capa' ? 'Gerando capa…' : 'Fazer capa'}
-          </button>
-          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('pasta')}>Controle de pastas →</button>
-          {f.id && (excluir ? (
-            <span className="confirmar">
-              <button type="button" className="btn btn-perigo" onClick={async () => { await api.excluirVenda(f.id); onFechar() }}>Excluir venda e anexos</button>
-              <button type="button" className="btn btn-leve" onClick={() => setExcluir(false)}>Cancelar</button>
-            </span>
-          ) : <button type="button" className="btn btn-perigo-leve" onClick={() => setExcluir(true)}>Excluir</button>)}
+          <button className="btn btn-principal" disabled={!!salvando}>{salvando === 'salvar' ? 'Salvando…' : g ? 'Salvar' : 'Cadastrar cliente'}</button>
+          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('capa')}>{salvando === 'capa' ? 'Gerando capa…' : 'Fazer capa'}</button>
+          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('pasta')}>Controle de pastas</button>
+          {onAbrirProcesso && <button type="button" className="btn btn-leve" disabled={!!salvando} onClick={() => acao('processo')}>Processo, anexos e renders →</button>}
+          {g && podeExcluir && <button type="button" className="btn btn-perigo-leve" onClick={() => setExcluir(true)}>Excluir cliente</button>}
         </div>
-        <p className="dica">"Fazer capa" salva a venda e baixa a planilha da capa do envelope (frente e verso) já preenchida.</p>
+        <p className="dica">"Fazer capa" salva e baixa a capa do envelope (frente e verso) já preenchida.</p>
       </form>
+      {excluir && (
+        <ConfirmarExclusao nome={g.cliente_nome} codigo={g.codigo} onCancelar={() => setExcluir(false)}
+          onConfirmar={async () => { await api.excluirProcesso(g.id); onFechar() }} />
+      )}
     </section>
   )
 }
 
-// ============================================================ Controle de pastas
-function ListaPastas({ vendas, seletorMes, onAbrir }) {
-  if (!vendas) return <div className="carregando">Carregando…</div>
-  const ativas = vendas.filter((v) => v.situacao !== 'cancelado')
+// ============================================================ Importar a planilha de gestão
+function Importar({ onFechar }) {
+  const [registros, setRegistros] = useState(null)
+  const [estado, setEstado] = useState('')
+  const [erro, setErro] = useState('')
+  const [fim, setFim] = useState(null)
+
+  async function ler(arquivo) {
+    setErro('')
+    setRegistros(null)
+    try {
+      const { lerPlanilha, dataDoExcel } = await import('../lib/xlsx.js')
+      const { aba, linhas } = await lerPlanilha(arquivo, 'CLIENTES')
+      const r = registrosDaPlanilha(linhas, { dataDoExcel, financeiraPorNome, somarDias })
+      if (!r.length) throw new Error(`Nenhum cliente encontrado na aba ${aba}.`)
+      setRegistros(r)
+    } catch (e) {
+      setErro(e.message)
+    }
+  }
+  async function importar() {
+    setErro('')
+    try {
+      setFim(await api.importarGestao(registros, (n, t) => setEstado(`${n} de ${t}`)))
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setEstado('')
+    }
+  }
+  const contar = (f) => registros.filter(f).length
   return (
-    <>
+    <div className="modal" role="presentation">
+      <div className="confirmar-exclusao importar" role="dialog" aria-modal="true" aria-labelledby="imp-t">
+        <span className="rotulo">Gestão de clientes</span>
+        <h2 id="imp-t">Importar a planilha de gestão</h2>
+        {fim ? (
+          <>
+            <p><strong>{fim.importados}</strong> clientes importados.{fim.pulados ? ` ${fim.pulados} já existiam (mesmo código) e ficaram como estavam.` : ''}</p>
+            <p className="dica">Abra cada cliente para escolher o vendedor e cadastrar o e-mail de acesso ao portal.</p>
+            <div className="acoes"><button className="btn btn-principal" onClick={() => onFechar(true)}>Ver clientes</button></div>
+          </>
+        ) : (
+          <>
+            <p>Envie o arquivo <strong>001 GESTÃO DE CLIENTES.xlsx</strong>. Lemos a aba <em>01 CLIENTES</em> (cabeçalho na linha 5). Clientes com um código que já existe não são alterados.</p>
+            <label className="btn btn-contorno">
+              Escolher arquivo
+              <input type="file" accept=".xlsx" hidden onChange={(e) => { if (e.target.files[0]) ler(e.target.files[0]); e.target.value = '' }} />
+            </label>
+            {registros && (
+              <ul className="importar-resumo">
+                <li><strong className="num">{registros.length}</strong> clientes na planilha</li>
+                <li><strong className="num">{contar((r) => r.processo.entrega_concluida)}</strong> montados</li>
+                <li><strong className="num">{contar((r) => !r.processo.entrega_concluida && (r.controle.projeto_final_assinado_em || r.processo.projeto_assinado_manual))}</strong> assinados aguardando montagem</li>
+                <li><strong className="num">{contar((r) => !r.processo.medicao_concluida && !r.processo.entrega_concluida)}</strong> aguardando medição</li>
+              </ul>
+            )}
+            {erro && <p className="erro" role="alert">{erro}</p>}
+            <div className="acoes">
+              <button className="btn btn-leve" onClick={() => onFechar(false)} disabled={!!estado}>Cancelar</button>
+              <button className="btn btn-principal" disabled={!registros || !!estado} onClick={importar}>{estado ? `Importando… ${estado}` : 'Importar'}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================ Controle de pastas
+function ListaPastas({ linhas, barraPeriodo, onAbrir }) {
+  const ativas = linhas.filter((l) => !l.cancelado)
+  return (
+    <section className="gestao">
       <div className="cab-linha">
         <div className="titulo-processo">
           <span className="rotulo">Gestão de clientes</span>
           <h1 className="titulo-grande">Controle de pastas</h1>
+          <p className="dica">Anexe os documentos de cada cliente. Em "Fechar venda", tudo vira um único PDF para baixar e imprimir.</p>
         </div>
       </div>
-      <p className="dica">Anexe os documentos de cada cliente. Em "Fechar venda", tudo vira um único PDF para baixar e imprimir.</p>
-      <div className="gestao-barra">{seletorMes}</div>
-      {!ativas.length ? <p className="vazio">Nenhuma venda neste mês.</p> : (
+      {barraPeriodo}
+      {!ativas.length ? <p className="vazio">Nenhum cliente neste período.</p> : (
         <ul className="pastas-lista">
-          {ativas.map((v) => {
-            const docs = v.venda_documentos || []
+          {ativas.map((l) => {
+            const docs = l.g.pasta || []
             const feitos = DOCS_PASTA.filter((d) => docs.some((x) => x.categoria === d.id)).length
             return (
-              <li key={v.id}>
-                <button type="button" className="pasta-cartao" onClick={() => onAbrir(v)}>
+              <li key={l.id}>
+                <button type="button" className="pasta-cartao" onClick={() => onAbrir(l)}>
                   <span className="pasta-cartao-topo">
-                    <strong>{v.cliente_nome}</strong>
-                    {v.pasta_fechada_em
+                    <strong>{l.cliente_nome}</strong>
+                    {l.pasta_fechada
                       ? <span className="chip chip-mini chip-sit-ok">Venda fechada</span>
                       : <span className="chip chip-mini chip-sit-andamento">Pasta aberta</span>}
                   </span>
-                  <span className="celula-sub num">{v.codigo || 'Sem código'} · {v.vendedor || '—'} · {dataCurta(v.data_venda)}</span>
+                  <span className="celula-sub num">{l.codigo || 'Sem código'} · {l.vendedor || '—'} · {dataBR(l.data_venda)}</span>
                   <span className="pasta-progresso" aria-label={`${feitos} de ${DOCS_PASTA.length} documentos`}>
                     {DOCS_PASTA.map((d) => <span key={d.id} className={docs.some((x) => x.categoria === d.id) ? 'ok' : ''} title={d.nome} />)}
                   </span>
@@ -488,28 +672,28 @@ function ListaPastas({ vendas, seletorMes, onAbrir }) {
           })}
         </ul>
       )}
-    </>
+    </section>
   )
 }
 
-function PastaVenda({ venda, onFechar, onEditar }) {
+function PastaCliente({ g, onFechar, onFicha }) {
   const [docs, setDocs] = useState(null)
   const [enviando, setEnviando] = useState('')
   const [erro, setErro] = useState('')
   const [fechando, setFechando] = useState(false)
   const [confirmar, setConfirmar] = useState(false)
-  const [fechadaEm, setFechadaEm] = useState(venda.pasta_fechada_em)
+  const [fechadaEm, setFechadaEm] = useState(g.comercial?.pasta_fechada_em)
 
-  const carregar = () => api.documentosVenda(venda.id).then(setDocs)
+  const carregar = () => api.documentosPasta(g.id).then(setDocs).catch((e) => setErro(e.message))
   useEffect(() => {
     carregar()
-  }, [venda.id])
+  }, [g.id])
 
   async function enviar(categoria, arquivos) {
     setErro('')
     setEnviando(categoria)
     try {
-      for (const a of arquivos) await api.enviarDocumentoVenda(venda.id, categoria, a)
+      for (const a of arquivos) await api.enviarDocumentoPasta(g.id, categoria, a)
       await carregar()
     } catch (e) {
       setErro(e.message)
@@ -523,9 +707,9 @@ function PastaVenda({ venda, onFechar, onEditar }) {
     setFechando(true)
     try {
       const { gerarPdfPasta } = await import('../lib/pastaPdf.js')
-      const blob = await gerarPdfPasta(venda, docs, (d) => api.arquivoDocumentoVenda(d), (d) => api.urlDocumentoVenda(d))
-      baixarArquivo(blob, `pasta-${nomeArquivo(`${venda.codigo || ''}-${venda.cliente_nome}`)}.pdf`)
-      await api.fecharPasta(venda.id)
+      const blob = await gerarPdfPasta(paraVenda(g), docs, (d) => api.arquivoDocumentoPasta(d), (d) => api.urlDocumentoPasta(d))
+      baixarArquivo(blob, `pasta-${nomeArquivo(`${g.codigo || ''}-${g.cliente_nome}`)}.pdf`)
+      await api.fecharPasta(g.id)
       setFechadaEm(new Date().toISOString())
       setConfirmar(false)
     } catch (e) {
@@ -544,10 +728,10 @@ function PastaVenda({ venda, onFechar, onEditar }) {
       <button className="btn btn-leve voltar" onClick={onFechar}>← Voltar</button>
       <div className="cab-linha">
         <div className="titulo-processo">
-          <span className="rotulo">Pasta {venda.codigo || ''}</span>
-          <h1 className="titulo-grande">{venda.cliente_nome}</h1>
+          <span className="rotulo">Pasta {g.codigo || ''}</span>
+          <h1 className="titulo-grande">{g.cliente_nome}</h1>
         </div>
-        <button className="btn btn-leve" onClick={() => onEditar(venda)}>Ver ficha da venda</button>
+        <button className="btn btn-leve" onClick={() => onFicha(g)}>Ver ficha do cliente</button>
       </div>
       {fechadaEm && <p className="dica">Venda fechada em {new Date(fechadaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}. Você pode anexar mais documentos e fechar de novo.</p>}
 
@@ -567,7 +751,7 @@ function PastaVenda({ venda, onFechar, onEditar }) {
               </div>
               {lista.length > 0 && (
                 <ul className="pasta-doc-lista">
-                  {lista.map((d) => <ArquivoPasta key={d.id} doc={d} onRemover={async () => { await api.excluirDocumentoVenda(d); carregar() }} />)}
+                  {lista.map((d) => <ArquivoPasta key={d.id} doc={d} onRemover={async () => { await api.excluirDocumentoPasta(d); carregar() }} />)}
                 </ul>
               )}
             </div>
@@ -600,7 +784,7 @@ function ArquivoPasta({ doc, onRemover }) {
   const [url, setUrl] = useState(null)
   const [remover, setRemover] = useState(false)
   useEffect(() => {
-    api.urlDocumentoVenda(doc).then(setUrl).catch(() => {})
+    api.urlDocumentoPasta(doc).then(setUrl).catch(() => {})
   }, [doc.id])
   return (
     <li className="pasta-arquivo">

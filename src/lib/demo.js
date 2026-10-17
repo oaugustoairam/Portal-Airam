@@ -30,6 +30,51 @@ function docFicticio(titulo) {
 // Renders da demonstração: fotos de ambientes da Airam
 const foto = (nome) => FOTOS.find((f) => f.nome === nome).src
 
+// Sistema único: as vendas da gestão viram clientes do portal (processo + dados comerciais)
+const VENDEDOR_DEMO = 'vendedor@airam.exemplo'
+const CAPTACAO_DEMO = { 'Indicação': 'INDICAÇÕES', 'Rubia': 'RUBIA', 'Cliente loja': 'CLIENTE LOJA', 'Arquitetura': 'ARQUITETURA',
+  'Porta de loja': 'PORTA DE LOJA', 'Amigos pessoais': 'AMIGOS PESSOAIS' }
+function paraGestaoUnica(dados, base) {
+  const { vendas, vendaDocs, ...resto } = dados
+  resto.comercial = {}
+  // clientes do portal que já existiam: dono, captação e valores
+  const ja = {
+    'demo-0154': ['Augusto Moraes', VENDEDOR_DEMO, 'INDICAÇÕES', 'mooca', 'santander', '1 + 12', 31200, 26840.1, 'resolvido'],
+    'demo-0158': ['Augusto Moraes', VENDEDOR_DEMO, 'ARQUITETURA', 'mooca', 'airam', '1 + 18', 18900, 15420, 'resolvido'],
+    'demo-0161': ['Agatha Moraes', null, 'RUBIA', 'guarulhos', 'dubai', '1 + 12', 26500, 21130.8, 'resolvido'],
+    'demo-0171': ['Augusto Moraes', VENDEDOR_DEMO, 'PORTA DE LOJA', 'mooca', 'santander', null, 22300, null, 'pendente'],
+    'demo-0169': ['Moises Alves', null, 'LINK DA BIO', 'guarulhos', 'cartao', '10x', 14800, 13760.5, 'resolvido'],
+    'demo-0152': ['Felipe Foiadell', null, 'PARCERIAS', 'mooca', 'avista', 'À vista', 39500, 39500, 'resolvido'],
+    'demo-0147': ['Ramon Arias', null, 'TELEFONE DE LOJA', 'guarulhos', 'airam', '1 + 24', 27600, 21980, 'resolvido'],
+  }
+  for (const p of resto.processos) {
+    const c = ja[p.id]
+    if (!c) continue
+    const [vendedor_nome, vendedor_id, captacao, loja, financeira, forma_pagamento, valor_venda, valor_deflacionado, situacao] = c
+    p.vendedor_id = vendedor_id
+    resto.comercial[p.id] = { id: p.id, vendedor_nome, captacao, loja, financeira, forma_pagamento, valor_venda, valor_deflacionado, situacao,
+      meios: ['pix', 'boletos'], observacao: '', cliente_meu: true }
+  }
+  // vendas novas da gestão: ainda sem acesso ao portal (sem e-mail)
+  for (const v of vendas) {
+    const id = `demo-${v.id}`
+    resto.processos.push({
+      ...base, id, codigo: v.codigo, numero_contrato: v.codigo, cliente_nome: v.cliente_nome, cliente_email: null, cliente_telefone: null,
+      data_venda: v.data_venda, data_disponivel_medicao: v.data_venda, data_entrega_prevista: null, tipo_prazo: 'normal',
+      solucao_financeira: v.situacao === 'resolvido' ? 'ok' : 'pendente', vendedor_id: v.vendedor === 'Augusto Moraes' ? VENDEDOR_DEMO : null,
+      cidade: v.loja === 'mooca' ? 'São Paulo' : 'Guarulhos', criado_em: v.criado_em,
+    })
+    resto.comercial[id] = {
+      id, vendedor_nome: v.vendedor, captacao: CAPTACAO_DEMO[v.captacao] || v.captacao, loja: v.loja, financeira: v.financeira,
+      forma_pagamento: v.forma_pagamento, valor_venda: v.valor_venda, valor_deflacionado: v.valor_deflacionado, valor_entrada: v.valor_entrada,
+      vencimento_primeira: v.vencimento_primeira, meios: v.meios, situacao: v.situacao, observacao: v.observacao, envio_email: v.envio_email,
+      assinatura_inicial: v.assinatura_inicial, avaliacao_google: v.avaliacao_google, bruto_promob: v.bruto_promob, cliente_meu: true,
+    }
+  }
+  resto.pastaDocs = vendaDocs.map(({ venda_id, ...d }) => ({ ...d, processo_id: `demo-${venda_id}` }))
+  return resto
+}
+
 // Comprovante fictício (imagem) para a pasta do cliente na demonstração
 function comprovanteSvg(titulo, linhas) {
   const t = linhas.map((l, i) => `<text x="40" y="${150 + i * 34}" font-family="Arial" font-size="20" fill="#393939">${l}</text>`).join('')
@@ -65,7 +110,7 @@ export function criarDadosDemo() {
     data_projeto_inicial: null, data_medicao: null, data_conferencia: null, data_assinatura_projeto: null, recado_cliente: '',
   }
 
-  return {
+  const dados = {
     sessao: null,
     contas: [
       { email: 'equipe@airam.exemplo', nome: 'Equipe Airam', papel: 'admin', senha: SENHA_DEMO, precisa_trocar_senha: false },
@@ -274,4 +319,5 @@ export function criarDadosDemo() {
       { id: 'a5', processo_id: p3, tipo: 'projeto_final', documento_id: 'd15', status: 'pendente', sign_url: null, criado_em: quando(-1) },
     ],
   }
+  return paraGestaoUnica(dados, base)
 }

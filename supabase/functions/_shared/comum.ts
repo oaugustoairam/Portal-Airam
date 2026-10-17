@@ -33,6 +33,19 @@ export async function exigirEquipe(req) {
   return perfil
 }
 
+// Pergunta ao banco, com o login de quem chamou, uma regra de acesso (pode_gerir, tem_permissao).
+// Assim o servidor segue exatamente as mesmas regras do portal: vendedor só mexe nos clientes dele.
+export async function regraDoUsuario(req, funcao, args) {
+  const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
+  if (!jwt) return false
+  const sb = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+  })
+  const { data, error } = await sb.rpc(funcao, args)
+  return !error && data === true
+}
+
 export function somenteNumeros(v) {
   return String(v ?? '').replace(/\D/g, '')
 }

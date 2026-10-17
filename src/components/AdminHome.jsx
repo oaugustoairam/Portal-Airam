@@ -24,6 +24,7 @@ import PastaProcessos, { ResumoPastas } from './PastaProcessos.jsx'
 import { PASTAS } from '../lib/pastas.js'
 import Avatar from './Avatar.jsx'
 import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
+import ConfirmarExclusao from './ConfirmarExclusao.jsx'
 
 // ============================================================ Lista de processos
 const ETAPAS_FILTRO = [
@@ -434,7 +435,6 @@ function FormDados({ processo, onSalvo, onExcluido }) {
     setErro('')
     if (f.cliente_cpf && !cpfValido(f.cliente_cpf)) return setErro('O CPF informado não é válido.')
     if (dias !== null && dias < 0) return setErro('A disponibilidade para medição não pode ser antes da data da venda.')
-    if (!f.data_entrega_prevista) return setErro('Informe o prazo do cliente (entrega prevista).')
     setSalvando(true)
     try {
       await onSalvo(await api.salvarProcesso(f))
@@ -561,13 +561,8 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           <button type="button" className="btn btn-perigo-leve" onClick={() => setConfirmar(true)}>Excluir processo</button>
         )}
         {confirmar && (
-          <span className="confirmar">
-            Excluir o processo e todos os anexos?
-            <button type="button" className="btn btn-perigo" onClick={async () => { await api.excluirProcesso(f.id); onExcluido() }}>
-              Sim, excluir
-            </button>
-            <button type="button" className="btn btn-leve" onClick={() => setConfirmar(false)}>Cancelar</button>
-          </span>
+          <ConfirmarExclusao nome={f.cliente_nome} codigo={f.codigo} onCancelar={() => setConfirmar(false)}
+            onConfirmar={async () => { await api.excluirProcesso(f.id); onExcluido() }} />
         )}
       </div>
     </form>
@@ -774,7 +769,7 @@ function CartaoAssinatura({ processo, config, onMudou }) {
 }
 
 // ============================================================ Acesso do cliente
-function Acesso({ processo }) {
+export function Acesso({ processo }) {
   const [resultado, setResultado] = useState(null)
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)

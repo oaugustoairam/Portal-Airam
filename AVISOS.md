@@ -100,16 +100,26 @@ receber, desligue a opção no processo.
 - A área **Aniversários** mostra o calendário do mês, os aniversários dos próximos 30 dias e o botão
   **Parabenizar no WhatsApp**, com a mensagem pronta.
 - No dia, aparece um aviso no topo do painel da equipe.
-- **E-mail diário para a equipe:** agende a função `aniversarios-do-dia` às 8h (horário de Brasília = 11h UTC):
+- Os aniversários aparecem **só na área Marketing** (aba Aniversários).
+- **Aviso diário às 9h no WhatsApp (e por e-mail):** a função `aniversarios-do-dia` roda todo dia às 9h de Brasília
+  (12h UTC) e, se houver aniversariante, manda a lista para a equipe.
+  1. Na Meta (WhatsApp Manager), crie o modelo **`aniversarios_do_dia`**, categoria *Utilidade*, idioma *Português (BR)*:
+     ```
+     Bom dia! Hoje é aniversário de {{1}} cliente(s) da Airam: {{2}}. Abra o portal em Marketing > Aniversários para mandar os parabéns.
+     ```
+     Exemplos para a Meta: `2` · `Marina Duarte (AIR-0154), Carla Nogueira (AIR-0158)`.
+  2. Em Edge Functions > Secrets: `AVISOS_EQUIPE_WHATSAPP=5511989776738` (pode ter vários, separados por vírgula),
+     além de `WHATSAPP_TOKEN` e `WHATSAPP_PHONE_NUMBER_ID`. Opcional: `AVISOS_EQUIPE_EMAIL=voce@airam.arq.br`.
+  3. Agende (SQL Editor):
   ```sql
-  select cron.schedule('aniversarios-airam', '0 11 * * *', $$
+  select cron.schedule('aniversarios-airam', '0 12 * * *', $$
     select net.http_post(
       url := 'https://<id-do-projeto>.supabase.co/functions/v1/aniversarios-do-dia',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-airam-segredo', '<mesmo NOTIFICACOES_SECRET>'),
       body := '{}'::jsonb);
   $$);
   ```
-  e cadastre `AVISOS_EQUIPE_EMAIL=voce@airam.arq.br,loja@airam.arq.br`.
+  O WhatsApp só chega depois que a conta da Meta estiver ativa e o modelo aprovado. Sem isso, o e-mail continua funcionando.
 
 # E-mail marketing
 

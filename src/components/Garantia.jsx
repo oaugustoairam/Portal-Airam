@@ -7,35 +7,22 @@ function somarAnos(iso, anos) {
   return d.toISOString().slice(0, 10)
 }
 
-const tracos = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }
-
-// Ferragens com amortecimento: padrão dos móveis Airam (ao lado da garantia)
+// Padrão Airam: ferragens com amortecimento (só tipografia, sem desenhos)
 function Ferragens() {
   return (
-    <aside className="ferragens" aria-label="Ferragens com amortecimento">
+    <aside className="ferragens" aria-label="Padrão Airam de ferragens">
       <span className="ferragens-rotulo">Padrão Airam</span>
-      <h3 className="ferragens-titulo">Fechamento suave em todo o móvel</h3>
-      <div className="ferragem">
-        <svg className="ferragem-icone ferragem-porta" viewBox="0 0 48 48" aria-hidden="true">
-          <rect x="8" y="6" width="32" height="36" rx="2" {...tracos} />
-          <path className="porta" d="M24 6v36" {...tracos} />
-          <circle cx="12" cy="14" r="1.6" fill="currentColor" /><circle cx="12" cy="34" r="1.6" fill="currentColor" />
-        </svg>
+      <p className="ferragens-titulo">Fechamento <em>suave</em>, em silêncio.</p>
+      <dl className="ferragens-lista">
         <div>
-          <strong>Dobradiças com amortecimento</strong>
-          <p>As portas desaceleram no final e fecham devagar, sem batidas e sem barulho, protegendo os móveis do impacto.</p>
+          <dt><span className="num">01</span>Dobradiças com amortecimento</dt>
+          <dd>As portas desaceleram no fim do curso e fecham devagar, sem batidas.</dd>
         </div>
-      </div>
-      <div className="ferragem">
-        <svg className="ferragem-icone ferragem-gaveta" viewBox="0 0 48 48" aria-hidden="true">
-          <rect x="6" y="10" width="36" height="28" rx="2" {...tracos} />
-          <g className="gaveta"><rect x="10" y="20" width="28" height="10" rx="1.5" {...tracos} /><path d="M20 25h8" {...tracos} /></g>
-        </svg>
         <div>
-          <strong>Corrediças ocultas com amortecimento</strong>
-          <p>As gavetas deslizam leves e fecham sozinhas no final do curso. As corrediças ficam escondidas embaixo da gaveta, deixando o acabamento mais limpo.</p>
+          <dt><span className="num">02</span>Corrediças ocultas com amortecimento</dt>
+          <dd>Gavetas leves que fecham sozinhas. Escondidas sob a gaveta, deixam o acabamento limpo.</dd>
         </div>
-      </div>
+      </dl>
     </aside>
   )
 }

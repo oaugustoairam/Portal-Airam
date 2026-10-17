@@ -35,11 +35,6 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'equipe', 'vendedor'));
 $$;
 
--- Gestão de clientes (vendas): só vendedores e gerência
-create or replace function public.eh_vendas()
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'vendedor'));
-$$;
 
 create or replace function public.eh_admin()
 returns boolean language sql stable security definer set search_path = public as $$
@@ -65,16 +60,15 @@ create table if not exists public.processos (
   codigo text not null unique,                 -- identificação junto com o nome
   cliente_nome text not null,
   cliente_cpf text,                            -- só números
-  cliente_email text not null,                 -- login do cliente
+  cliente_email text,                          -- login do cliente (pode ficar para depois)
   cliente_telefone text,
   endereco text,
   ambientes text,                              -- ex.: cozinha, suíte, home office
   data_venda date not null,
-  data_disponivel_medicao date not null,       -- quando o imóvel fica disponível para medir
+  data_disponivel_medicao date,                -- quando o imóvel fica disponível para medir
   -- Regra Airam: até 90 dias entre a venda e a disponibilidade para medição = Normal; acima = Futuro
-  tipo_prazo text generated always as (
-    case when data_disponivel_medicao - data_venda <= 90 then 'normal' else 'futuro' end
-  ) stored,
+  -- (calculado pelo gatilho calcular_tipo_prazo; sem a data, vale o que foi informado)
+  tipo_prazo text check (tipo_prazo in ('normal', 'futuro')),
   solucao_financeira text not null default 'pendente' check (solucao_financeira in ('ok', 'pendente')),
   data_medicao date,
   medicao_concluida boolean not null default false,
@@ -82,7 +76,7 @@ create table if not exists public.processos (
   conferencia_concluida boolean not null default false,
   data_assinatura_projeto date,                -- assinatura do projeto final
   projeto_assinado_manual boolean not null default false,  -- assinado fora do ZapSign
-  data_entrega_prevista date not null,         -- prazo do cliente (obrigatório)
+  data_entrega_prevista date,                  -- prazo máximo do cliente
   entrega_concluida boolean not null default false,
   recado_cliente text,                         -- mensagem que o cliente vê no topo
   criado_em timestamptz not null default now(),
@@ -189,12 +183,8 @@ on conflict (id) do update set
 
 drop policy if exists "equipe arquivos" on storage.objects;
 create policy "equipe arquivos" on storage.objects for all
-  using (bucket_id = 'documentos' and public.eh_equipe() and coalesce((storage.foldername(name))[1], '') <> 'vendas')
-  with check (bucket_id = 'documentos' and public.eh_equipe() and coalesce((storage.foldername(name))[1], '') <> 'vendas');
-drop policy if exists "vendas arquivos" on storage.objects;
-create policy "vendas arquivos" on storage.objects for all
-  using (bucket_id = 'documentos' and public.eh_vendas() and (storage.foldername(name))[1] = 'vendas')
-  with check (bucket_id = 'documentos' and public.eh_vendas() and (storage.foldername(name))[1] = 'vendas');
+  using (bucket_id = 'documentos' and public.eh_equipe())
+  with check (bucket_id = 'documentos' and public.eh_equipe());
 drop policy if exists "cliente le arquivos" on storage.objects;
 create policy "cliente le arquivos" on storage.objects for select
   using (
@@ -625,18 +615,80 @@ drop trigger if exists auditoria on public.controle_interno;
 create trigger auditoria after insert or update or delete on public.controle_interno
   for each row execute function public.registrar_atividade();
 
--- 16. Gestão de clientes (vendedores) ----------------------------------------
--- Controle mensal das vendas (como a planilha de feedback), capa do envelope e controle de pastas.
-create table if not exists public.vendas (
-  id uuid primary key default gen_random_uuid(),
-  mes text not null check (mes ~ '^[0-9]{4}-[0-9]{2}$'),     -- mês do controle (AAAA-MM)
-  codigo text,
-  cliente_nome text not null,
-  vendedor text,
+-- 16. Sistema único: gestão de clientes, papéis, permissões e acesso por vendedor ---
+-- O cadastro da gestão de clientes É o processo do portal (mesmo registro).
+-- Dados comerciais (financeira, valores, situação) ficam em "comercial", que o cliente não lê.
+drop table if exists public.venda_documentos;
+drop table if exists public.vendas;
+
+alter table public.perfis add column if not exists permissoes jsonb not null default '{}'::jsonb;
+
+-- Permissões do master (admin). Chaves: gestao, processos, marketing, ver_todos, excluir.
+-- Admin tem tudo; nos outros vale o que o master marcou ou o padrão do papel.
+create or replace function public.tem_permissao(chave text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select case
+      when papel = 'admin' then true
+      when permissoes ? chave then (permissoes ->> chave)::boolean
+      when papel = 'equipe' then chave in ('processos', 'marketing', 'ver_todos')
+      when papel = 'vendedor' then chave in ('gestao', 'processos')
+      else false end
+    from public.perfis where id = auth.uid()), false);
+$$;
+
+-- Vê todos os clientes (admin, equipe e quem o master liberou). Vendedor vê só os dele.
+create or replace function public.ve_todos()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.eh_equipe() and public.tem_permissao('ver_todos');
+$$;
+
+alter table public.processos add column if not exists vendedor_id uuid references public.perfis (id) on delete set null;
+alter table public.processos add column if not exists cidade text;
+alter table public.processos add column if not exists bairro text;
+alter table public.processos add column if not exists cep text;
+alter table public.processos alter column cliente_email drop not null;
+alter table public.processos alter column data_disponivel_medicao drop not null;
+alter table public.processos alter column data_entrega_prevista drop not null;
+create index if not exists processos_vendedor_idx on public.processos (vendedor_id);
+
+-- tipo_prazo deixa de ser coluna calculada: a venda futura pode ser informada sem a data do imóvel
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'processos'
+             and column_name = 'tipo_prazo' and is_generated = 'ALWAYS') then
+    alter table public.processos drop column tipo_prazo;
+  end if;
+end $$;
+alter table public.processos add column if not exists tipo_prazo text check (tipo_prazo in ('normal', 'futuro'));
+create or replace function public.calcular_tipo_prazo()
+returns trigger language plpgsql as $$
+begin
+  if new.data_disponivel_medicao is not null and new.data_venda is not null then
+    new.tipo_prazo := case when new.data_disponivel_medicao - new.data_venda <= 90 then 'normal' else 'futuro' end;
+  elsif new.tipo_prazo is null then
+    new.tipo_prazo := 'normal';
+  end if;
+  return new;
+end $$;
+drop trigger if exists tipo_prazo on public.processos;
+create trigger tipo_prazo before insert or update on public.processos
+  for each row execute function public.calcular_tipo_prazo();
+
+-- Pode cuidar deste processo: quem vê todos, ou o vendedor dono da venda
+create or replace function public.pode_gerir(pid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.ve_todos()
+    or exists (select 1 from public.processos where id = pid and vendedor_id = auth.uid() and public.eh_equipe());
+$$;
+
+-- Dados comerciais da venda (internos)
+create table if not exists public.comercial (
+  id uuid primary key references public.processos on delete cascade,
+  vendedor_nome text,                          -- nome do vendedor (também para vendas importadas)
   captacao text,
   loja text check (loja in ('guarulhos', 'mooca')),
-  data_venda date,
-  financeira text check (financeira in ('avista', 'dubai', 'airam', 'santander', 'cartao')),
+  financeira text check (financeira in ('avista', 'dubai', 'airam', 'santander', 'financeira_santander', 'cartao', 'casa', 'flex', 'losango')),
   forma_pagamento text,
   valor_venda numeric(12, 2),
   valor_deflacionado numeric(12, 2),
@@ -644,52 +696,186 @@ create table if not exists public.vendas (
   valor_parcela numeric(12, 2),
   vencimento_primeira date,
   meios text[] not null default '{}',
-  prazo_tipo text check (prazo_tipo in ('45_dias', 'futura')),
-  previsao_imovel date,
+  situacao text not null default 'pendente' check (situacao in ('pendente', 'resolvido', 'cancelado')),
+  observacao text,
+  cliente_meu boolean,
   envio_email date,
   assinatura_inicial date,
   avaliacao_google boolean,
   bruto_promob numeric(12, 2),
   pedido_fabrica text,
-  assinatura_projeto_final date,
-  prazo_limite_entrega date,
-  medicao_realizada date,
-  limite_projeto_final date,
-  observacao text,
-  situacao text not null default 'pendente' check (situacao in ('pendente', 'resolvido', 'cancelado')),
   pasta_fechada_em timestamptz,
-  criado_por uuid default auth.uid(),
-  criado_em timestamptz not null default now(),
   atualizado_em timestamptz not null default now(),
-  constraint vendas_textos check (coalesce(length(observacao), 0) <= 2000 and length(cliente_nome) <= 160)
+  constraint comercial_textos check (coalesce(length(observacao), 0) <= 2000)
 );
-create index if not exists vendas_mes_idx on public.vendas (mes);
-alter table public.vendas enable row level security;
-drop policy if exists "vendas equipe de vendas" on public.vendas;
-create policy "vendas equipe de vendas" on public.vendas for all using (public.eh_vendas()) with check (public.eh_vendas());
+alter table public.comercial enable row level security;
 
-create table if not exists public.venda_documentos (
+-- Pasta do cliente (comprovantes, financeira aprovada, contrato...): <processo>/pasta/
+create table if not exists public.pasta_documentos (
   id uuid primary key default gen_random_uuid(),
-  venda_id uuid not null references public.vendas on delete cascade,
+  processo_id uuid not null references public.processos on delete cascade,
   categoria text not null check (categoria in ('comprovante_pix', 'financeira_aprovada', 'projeto_inicial', 'contrato_assinado', 'documento_foto')),
   titulo text not null,
-  arquivo_path text not null check (arquivo_path like 'vendas/%'),
+  arquivo_path text not null check (arquivo_path like '%/pasta/%'),
   tipo_mime text,
   criado_em timestamptz not null default now()
 );
-alter table public.venda_documentos enable row level security;
-drop policy if exists "pasta equipe de vendas" on public.venda_documentos;
-create policy "pasta equipe de vendas" on public.venda_documentos for all using (public.eh_vendas()) with check (public.eh_vendas());
+alter table public.pasta_documentos enable row level security;
 
-create or replace function public.carimbar_venda()
+-- Controle interno: campos que a planilha de gestão usa
+alter table public.controle_interno add column if not exists entregue boolean;
+alter table public.controle_interno add column if not exists previsao_entrega date;
+alter table public.controle_interno add column if not exists vistoria_obs text;
+alter table public.controle_interno add column if not exists pos_vistoria text;
+alter table public.controle_interno drop constraint if exists controle_pos_vistoria;
+alter table public.controle_interno add constraint controle_pos_vistoria
+  check (pos_vistoria is null or pos_vistoria in ('aguardando', 'em_andamento', 'concluido'));
+
+-- Políticas: cada um vê o que pode cuidar
+drop policy if exists "perfil proprio" on public.perfis;
+create policy "perfil proprio" on public.perfis for select
+  using (id = auth.uid() or public.ve_todos() or (public.eh_equipe() and papel <> 'cliente'));
+
+drop policy if exists "equipe processos" on public.processos;
+drop policy if exists "equipe ve processos" on public.processos;
+drop policy if exists "equipe cria processos" on public.processos;
+drop policy if exists "equipe edita processos" on public.processos;
+drop policy if exists "equipe apaga processos" on public.processos;
+create policy "equipe ve processos" on public.processos for select
+  using (public.ve_todos() or (public.eh_equipe() and vendedor_id = auth.uid()));
+create policy "equipe cria processos" on public.processos for insert
+  with check (public.eh_equipe() and (public.ve_todos() or vendedor_id = auth.uid()));
+create policy "equipe edita processos" on public.processos for update
+  using (public.ve_todos() or (public.eh_equipe() and vendedor_id = auth.uid()))
+  with check (public.ve_todos() or (public.eh_equipe() and vendedor_id = auth.uid()));
+create policy "equipe apaga processos" on public.processos for delete
+  using ((public.ve_todos() or (public.eh_equipe() and vendedor_id = auth.uid())) and public.tem_permissao('excluir'));
+
+drop policy if exists "equipe documentos" on public.documentos;
+create policy "equipe documentos" on public.documentos for all
+  using (public.pode_gerir(processo_id)) with check (public.pode_gerir(processo_id));
+drop policy if exists "equipe le assinaturas" on public.assinaturas;
+create policy "equipe le assinaturas" on public.assinaturas for select using (public.pode_gerir(processo_id));
+drop policy if exists "equipe cancela assinaturas" on public.assinaturas;
+create policy "equipe cancela assinaturas" on public.assinaturas for update
+  using (public.pode_gerir(processo_id)) with check (public.pode_gerir(processo_id) and status = 'cancelado');
+drop policy if exists "equipe le avisos" on public.notificacoes;
+create policy "equipe le avisos" on public.notificacoes for select using (public.pode_gerir(processo_id));
+drop policy if exists "equipe controle" on public.controle_interno;
+create policy "equipe controle" on public.controle_interno for all
+  using (public.pode_gerir(id)) with check (public.pode_gerir(id));
+drop policy if exists "gestao comercial" on public.comercial;
+create policy "gestao comercial" on public.comercial for all
+  using (public.pode_gerir(id) and public.tem_permissao('gestao'))
+  with check (public.pode_gerir(id) and public.tem_permissao('gestao'));
+drop policy if exists "gestao pasta" on public.pasta_documentos;
+create policy "gestao pasta" on public.pasta_documentos for all
+  using (public.pode_gerir(processo_id) and public.tem_permissao('gestao'))
+  with check (public.pode_gerir(processo_id) and public.tem_permissao('gestao'));
+
+drop policy if exists "cliente le perfil" on public.perfil_cliente;
+create policy "cliente le perfil" on public.perfil_cliente for select using (
+  id = auth.uid() or public.ve_todos()
+  or exists (select 1 from public.perfis pf join public.processos pr on lower(pr.cliente_email) = lower(pf.email)
+             where pf.id = perfil_cliente.id and pr.vendedor_id = auth.uid() and public.eh_equipe()));
+
+drop policy if exists "equipe campanhas" on public.campanhas;
+create policy "equipe campanhas" on public.campanhas for select using (public.eh_equipe() and public.tem_permissao('marketing'));
+drop policy if exists "equipe cria campanhas" on public.campanhas;
+create policy "equipe cria campanhas" on public.campanhas for insert
+  with check (public.eh_equipe() and public.tem_permissao('marketing') and status = 'rascunho');
+drop policy if exists "equipe edita rascunho" on public.campanhas;
+create policy "equipe edita rascunho" on public.campanhas for update
+  using (public.eh_equipe() and public.tem_permissao('marketing') and status = 'rascunho')
+  with check (public.eh_equipe() and public.tem_permissao('marketing') and status = 'rascunho');
+drop policy if exists "equipe apaga rascunho" on public.campanhas;
+create policy "equipe apaga rascunho" on public.campanhas for delete
+  using (public.eh_equipe() and public.tem_permissao('marketing') and status = 'rascunho');
+drop policy if exists "equipe le envios" on public.campanha_envios;
+create policy "equipe le envios" on public.campanha_envios for select using (public.eh_equipe() and public.tem_permissao('marketing'));
+
+-- Arquivos: pasta do processo para quem pode cuidar dele; a subpasta "pasta" só com gestão;
+-- o cliente nunca lê "interno" nem "pasta"
+drop policy if exists "vendas arquivos" on storage.objects;
+drop policy if exists "equipe arquivos" on storage.objects;
+create policy "equipe arquivos" on storage.objects for all
+  using (bucket_id = 'documentos'
+    and public.pode_gerir(case when (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$' then ((storage.foldername(name))[1])::uuid end)
+    and (coalesce((storage.foldername(name))[2], '') <> 'pasta' or public.tem_permissao('gestao')))
+  with check (bucket_id = 'documentos'
+    and public.pode_gerir(case when (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$' then ((storage.foldername(name))[1])::uuid end)
+    and (coalesce((storage.foldername(name))[2], '') <> 'pasta' or public.tem_permissao('gestao')));
+drop policy if exists "cliente le arquivos" on storage.objects;
+create policy "cliente le arquivos" on storage.objects for select
+  using (
+    bucket_id = 'documentos'
+    and coalesce((storage.foldername(name))[2], '') not in ('interno', 'pasta')
+    and public.eh_meu_processo(
+      case when (storage.foldername(name))[1] ~ '^[0-9a-f-]{36}$'
+           then ((storage.foldername(name))[1])::uuid end)
+  );
+
+-- O master (admin) define papel e permissões dos usuários internos
+create or replace function public.definir_acesso(usuario uuid, novo_papel text, novas_permissoes jsonb, novo_nome text default null)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.eh_admin() then raise exception 'Somente o master pode mudar acessos.'; end if;
+  if novo_papel not in ('admin', 'equipe', 'vendedor') then raise exception 'Papel inválido.'; end if;
+  if usuario = auth.uid() and novo_papel <> 'admin' then raise exception 'Você não pode tirar o seu próprio acesso de master.'; end if;
+  if exists (select 1 from public.perfis where id = usuario and papel = 'cliente') then
+    raise exception 'Este usuário é um cliente do portal.';
+  end if;
+  update public.perfis set papel = novo_papel, permissoes = coalesce(novas_permissoes, '{}'::jsonb),
+    nome = coalesce(nullif(novo_nome, ''), nome)
+  where id = usuario;
+end $$;
+revoke execute on function public.definir_acesso(uuid, text, jsonb, text) from anon;
+
+-- O cliente só muda foto, celular, Instagram e preferência de novidades.
+-- Nome, nascimento e endereço são cadastrados pela loja.
+create or replace function public.travar_perfil_cliente()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.eh_equipe() then return new; end if;
+  if tg_op = 'INSERT' then
+    new.nome_preferido := null; new.sobrenome := null; new.nascimento := null; new.cep := null; new.endereco := null;
+    new.numero := null; new.complemento := null; new.bairro := null; new.cidade := null; new.uf := null; new.observacoes := null;
+  else
+    new.nome_preferido := old.nome_preferido; new.sobrenome := old.sobrenome; new.nascimento := old.nascimento;
+    new.cep := old.cep; new.endereco := old.endereco; new.numero := old.numero; new.complemento := old.complemento;
+    new.bairro := old.bairro; new.cidade := old.cidade; new.uf := old.uf; new.observacoes := old.observacoes;
+  end if;
+  return new;
+end $$;
+-- "a_travar" roda antes do gatilho "sincronizar" (ordem alfabética)
+drop trigger if exists travar on public.perfil_cliente;
+drop trigger if exists a_travar on public.perfil_cliente;
+create trigger a_travar before insert or update on public.perfil_cliente
+  for each row execute function public.travar_perfil_cliente();
+
+-- Troca de e-mail confirmada: o login novo continua ligado aos processos do cliente
+create or replace function public.email_trocado()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if lower(new.email) is distinct from lower(old.email) then
+    update public.perfis set email = new.email where id = new.id;
+    update public.processos set cliente_email = lower(new.email) where lower(cliente_email) = lower(old.email);
+  end if;
+  return new;
+end $$;
+drop trigger if exists ao_trocar_email on auth.users;
+create trigger ao_trocar_email after update of email on auth.users
+  for each row execute function public.email_trocado();
+
+create or replace function public.carimbar_comercial()
 returns trigger language plpgsql set search_path = public as $$
 begin
   new.atualizado_em := now();
   return new;
 end $$;
-drop trigger if exists carimbar on public.vendas;
-create trigger carimbar before update on public.vendas for each row execute function public.carimbar_venda();
-drop trigger if exists auditoria on public.vendas;
-create trigger auditoria after insert or update or delete on public.vendas for each row execute function public.registrar_atividade();
-drop trigger if exists auditoria on public.venda_documentos;
-create trigger auditoria after insert or update or delete on public.venda_documentos for each row execute function public.registrar_atividade();
+drop trigger if exists carimbar on public.comercial;
+create trigger carimbar before update on public.comercial for each row execute function public.carimbar_comercial();
+drop trigger if exists auditoria on public.comercial;
+create trigger auditoria after insert or update or delete on public.comercial for each row execute function public.registrar_atividade();
+drop trigger if exists auditoria on public.pasta_documentos;
+create trigger auditoria after insert or update or delete on public.pasta_documentos for each row execute function public.registrar_atividade();

@@ -11,23 +11,28 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   Para o cliente, a linha do tempo começa em **Compra** (data da venda) e a solução financeira não é etapa:
   com pendência, aparece um lembrete no topo (`linhaDoTempo(p, a, { cliente: true })`).
   Abas do cliente, nesta ordem: Meu perfil, Meu processo, Contrato, Projeto inicial, Renders, Projeto final,
-  Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (endereços e links em `src/lib/contato.js`).
-  Meu perfil: nome, sobrenome, Instagram, endereço de entrega dos móveis. Garantia de 10 anos na madeira +
-  card "Padrão Airam" (dobradiças e corrediças ocultas com amortecimento; não é garantia).
+  Quem somos (texto do site), Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (`src/lib/contato.js`).
+  Topo com o logo no centro, fixo ao rolar. Cliente baixa arquivos e renders (um a um ou .zip).
+  Meu perfil: o cliente só muda foto, e-mail, celular, Instagram e senha; nome, CPF, nascimento e endereço são só leitura
+  (gatilho `travar_perfil_cliente` no banco). Garantia de 10 anos na madeira +
+  card "Padrão Airam" só tipográfico (dobradiças e corrediças ocultas com amortecimento; não é garantia).
   O fundo do topo alterna entre os renders do cliente (ou fotos da loja). Ao avançar de fase, aparece a transição.
-- **Papéis**: admin, equipe, vendedor, cliente (`perfis.papel`). `eh_equipe()` = admin/equipe/vendedor;
-  `eh_vendas()` = admin/vendedor.
-- **Equipe**: área com seções.
-  - **Processos**: Geral (resumo por fase + lista com filtros) e pastas Financeiro, Medição, Conferência,
-    Assinatura do projeto final, Entregas, Vistoria, Assistência técnica (`src/lib/pastas.js`).
-  - **Marketing**: E-mail marketing e Aniversários (novas ferramentas entram como novas pastas).
-  - **Gestão de clientes** (só admin e vendedor; `src/components/GestaoClientes.jsx`, `src/lib/vendas.js`):
-    Controle mensal (tabela `vendas`, igual à planilha FEEDBACK_VENDAS: resumo, ranking por vendedor e captação,
-    "O que falta", planilha no modelo `src/assets/modelos/feedback-vendas.xlsx` e PDF), ficha da venda com
-    financeiras/formas da Airam, **Fazer capa** (preenche `capa-envelope.xlsx`, frente e verso, em `src/lib/planilhas.js`)
-    e **Controle de pastas** (`venda_documentos`, arquivos em `documentos/vendas/<id>/`; "Fechar venda" junta tudo
-    num PDF com pdf-lib em `src/lib/pastaPdf.js`). Os modelos .xlsx são preenchidos célula a célula (`src/lib/xlsx.js`)
-    sem mudar o desenho.
+- **Papéis**: admin (= master), equipe, vendedor, cliente (`perfis.papel`) + `perfis.permissoes` (gestao, processos,
+  marketing, ver_todos, excluir; padrões em `src/lib/permissoes.js` = `tem_permissao()` no banco). `eh_equipe()` = interno;
+  `ve_todos()`; `pode_gerir(pid)`. Vendedor sem `ver_todos` vê só processos com `vendedor_id` = ele (RLS).
+  O master muda acessos na seção **Usuários** (`definir_acesso`, função `criar-usuario`).
+- **Equipe** (ordem da barra): Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
+  Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
+  - **Gestão de clientes** (`src/components/GestaoClientes.jsx`, regras em `src/lib/gestao.js`): **sistema único** — o cadastro
+    da gestão é o próprio processo do portal (`processos`) + `comercial` (1:1, só gestão) + `controle_interno`.
+    Abas como a planilha 001 GESTÃO DE CLIENTES: Clientes, Futuros, Conferências, Entrega e montagem, Assistência técnica,
+    Montados, Resultados (resumo/ranking, planilha `feedback-vendas.xlsx` e PDF por período) e Controle de pastas
+    (`pasta_documentos`, arquivos em `documentos/<pid>/pasta/`; "Fechar venda" → PDF com pdf-lib em `src/lib/pastaPdf.js`).
+    Planilha com filtro/ordenação por coluna e período de qualquer dia (`PlanilhaFiltravel.jsx`; cartões no celular).
+    Importa a aba 01 CLIENTES (`registrosDaPlanilha`, `lerPlanilha` em `src/lib/xlsx.js`). **Fazer capa** preenche
+    `capa-envelope.xlsx` (`src/lib/planilhas.js`, via `paraVenda`). Excluir cliente pede digitar EXCLUIR (`ConfirmarExclusao.jsx`).
+  - **Processos**: Geral e pastas Financeiro, Medição, Conferência, Assinatura do projeto final, Entregas, Vistoria,
+    Assistência técnica (`src/lib/pastas.js`).
   - No processo: Dados e prazos, Anexos (cliente vê), Arquivos internos (só a loja: medição, Promob vendido,
     documentos do cliente, ficha cadastral), Assinaturas, Controle interno, Avisos, Acesso do cliente.
   - **Controle interno** (`controle_interno`, só equipe): datas reais de cada passo, liberador, montador,

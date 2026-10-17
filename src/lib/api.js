@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { criarDadosDemo, SENHA_DEMO } from './demo.js'
 import { calcularTipoPrazo, cpfValido, telefoneNumeros, ehInterna } from './constants.js'
 import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
+import { temPermissao } from './permissoes.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -19,8 +20,8 @@ const TAMANHO_MAXIMO = 50 * 1024 * 1024
 const ERRO_LOGIN = 'Dados de acesso ou senha incorretos.'
 
 // campos do "Meu perfil" que o próprio cliente edita
-const CAMPOS_PERFIL = ['nome_preferido', 'sobrenome', 'telefone', 'telefone_2', 'instagram', 'nascimento', 'cep', 'endereco', 'numero',
-  'complemento', 'bairro', 'cidade', 'uf', 'receber_novidades', 'foto_path']
+// (nome, nascimento e endereço são cadastrados pela loja; o banco também trava esses campos)
+const CAMPOS_PERFIL = ['telefone', 'instagram', 'receber_novidades', 'foto_path']
 function limparPerfil(d) {
   const out = {}
   for (const k of CAMPOS_PERFIL) if (k in d) out[k] = d[k] === '' ? null : d[k]
@@ -49,7 +50,7 @@ const CAMPOS = [
   'projeto_inicial_enviado', 'data_projeto_inicial',
   'medicao_concluida', 'data_conferencia', 'conferencia_concluida', 'data_assinatura_projeto',
   'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente', 'notificar',
-  'cliente_nascimento', 'aceita_marketing', 'numero_contrato',
+  'cliente_nascimento', 'aceita_marketing', 'numero_contrato', 'vendedor_id', 'cidade', 'bairro', 'cep', 'tipo_prazo',
 ]
 function limpar(p) {
   const out = {}
@@ -151,9 +152,12 @@ const supabaseApi = {
   },
   async excluirProcesso(id) {
     const { data: docs } = await sb.from('documentos').select('arquivo_path').eq('processo_id', id)
-    if (docs?.length) await sb.storage.from('documentos').remove(docs.map((d) => d.arquivo_path))
-    const { error } = await sb.from('processos').delete().eq('id', id)
+    const { data: pasta } = await sb.from('pasta_documentos').select('arquivo_path').eq('processo_id', id)
+    const { data, error } = await sb.from('processos').delete().eq('id', id).select('id')
     if (error) throw error
+    if (!data?.length) throw new Error('Você não tem permissão para excluir clientes. Peça ao master.')
+    const arquivos = [...(docs || []), ...(pasta || [])].map((d) => d.arquivo_path)
+    if (arquivos.length) await sb.storage.from('documentos').remove(arquivos)
   },
   async enviarDocumento(processoId, { titulo, categoria }, arquivo) {
     validarArquivo(arquivo)
@@ -184,55 +188,102 @@ const supabaseApi = {
   async liberarAcesso(processoId) {
     return chamarFuncao('liberar-acesso', { processo_id: processoId })
   },
-  // ---------------- Gestão de clientes (vendedores)
-  async listarVendas(mes) {
-    let q = sb.from('vendas').select('*, venda_documentos(id, categoria)').order('data_venda', { ascending: false, nullsFirst: false })
-    if (mes) q = q.eq('mes', mes)
-    const { data, error } = await q
+  // ---------------- Gestão de clientes (cadastro único = processo do portal)
+  async listarGestao() {
+    const { data, error } = await sb.from('processos').select(SELECT_GESTAO).order('data_venda', { ascending: false })
+    if (error) throw error
+    return data.map(normalizarGestao)
+  },
+  async clienteGestao(id) {
+    const { data, error } = await sb.from('processos').select(SELECT_GESTAO).eq('id', id).single()
+    if (error) throw error
+    return normalizarGestao(data)
+  },
+  async salvarClienteGestao({ processo, comercial, controle }) {
+    const p = await this.salvarProcesso(processo)
+    if (comercial) {
+      const { error } = await sb.from('comercial').upsert(limparComercial({ ...comercial, id: p.id }))
+      if (error) throw new Error('Não foi possível salvar os dados comerciais: ' + error.message)
+    }
+    if (controle) await this.salvarControleInterno(p.id, controle)
+    return this.clienteGestao(p.id)
+  },
+  // importação da planilha de gestão: pula códigos que já existem
+  async importarGestao(registros, aoAvancar) {
+    const { data: existentes, error: e0 } = await sb.from('processos').select('codigo')
+    if (e0) throw e0
+    const ja = new Set(existentes.map((x) => x.codigo))
+    const novos = registros.filter((r) => !ja.has(r.processo.codigo))
+    let feitos = 0
+    for (let i = 0; i < novos.length; i += 50) {
+      const lote = novos.slice(i, i + 50)
+      const { data, error } = await sb.from('processos').insert(lote.map((r) => limpar(r.processo))).select('id, codigo')
+      if (error) throw new Error(`Erro ao importar (linhas ${i + 1}–${i + lote.length}): ${error.message}`)
+      const id = Object.fromEntries(data.map((x) => [x.codigo, x.id]))
+      const com = lote.map((r) => limparComercial({ ...r.comercial, id: id[r.processo.codigo] }))
+      const ctl = lote.map((r) => limparControle({ ...r.controle, id: id[r.processo.codigo] }))
+      const a = await sb.from('comercial').upsert(com)
+      if (a.error) throw new Error('Erro nos dados comerciais: ' + a.error.message)
+      const b = await sb.from('controle_interno').upsert(ctl)
+      if (b.error) throw new Error('Erro no controle interno: ' + b.error.message)
+      feitos += lote.length
+      aoAvancar?.(feitos, novos.length)
+    }
+    return { importados: feitos, pulados: registros.length - novos.length }
+  },
+  async listarVendedores() {
+    const { data, error } = await sb.from('perfis').select('id, nome, email, papel').in('papel', ['vendedor', 'admin']).order('nome')
     if (error) throw error
     return data
   },
-  async salvarVenda(v) {
-    const { data, error } = await sb.from('vendas').upsert(limparVenda(v)).select('*, venda_documentos(id, categoria)').single()
-    if (error) throw new Error('Não foi possível salvar: ' + error.message)
-    return data
-  },
-  async excluirVenda(id) {
-    const { data: docs } = await sb.from('venda_documentos').select('arquivo_path').eq('venda_id', id)
-    if (docs?.length) await sb.storage.from('documentos').remove(docs.map((d) => d.arquivo_path))
-    const { error } = await sb.from('vendas').delete().eq('id', id)
-    if (error) throw error
-  },
-  async documentosVenda(vendaId) {
-    const { data, error } = await sb.from('venda_documentos').select('*').eq('venda_id', vendaId).order('criado_em')
+  async documentosPasta(processoId) {
+    const { data, error } = await sb.from('pasta_documentos').select('*').eq('processo_id', processoId).order('criado_em')
     if (error) throw error
     return data
   },
-  async enviarDocumentoVenda(vendaId, categoria, arquivo) {
+  async enviarDocumentoPasta(processoId, categoria, arquivo) {
     validarArquivoPasta(arquivo)
     const seguro = arquivo.name.normalize('NFD').replace(/[^\w.-]+/g, '_')
-    const caminho = `vendas/${vendaId}/${Date.now()}-${seguro}`
+    const caminho = `${processoId}/pasta/${Date.now()}-${seguro}`
     const up = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: arquivo.type })
     if (up.error) throw up.error
-    const { error } = await sb.from('venda_documentos').insert({ venda_id: vendaId, categoria, titulo: arquivo.name, arquivo_path: caminho, tipo_mime: arquivo.type })
+    const { error } = await sb.from('pasta_documentos').insert({ processo_id: processoId, categoria, titulo: arquivo.name, arquivo_path: caminho, tipo_mime: arquivo.type })
     if (error) throw error
   },
-  async excluirDocumentoVenda(doc) {
+  async excluirDocumentoPasta(doc) {
     await sb.storage.from('documentos').remove([doc.arquivo_path])
-    const { error } = await sb.from('venda_documentos').delete().eq('id', doc.id)
+    const { error } = await sb.from('pasta_documentos').delete().eq('id', doc.id)
     if (error) throw error
   },
-  async urlDocumentoVenda(doc) {
+  async urlDocumentoPasta(doc) {
     const { data, error } = await sb.storage.from('documentos').createSignedUrl(doc.arquivo_path, 600)
     if (error) throw error
     return data.signedUrl
   },
-  async arquivoDocumentoVenda(doc) {
-    return (await fetch(await this.urlDocumentoVenda(doc))).arrayBuffer()
+  async arquivoDocumentoPasta(doc) {
+    return (await fetch(await this.urlDocumentoPasta(doc))).arrayBuffer()
   },
-  async fecharPasta(vendaId) {
-    const { error } = await sb.from('vendas').update({ pasta_fechada_em: new Date().toISOString() }).eq('id', vendaId)
+  async fecharPasta(processoId) {
+    const { error } = await sb.from('comercial').upsert({ id: processoId, pasta_fechada_em: new Date().toISOString() })
     if (error) throw error
+  },
+  // ---------------- Usuários internos (master)
+  async listarUsuarios() {
+    const { data, error } = await sb.from('perfis').select('id, email, nome, papel, permissoes, criado_em').neq('papel', 'cliente').order('nome')
+    if (error) throw error
+    return data
+  },
+  async definirAcesso(id, papel, permissoes, nome) {
+    const { error } = await sb.rpc('definir_acesso', { usuario: id, novo_papel: papel, novas_permissoes: permissoes, novo_nome: nome || null })
+    if (error) throw new Error(error.message)
+  },
+  async criarUsuario(dados) {
+    return chamarFuncao('criar-usuario', dados)
+  },
+  async trocarEmail(novo) {
+    const { error } = await sb.auth.updateUser({ email: novo.trim().toLowerCase() })
+    if (error) throw new Error('Não foi possível trocar o e-mail: ' + error.message)
+    return 'Enviamos um link de confirmação para o novo e-mail. A troca vale depois que você confirmar.'
   },
   async enviarParaAssinatura(processoId, documentoId, tipo) {
     return chamarFuncao('zapsign-enviar', { processo_id: processoId, documento_id: documentoId, tipo })
@@ -319,7 +370,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v16'
+const CHAVE_DEMO = 'portal-airam-demo-v17'
 let memoria = null
 const ouvintes = new Set()
 
@@ -339,7 +390,16 @@ function gravar() {
 }
 const avisar = () => ouvintes.forEach((cb) => cb(db().sessao))
 const novoId = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2)
-const comTipo = (p) => ({ ...p, tipo_prazo: calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao) })
+const comTipo = (p) => ({ ...p, tipo_prazo: calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao) || p.tipo_prazo || 'normal' })
+// quem está logado na demonstração e o que pode ver (mesmas regras do banco)
+const contaAtual = (d) => d.contas.find((c) => c.email === d.sessao?.email)
+function visiveis(d) {
+  const conta = contaAtual(d)
+  if (!conta) return []
+  if (conta.papel === 'cliente') return d.processos.filter((p) => p.cliente_email === conta.email)
+  if (temPermissao(conta, 'ver_todos')) return d.processos
+  return d.processos.filter((p) => p.vendedor_id === conta.email)
+}
 
 // mesma regra do gatilho marcar_datas_etapas: guarda o dia em que cada etapa foi concluída
 function marcarDatas(a, n) {
@@ -370,6 +430,7 @@ export const CAMPOS_CONTROLE = [
   'pendencia_resolvida_em', 'email_enviado_em', 'inicial_assinado_em', 'medido_em', 'liberador', 'liberador_recebeu_em',
   'conferido_em', 'conferencia_enviada_em', 'pdf_recebido_em', 'projeto_final_assinado_em', 'entregue_em',
   'montagem_inicio_em', 'montador', 'tem_att', 'vistoria_em', 'assistencia_retorno_max', 'assistencia_concluida_em', 'observacoes',
+  'entregue', 'previsao_entrega', 'vistoria_obs', 'pos_vistoria',
 ]
 function limparControle(c) {
   const out = { id: c.id }
@@ -377,34 +438,42 @@ function limparControle(c) {
   return out
 }
 
-// Gestão de clientes: campos da venda que o vendedor edita
-const CAMPOS_VENDA = [
-  'mes', 'codigo', 'cliente_nome', 'vendedor', 'captacao', 'loja', 'data_venda', 'financeira', 'forma_pagamento',
-  'valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'vencimento_primeira', 'meios', 'prazo_tipo',
-  'previsao_imovel', 'envio_email', 'assinatura_inicial', 'avaliacao_google', 'bruto_promob', 'pedido_fabrica',
-  'assinatura_projeto_final', 'prazo_limite_entrega', 'medicao_realizada', 'limite_projeto_final', 'observacao', 'situacao',
+// Gestão de clientes: dados comerciais (internos) da venda
+const CAMPOS_COMERCIAL = [
+  'vendedor_nome', 'captacao', 'loja', 'financeira', 'forma_pagamento', 'valor_venda', 'valor_deflacionado', 'valor_entrada',
+  'valor_parcela', 'vencimento_primeira', 'meios', 'situacao', 'observacao', 'cliente_meu', 'envio_email', 'assinatura_inicial',
+  'avaliacao_google', 'bruto_promob', 'pedido_fabrica',
 ]
-const NUMEROS_VENDA = ['valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'bruto_promob']
-function limparVenda(v) {
-  const out = v.id ? { id: v.id } : {}
-  for (const k of CAMPOS_VENDA) {
-    let x = v[k]
+const NUMEROS_COMERCIAL = ['valor_venda', 'valor_deflacionado', 'valor_entrada', 'valor_parcela', 'bruto_promob']
+export function numeroBR(x) {
+  if (x === '' || x === null || x === undefined) return null
+  if (typeof x === 'number') return Number.isFinite(x) ? x : null
+  // aceita 1234.56 (campo numérico) e 1.234,56 (digitado no formato brasileiro)
+  const t = String(x).trim().replace(/^R\$\s*/, '')
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
+  return Number.isFinite(n) ? n : null
+}
+function limparComercial(c) {
+  const out = { id: c.id }
+  for (const k of CAMPOS_COMERCIAL) {
+    if (!(k in c)) continue
+    let x = c[k]
     if (typeof x === 'string') x = x.trim()
     if (x === '' || x === undefined) x = null
-    if (NUMEROS_VENDA.includes(k) && x !== null) {
-      // aceita 1234.56 (campo numérico) e 1.234,56 (digitado no formato brasileiro)
-      const t = String(x)
-      x = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t)
-      if (!Number.isFinite(x)) x = null
-    }
+    if (NUMEROS_COMERCIAL.includes(k)) x = numeroBR(x)
     out[k] = x
   }
-  out.meios = Array.isArray(v.meios) ? v.meios : []
-  if (!out.mes && out.data_venda) out.mes = out.data_venda.slice(0, 7)
-  if (!out.cliente_nome) throw new Error('Informe o nome do cliente.')
-  if (!out.mes) throw new Error('Informe a data da venda ou o mês do controle.')
+  if ('meios' in c) out.meios = Array.isArray(c.meios) ? c.meios : []
+  if (!out.situacao && 'situacao' in c) out.situacao = 'pendente'
   return out
 }
+// linha da gestão: processo + comercial + controle interno + pasta
+function normalizarGestao(r) {
+  const um = (x) => (Array.isArray(x) ? x[0] : x) || {}
+  const { comercial, controle_interno, pasta_documentos, ...p } = r
+  return { ...p, comercial: um(comercial), controle: um(controle_interno), pasta: pasta_documentos || [] }
+}
+const SELECT_GESTAO = '*, assinaturas(id, tipo, status, assinado_em), comercial(*), controle_interno(*), pasta_documentos(id, categoria)'
 const TIPOS_PASTA = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 function validarArquivoPasta(arquivo) {
   if (!TIPOS_PASTA.includes(arquivo.type)) throw new Error('Envie PDF ou foto (JPG, PNG ou WEBP).')
@@ -476,18 +545,16 @@ const demoApi = {
   async perfil() {
     const d = db()
     const conta = d.contas.find((c) => c.email === d.sessao?.email)
-    return conta ? { email: conta.email, nome: conta.nome, papel: conta.papel, precisa_trocar_senha: conta.precisa_trocar_senha } : null
+    return conta ? { id: conta.email, email: conta.email, nome: conta.nome, papel: conta.papel, permissoes: conta.permissoes || {}, precisa_trocar_senha: conta.precisa_trocar_senha } : null
   },
   async listarProcessos() {
     const d = db()
-    const conta = d.contas.find((c) => c.email === d.sessao?.email)
-    const lista = conta?.papel === 'cliente' ? d.processos.filter((p) => p.cliente_email === conta.email) : d.processos
-    return lista.map((p) => ({ ...comTipo(p), assinaturas: d.assinaturas.filter((a) => a.processo_id === p.id) }))
+    return visiveis(d).map((p) => ({ ...comTipo(p), assinaturas: d.assinaturas.filter((a) => a.processo_id === p.id) }))
   },
   async processo(id) {
     const d = db()
-    const conta = d.contas.find((c) => c.email === d.sessao?.email)
-    const p = d.processos.find((x) => x.id === id)
+    const conta = contaAtual(d)
+    const p = visiveis(d).find((x) => x.id === id)
     if (!p) throw new Error('Processo não encontrado')
     const cliente = conta?.papel === 'cliente'
     return {
@@ -522,6 +589,10 @@ const demoApi = {
   },
   async excluirProcesso(id) {
     const d = db()
+    if (!temPermissao(contaAtual(d), 'excluir')) throw new Error('Você não tem permissão para excluir clientes. Peça ao master.')
+    if (d.comercial) delete d.comercial[id]
+    if (d.controles) delete d.controles[id]
+    d.pastaDocs = (d.pastaDocs || []).filter((x) => x.processo_id !== id)
     d.processos = d.processos.filter((x) => x.id !== id)
     d.documentos = d.documentos.filter((x) => x.processo_id !== id)
     d.assinaturas = d.assinaturas.filter((x) => x.processo_id !== id)
@@ -562,35 +633,66 @@ const demoApi = {
   async urlDocumento(doc) {
     return doc.arquivo_path
   },
-  // ---------------- Gestão de clientes (vendedores)
-  async listarVendas(mes) {
+  // ---------------- Gestão de clientes (cadastro único = processo do portal)
+  async listarGestao() {
     const d = db()
-    const docs = d.vendaDocs || []
-    return (d.vendas || [])
-      .filter((v) => !mes || v.mes === mes)
-      .map((v) => ({ ...v, venda_documentos: docs.filter((x) => x.venda_id === v.id).map(({ id, categoria }) => ({ id, categoria })) }))
+    const conta = contaAtual(d)
+    const gestao = temPermissao(conta, 'gestao')
+    return visiveis(d)
+      .map((p) => ({
+        ...comTipo(p),
+        assinaturas: d.assinaturas.filter((a) => a.processo_id === p.id),
+        comercial: gestao ? (d.comercial || {})[p.id] || {} : {},
+        controle: (d.controles || {})[p.id] || {},
+        pasta: (d.pastaDocs || []).filter((x) => x.processo_id === p.id).map(({ id, categoria }) => ({ id, categoria })),
+      }))
       .sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || ''))
   },
-  async salvarVenda(v) {
+  async clienteGestao(id) {
+    const r = (await this.listarGestao()).find((x) => x.id === id)
+    if (!r) throw new Error('Cliente não encontrado')
+    return r
+  },
+  async salvarClienteGestao({ processo, comercial, controle }) {
     const d = db()
-    d.vendas = d.vendas || []
-    const limpo = limparVenda(v)
-    if (limpo.id) d.vendas = d.vendas.map((x) => (x.id === limpo.id ? { ...x, ...limpo, atualizado_em: new Date().toISOString() } : x))
-    else d.vendas.unshift({ ...limpo, id: novoId(), pasta_fechada_em: null, criado_em: new Date().toISOString() })
+    const conta = contaAtual(d)
+    if (!temPermissao(conta, 'ver_todos') && processo.vendedor_id !== conta.email) throw new Error('Você só pode cadastrar vendas suas.')
+    const p = await this.salvarProcesso(processo)
+    if (comercial) {
+      d.comercial = d.comercial || {}
+      d.comercial[p.id] = { ...(d.comercial[p.id] || {}), ...limparComercial({ ...comercial, id: p.id }), atualizado_em: new Date().toISOString() }
+    }
+    if (controle) await this.salvarControleInterno(p.id, controle)
     gravar()
-    const id = limpo.id || d.vendas[0].id
-    return (await this.listarVendas()).find((x) => x.id === id)
+    return this.clienteGestao(p.id)
   },
-  async excluirVenda(id) {
+  async importarGestao(registros, aoAvancar) {
     const d = db()
-    d.vendas = (d.vendas || []).filter((x) => x.id !== id)
-    d.vendaDocs = (d.vendaDocs || []).filter((x) => x.venda_id !== id)
+    const conta = contaAtual(d)
+    if (!temPermissao(conta, 'ver_todos')) throw new Error('Só quem vê todos os clientes pode importar a planilha.')
+    const ja = new Set(d.processos.map((x) => x.codigo))
+    const novos = registros.filter((r) => !ja.has(r.processo.codigo))
+    d.comercial = d.comercial || {}
+    d.controles = d.controles || {}
+    for (const r of novos) {
+      const p = { ...limpar(r.processo), id: novoId(), criado_em: new Date().toISOString() }
+      p.tipo_prazo = calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao)
+      if (p.entrega_concluida) p.montagem_concluida_em = p.data_entrega_prevista || p.data_venda
+      d.processos.push(p)
+      d.comercial[p.id] = limparComercial({ ...r.comercial, id: p.id })
+      d.controles[p.id] = limparControle({ ...r.controle, id: p.id })
+    }
     gravar()
+    aoAvancar?.(novos.length, novos.length)
+    return { importados: novos.length, pulados: registros.length - novos.length }
   },
-  async documentosVenda(vendaId) {
-    return (db().vendaDocs || []).filter((x) => x.venda_id === vendaId)
+  async listarVendedores() {
+    return db().contas.filter((c) => ['vendedor', 'admin'].includes(c.papel)).map((c) => ({ id: c.email, nome: c.nome, email: c.email, papel: c.papel }))
   },
-  async enviarDocumentoVenda(vendaId, categoria, arquivo) {
+  async documentosPasta(processoId) {
+    return (db().pastaDocs || []).filter((x) => x.processo_id === processoId)
+  },
+  async enviarDocumentoPasta(processoId, categoria, arquivo) {
     validarArquivoPasta(arquivo)
     const dataUrl = await new Promise((ok, erro) => {
       const r = new FileReader()
@@ -599,30 +701,67 @@ const demoApi = {
       r.readAsDataURL(arquivo)
     })
     const d = db()
-    d.vendaDocs = d.vendaDocs || []
-    d.vendaDocs.push({ id: novoId(), venda_id: vendaId, categoria, titulo: arquivo.name, arquivo_path: dataUrl, tipo_mime: arquivo.type, criado_em: new Date().toISOString() })
+    d.pastaDocs = d.pastaDocs || []
+    d.pastaDocs.push({ id: novoId(), processo_id: processoId, categoria, titulo: arquivo.name, arquivo_path: dataUrl, tipo_mime: arquivo.type, criado_em: new Date().toISOString() })
     gravar()
   },
-  async excluirDocumentoVenda(doc) {
+  async excluirDocumentoPasta(doc) {
     const d = db()
-    d.vendaDocs = (d.vendaDocs || []).filter((x) => x.id !== doc.id)
+    d.pastaDocs = (d.pastaDocs || []).filter((x) => x.id !== doc.id)
     gravar()
   },
-  async urlDocumentoVenda(doc) {
+  async urlDocumentoPasta(doc) {
     return doc.arquivo_path
   },
-  async arquivoDocumentoVenda(doc) {
+  async arquivoDocumentoPasta(doc) {
     return (await fetch(doc.arquivo_path)).arrayBuffer()
   },
-  async fecharPasta(vendaId) {
+  async fecharPasta(processoId) {
     const d = db()
-    const v = (d.vendas || []).find((x) => x.id === vendaId)
-    if (v) v.pasta_fechada_em = new Date().toISOString()
+    d.comercial = d.comercial || {}
+    d.comercial[processoId] = { ...(d.comercial[processoId] || {}), pasta_fechada_em: new Date().toISOString() }
     gravar()
+  },
+  // ---------------- Usuários internos (master)
+  async listarUsuarios() {
+    return db().contas.filter((c) => c.papel !== 'cliente').map((c) => ({ id: c.email, email: c.email, nome: c.nome, papel: c.papel, permissoes: c.permissoes || {} }))
+  },
+  async definirAcesso(id, papel, permissoes, nome) {
+    const d = db()
+    if (contaAtual(d)?.papel !== 'admin') throw new Error('Somente o master pode mudar acessos.')
+    if (id === d.sessao.email && papel !== 'admin') throw new Error('Você não pode tirar o seu próprio acesso de master.')
+    const c = d.contas.find((x) => x.email === id)
+    Object.assign(c, { papel, permissoes: permissoes || {}, nome: nome || c.nome })
+    gravar()
+  },
+  async criarUsuario({ email, nome, papel, permissoes }) {
+    const d = db()
+    if (contaAtual(d)?.papel !== 'admin') throw new Error('Somente o master cria usuários.')
+    const e = String(email || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('E-mail inválido.')
+    if (d.contas.some((c) => c.email === e)) throw new Error('Este e-mail já tem acesso.')
+    const senha = 'Airam' + Math.floor(1000 + Math.random() * 9000)
+    d.contas.push({ email: e, nome, papel, permissoes: permissoes || {}, senha, precisa_trocar_senha: true })
+    gravar()
+    return { id: e, senha }
+  },
+  async trocarEmail(novo) {
+    const d = db()
+    const e = String(novo || '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('E-mail inválido.')
+    if (d.contas.some((c) => c.email === e)) throw new Error('Este e-mail já está em uso.')
+    const antigo = d.sessao.email
+    d.contas.find((c) => c.email === antigo).email = e
+    d.processos.filter((p) => p.cliente_email === antigo).forEach((p) => (p.cliente_email = e))
+    if (d.perfisCliente?.[antigo]) { d.perfisCliente[e] = d.perfisCliente[antigo]; delete d.perfisCliente[antigo] }
+    d.sessao.email = e
+    gravar()
+    return 'E-mail trocado. (No portal real, chega um link de confirmação no novo e-mail.)'
   },
   async liberarAcesso(processoId) {
     const d = db()
     const p = d.processos.find((x) => x.id === processoId)
+    if (!p.cliente_email) throw new Error('Cadastre o e-mail do cliente antes de liberar o acesso.')
     const senha = 'Airam' + Math.floor(1000 + Math.random() * 9000)
     const existente = d.contas.find((c) => c.email === p.cliente_email)
     if (existente && existente.papel !== 'cliente')

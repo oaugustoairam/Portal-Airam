@@ -4,7 +4,7 @@
 import modeloCapa from '../assets/modelos/capa-envelope.xlsx?base64'
 import modeloFeedback from '../assets/modelos/feedback-vendas.xlsx?base64'
 import { preencherModelo, serialExcel } from './xlsx.js'
-import { financeira, nomeMes } from './vendas.js'
+import { financeira } from './vendas.js'
 
 const FRENTE = 'xl/worksheets/sheet1.xml'
 const VERSO = 'xl/worksheets/sheet2.xml'
@@ -47,8 +47,8 @@ export function gerarCapa(v) {
 
 export const SITUACAO_PLANILHA = { pendente: 'PENDENTE', resolvido: 'RESOLVIDO', cancelado: 'CANCELADO' }
 
-// Relação de clientes do mês (até 223 vendas, como o modelo)
-export function gerarPlanilhaMes(vendas, mes) {
+// Relação de clientes do período (até 223 vendas, como o modelo). aba: nome curto da aba (até 31 letras)
+export function gerarPlanilhaVendas(vendas, { titulo, aba }) {
   const linhas = {}
   vendas.slice(0, 223).forEach((v, i) => {
     const r = 4 + i
@@ -63,8 +63,8 @@ export function gerarPlanilhaMes(vendas, mes) {
   })
   // o modelo deixa as linhas 4 a 226 escondidas: mostra só as que têm venda
   const mostrar = vendas.slice(0, 223).map((_, i) => [FRENTE, `<row r="${4 + i}" ht="21.75" hidden="1" customHeight="1">`, `<row r="${4 + i}" ht="21.75" customHeight="1">`])
-  const titulo = nomeMes(mes).toUpperCase()
-  const aba = nomeMes(mes, true)
+  titulo = titulo.toUpperCase()
+  aba = aba.replace(/[\\/?*[\]:']/g, '-').slice(0, 31)
   return preencherModelo(
     modeloFeedback,
     { [FRENTE]: { A1: `RELAÇÃO DE CLIENTES — ${titulo}`, ...linhas }, [VERSO]: { A1: `RESUMO EXECUTIVO — ${titulo}` } },

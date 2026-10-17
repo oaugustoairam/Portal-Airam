@@ -1,6 +1,6 @@
 // Envia uma campanha de e-mail marketing para os clientes escolhidos pela equipe.
 // Respeita quem pediu para não receber (aceita_marketing = false) e não repete e-mails.
-import { cors, resposta, clienteServidor, exigirEquipe } from '../_shared/comum.ts'
+import { cors, resposta, clienteServidor, exigirEquipe, regraDoUsuario } from '../_shared/comum.ts'
 import { htmlCampanha, tokenDescadastro } from '../_shared/email.ts'
 
 const LOTE = 100 // limite do envio em lote da Resend
@@ -10,6 +10,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const equipe = await exigirEquipe(req)
   if (!equipe) return resposta({ erro: 'Acesso negado' }, 403)
+  if (!(await regraDoUsuario(req, 'tem_permissao', { chave: 'marketing' }))) return resposta({ erro: 'Sem permissão para marketing.' }, 403)
   const chave = Deno.env.get('RESEND_API_KEY')
   if (!chave) return resposta({ erro: 'RESEND_API_KEY não configurada no servidor.' }, 500)
   if (!Deno.env.get('MARKETING_SECRET')) return resposta({ erro: 'MARKETING_SECRET não configurado no servidor.' }, 500)
