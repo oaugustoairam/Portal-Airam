@@ -7,7 +7,10 @@ export default function ClienteHome() {
   const [processos, setProcessos] = useState(null)
   const [aberto, setAberto] = useState(null)
 
-  const abrir = async (id) => setAberto(await api.processo(id))
+  const abrir = async (id, topo = true) => {
+    setAberto(await api.processo(id))
+    if (topo) window.scrollTo(0, 0)
+  }
 
   useEffect(() => {
     api.listarProcessos().then((lista) => {
@@ -32,7 +35,7 @@ export default function ClienteHome() {
         {processos.length > 1 && (
           <button className="btn btn-leve voltar" onClick={() => setAberto(null)}>← Meus processos</button>
         )}
-        <ProcessoView processo={aberto} onAtualizar={() => abrir(aberto.id)} />
+        <ProcessoView processo={aberto} onAtualizar={() => abrir(aberto.id, false)} />
       </>
     )
 

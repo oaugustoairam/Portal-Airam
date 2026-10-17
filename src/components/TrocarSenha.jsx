@@ -31,7 +31,7 @@ export default function TrocarSenha({ perfil }) {
   return (
     <section className="login">
       <span className="rotulo">Primeiro acesso</span>
-      <h1 className="titulo-grande">Crie sua senha</h1>
+      <h1 className="titulo-entrada">Crie <em>sua senha</em></h1>
       <p className="login-texto">
         Olá{perfil.nome ? `, ${perfil.nome.split(' ')[0]}` : ''}! A senha que você recebeu é provisória.
         Escolha uma senha só sua para acessar o Portal Airam.

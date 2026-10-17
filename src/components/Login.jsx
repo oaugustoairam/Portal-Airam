@@ -32,10 +32,10 @@ export default function Login() {
   return (
     <section className="login">
       <img className="login-marca" src={logoVermelho} alt="Airam Arquitetura & Marcenaria" />
-      <h1 className="titulo-grande">Acompanhe seus móveis</h1>
+      <span className="rotulo login-eyebrow">Portal do cliente</span>
+      <h1 className="titulo-entrada">Acompanhe <em>seus móveis</em> do projeto à montagem</h1>
       <p className="login-texto">
-        Prazos, contrato e projetos do seu processo em um só lugar. Entre com o e-mail ou o CPF
-        cadastrado na Airam e a senha que você recebeu.
+        Prazos, contrato e projetos em um só lugar. Entre com o e-mail ou o CPF cadastrado na Airam.
       </p>
 
       <form className="login-form" onSubmit={entrar}>
