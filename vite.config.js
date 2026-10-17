@@ -17,4 +17,6 @@ const modelosXlsx = {
 export default defineConfig({
   plugins: [modelosXlsx, react()],
   base: './',
+  // caracteres especiais escritos como \uXXXX no código final (evita problemas de codificação)
+  esbuild: { charset: 'ascii' },
 })
