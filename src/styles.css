@@ -1143,3 +1143,103 @@ figure.recado::before { font-family: var(--f-display); font-weight: 300; color: 
   .numeros > div, .numeros > div:first-child { padding: 0 0 0 14px; border-left: 1px solid var(--linha); }
   .numeros dd { font-size: 26px; }
 }
+
+/* =====================================================================
+   CORES AIRAM COMO BASE (site airam.arq.br e Instagram)
+   Vermelho #930000 · vermelho escuro #6e0000 · branco · cinza #f2f2f2 · grafite #393939
+   ===================================================================== */
+:root {
+  --marca: #930000; --marca-escura: #6e0000; --marca-funda: #4a0000;
+  --papel: #f2f2f2; --superficie: #ffffff; --tinta: #393939; --tinta-2: #77706f; --linha: #e6dcdc;
+  --escuro: #930000; --escuro-2: #6e0000; --cinza-claro: #f0c9c9;
+  --acento: #930000; --acento-suave: #f7e4e4; --neutro-suave: #f2eded;
+  --andamento: #930000; --andamento-suave: #fbe1e1;
+  --ok: #930000; --ok-suave: #f7e4e4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --papel: #140d0d; --superficie: #1e1515; --tinta: #f2eeee; --tinta-2: #b3a3a3; --linha: #3a2626;
+    --escuro: #930000; --escuro-2: #6e0000; --cinza-claro: #f0c9c9;
+    --acento: #ef6b6b; --acento-suave: #3a1c1c; --neutro-suave: #2a1e1e; --ok: #ef6b6b; --ok-suave: #3a1c1c;
+  }
+}
+:root[data-theme='dark'] {
+  --papel: #140d0d; --superficie: #1e1515; --tinta: #f2eeee; --tinta-2: #b3a3a3; --linha: #3a2626;
+  --escuro: #930000; --escuro-2: #6e0000; --cinza-claro: #f0c9c9;
+  --acento: #ef6b6b; --acento-suave: #3a1c1c; --neutro-suave: #2a1e1e; --ok: #ef6b6b; --ok-suave: #3a1c1c;
+}
+
+/* Topo vermelho Airam */
+.topo { background: var(--marca); }
+.faixa-demo { background: var(--marca-escura); color: #f6d9d9; }
+.topo .btn-leve { background: #fff; color: var(--marca); }
+.topo .btn-leve:hover { background: var(--marca-funda); color: #fff; }
+
+/* Entrada: véu vermelho como o rodapé dos posts */
+.entrada-vitrine { background: var(--marca-funda); }
+.vitrine-veu { background: linear-gradient(180deg, rgb(74 0 0 / .5) 0%, rgb(74 0 0 / 0) 28%, rgb(147 0 0 / .15) 48%, rgb(147 0 0 / .7) 75%, rgb(110 0 0 / .96) 100%); }
+.vitrine-ambiente { background: rgb(255 255 255 / .18); }
+.titulo-entrada em { color: var(--marca); }
+.login-eyebrow { color: var(--marca); }
+.entrada-rodape a, .link-esqueci { color: var(--marca); }
+
+/* Topo do processo: degradê vermelho Airam sobre a foto */
+.hero { background: var(--marca-funda); }
+.hero-veu { background:
+  linear-gradient(0deg, rgb(110 0 0 / .97) 0%, rgb(147 0 0 / .72) 42%, rgb(147 0 0 / .25) 100%),
+  linear-gradient(90deg, rgb(74 0 0 / .45), rgb(74 0 0 / 0) 60%); }
+.hero-foto { filter: grayscale(.25) contrast(1.05); }
+.hero-amb { color: #f6d6d6; }
+.hero-tag { background: rgb(255 255 255 / .16); }
+.hero-numeros, .hero-dados > div { border-color: rgb(255 255 255 / .28); }
+.hero-dados dt { opacity: .75; }
+
+/* Botões e destaques */
+.btn-principal { background: var(--marca); color: #fff; }
+.btn-principal:hover:not(:disabled) { background: var(--marca-escura); }
+.cartao-assinar .btn-principal:hover, .entrada .btn-principal:hover:not(:disabled) { background: var(--marca-escura); }
+.btn-contorno { background: var(--neutro-suave); color: var(--tinta); }
+.btn-contorno:hover { background: var(--marca); color: #fff; }
+.pilula-ok { background: var(--marca); color: #fff; }
+.toast { background: var(--marca); color: #fff; }
+.chip-concluida, .chip-aviso-enviado, .chip-aviso-simulado { background: var(--acento-suave); color: var(--marca); }
+input:focus, select:focus, textarea:focus { border-color: var(--marca); box-shadow: 0 0 0 3px var(--acento-suave); }
+
+/* Linhas de seção em vermelho */
+.titulo-secao, .secao-mono, .jornada-cab, .contagem { border-top-color: var(--marca); }
+.titulo-secao, .secao-mono, .jornada-cab .titulo-secao { color: var(--marca); }
+.rotulo-mono { color: var(--marca); }
+
+/* Jornada: etapas concluídas em vermelho */
+.jn-concluida .jn-icone { background: var(--marca); border-color: var(--marca); color: #fff; }
+.jn-concluida .jn-icone .cubo { color: #fff; }
+.jornada-linha-cheia { background: linear-gradient(90deg, var(--marca-escura), var(--marca)); }
+@media (max-width: 760px) { .jn:not(:last-child)::after { background: var(--marca); } }
+.jn-sel .jn-nome { color: var(--marca); }
+.jd-numero { color: var(--marca); }
+.jd-futura .jd-numero { color: var(--cinza-claro); }
+
+/* Documentos, galeria e garantia */
+.aba-ativa { border-bottom-color: var(--marca); color: var(--marca); }
+.aba-qtd { background: var(--acento-suave); color: var(--marca); }
+.doc-tipo { color: var(--marca); border-color: var(--cinza-claro); }
+.carrossel-pontos span.ativo { background: var(--marca); }
+.carrossel-seta:hover:not(:disabled) { background: var(--marca); border-color: var(--marca); color: #fff; }
+.garantia-numero span { color: var(--marca); }
+figure.recado::before { color: var(--marca); }
+.recado figcaption { color: var(--marca); }
+
+/* Relógio da contagem */
+.relogio-ponteiro, .relogio-centro { background: var(--tinta); }
+.contagem-titulo > span:not(.contagem-num) { color: var(--tinta-2); }
+
+/* Painel da equipe */
+.painel-nav-item.ativo { background: var(--marca); color: #fff; }
+.indicador-valor { color: var(--marca); }
+.indicador-ativo { border-color: var(--marca); box-shadow: inset 0 0 0 1px var(--marca); background: var(--acento-suave); }
+.segmentado button.ativo, .segmentado button.ativo-ok { background: var(--marca); }
+.banner-aniv { background: linear-gradient(100deg, var(--marca), var(--marca-escura)); }
+.banner-aniv .btn-contorno { background: #fff; color: var(--marca); }
+.cal-avatar { background: var(--marca); }
+.grupo legend { color: var(--marca); }
+.tabela tbody tr:hover { background: var(--acento-suave); }
