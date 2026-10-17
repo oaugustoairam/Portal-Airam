@@ -28,7 +28,7 @@ export const PASTAS_GESTAO = [...ABAS_GESTAO.map((a) => [a.id, a.nome]), ['resul
 
 // Gestão de clientes: um cadastro só para a venda, o processo e o acesso do cliente ao portal.
 // O vendedor vê só os clientes dele; quem tem "ver todos" vê a loja inteira.
-export default function GestaoClientes({ aba, perfil, onAbrirProcesso }) {
+export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) {
   const [lista, setLista] = useState(null)
   const [erro, setErro] = useState('')
   const [ficha, setFicha] = useState(null) // linha da gestão ou 'novo'
@@ -47,7 +47,9 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso }) {
     setPasta(null)
   }, [aba])
 
-  const periodo = periodos[aba] || { de: '', ate: '' }
+  // Resultados e Controle de pastas usam o mesmo período (um leva ao outro)
+  const chavePeriodo = aba === 'pastas' ? 'resultados' : aba
+  const periodo = periodos[chavePeriodo] || { de: '', ate: '' }
   const linhas = useMemo(() => (lista || []).map(linhaGestao), [lista])
   const doPeriodo = useMemo(
     () => linhas.filter((l) => (!periodo.de || (l.data_venda && l.data_venda >= periodo.de)) && (!periodo.ate || (l.data_venda && l.data_venda <= periodo.ate))),
@@ -71,10 +73,11 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso }) {
     )
   if (pasta) return <PastaCliente g={pasta} onFechar={() => { setPasta(null); carregar() }} onFicha={(g) => { setPasta(null); setFicha(linhaGestao(g)) }} />
 
-  const barraPeriodo = <BarraPeriodo periodo={periodo} onChange={(p) => setPeriodos((x) => ({ ...x, [aba]: p }))} />
+  const barraPeriodo = <BarraPeriodo periodo={periodo} onChange={(p) => setPeriodos((x) => ({ ...x, [chavePeriodo]: p }))} />
 
-  if (aba === 'resultados') return <Resultados linhas={doPeriodo} periodo={periodo} barraPeriodo={barraPeriodo} verTodos={verTodos} perfil={perfil} />
-  if (aba === 'pastas') return <ListaPastas linhas={doPeriodo} barraPeriodo={barraPeriodo} onAbrir={(l) => setPasta(l.g)} />
+  if (aba === 'resultados') return <Resultados linhas={doPeriodo} periodo={periodo} barraPeriodo={barraPeriodo} verTodos={verTodos} perfil={perfil}
+    onAbrirPasta={(l) => setPasta(l.g)} onVerPastas={() => onAba?.('pastas')} />
+  if (aba === 'pastas') return <ListaPastas linhas={doPeriodo} periodo={periodo} barraPeriodo={barraPeriodo} onAbrir={(l) => setPasta(l.g)} onVerResultados={() => onAba?.('resultados')} />
 
   const def = ABAS_GESTAO.find((a) => a.id === aba) || ABAS_GESTAO[0]
   const daAba = doPeriodo.filter(def.filtro)
@@ -157,7 +160,7 @@ function textoPeriodo(p) {
 }
 
 // ============================================================ Resultados (resumo e ranking, como a planilha de feedback)
-function Resultados({ linhas, periodo, barraPeriodo, verTodos, perfil }) {
+function Resultados({ linhas, periodo, barraPeriodo, verTodos, perfil, onAbrirPasta, onVerPastas }) {
   const [gerando, setGerando] = useState('')
   const [erro, setErro] = useState('')
   const vendas = useMemo(() => linhas.map((l) => paraVenda(l.g)), [linhas])
@@ -233,7 +236,60 @@ function Resultados({ linhas, periodo, barraPeriodo, verTodos, perfil }) {
           ))}
         </div>
       ) : <p className="vazio">Nenhuma venda em {titulo}.</p>}
+      {linhas.length > 0 && <PastasDoPeriodo linhas={linhas} onAbrirPasta={onAbrirPasta} onVerPastas={onVerPastas} />}
     </section>
+  )
+}
+
+// Ligação com o Controle de pastas: cada venda do período e como está a pasta dela
+function PastasDoPeriodo({ linhas, onAbrirPasta, onVerPastas }) {
+  const ativas = linhas.filter((l) => !l.cancelado)
+  const feitos = (l) => DOCS_PASTA.filter((d) => (l.g.pasta || []).some((x) => x.categoria === d.id)).length
+  const fechadas = ativas.filter((l) => l.pasta_fechada).length
+  const completas = ativas.filter((l) => !l.pasta_fechada && feitos(l) === DOCS_PASTA.length).length
+  return (
+    <div className="resultados-pastas">
+      <div className="cab-linha">
+        <div>
+          <h2 className="rotulo">Vendas do período e pastas</h2>
+          <p className="dica">{fechadas} de {ativas.length} vendas fechadas{completas ? ` · ${completas} com a pasta completa, prontas para fechar` : ''}.</p>
+        </div>
+        {onVerPastas && <button className="btn btn-leve" onClick={onVerPastas}>Ir para o Controle de pastas →</button>}
+      </div>
+      <div className="tabela-wrap">
+        <table className="tabela tabela-pastas">
+          <thead>
+            <tr><th>Cód.</th><th>Cliente</th><th>Vendedor</th><th>Data</th><th>Deflacionado</th><th>Situação</th><th>Pasta</th><th></th></tr>
+          </thead>
+          <tbody>
+            {linhas.map((l) => {
+              const n = feitos(l)
+              return (
+                <tr key={l.id}>
+                  <td className="num"><strong>{l.codigo}</strong></td>
+                  <td>{l.cliente_nome}</td>
+                  <td>{l.vendedor || '—'}</td>
+                  <td className="num">{dataBR(l.data_venda)}</td>
+                  <td className="num">{moeda(l.valor_deflacionado)}</td>
+                  <td><span className={`chip chip-mini ${CHIP_SIT[l.situacao]}`}>{SITUACOES.find(([k]) => k === l.situacao)?.[1]}</span></td>
+                  <td>
+                    {l.cancelado ? <span className="celula-sub">—</span> : (
+                      <span className="pasta-mini">
+                        <span className="pasta-progresso" aria-hidden="true">
+                          {DOCS_PASTA.map((d) => <span key={d.id} className={(l.g.pasta || []).some((x) => x.categoria === d.id) ? 'ok' : ''} />)}
+                        </span>
+                        {l.pasta_fechada ? <span className="chip chip-mini chip-sit-ok">Fechada</span> : <span className="celula-sub num">{n}/{DOCS_PASTA.length}</span>}
+                      </span>
+                    )}
+                  </td>
+                  <td>{!l.cancelado && <button className="btn btn-leve" onClick={() => onAbrirPasta(l)}>Abrir pasta</button>}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -635,7 +691,7 @@ function Importar({ onFechar }) {
 }
 
 // ============================================================ Controle de pastas
-function ListaPastas({ linhas, barraPeriodo, onAbrir }) {
+function ListaPastas({ linhas, periodo, barraPeriodo, onAbrir, onVerResultados }) {
   const ativas = linhas.filter((l) => !l.cancelado)
   return (
     <section className="gestao">
@@ -645,6 +701,7 @@ function ListaPastas({ linhas, barraPeriodo, onAbrir }) {
           <h1 className="titulo-grande">Controle de pastas</h1>
           <p className="dica">Anexe os documentos de cada cliente. Em "Fechar venda", tudo vira um único PDF para baixar e imprimir.</p>
         </div>
+        {onVerResultados && <button className="btn btn-leve" onClick={onVerResultados}>Ver resultados de {textoPeriodo(periodo)} →</button>}
       </div>
       {barraPeriodo}
       {!ativas.length ? <p className="vazio">Nenhum cliente neste período.</p> : (

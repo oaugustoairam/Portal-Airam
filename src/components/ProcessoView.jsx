@@ -117,6 +117,8 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao, seca
           <CartaoAssinar key={a.id} assinatura={a} visualizacao={visualizacao} onAssinar={() => setAssinando(a)} />
         ))}
         <DocumentosCategoria documentos={documentos} categoria={secao} />
+        {/* a jornada acompanha o cliente em todas as abas, para a tela nunca ficar vazia */}
+        <Jornada etapas={etapas} />
         {modalAssinatura}
       </article>
     )

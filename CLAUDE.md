@@ -11,8 +11,8 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   Para o cliente, a linha do tempo começa em **Compra** (data da venda) e a solução financeira não é etapa:
   com pendência, aparece um lembrete no topo (`linhaDoTempo(p, a, { cliente: true })`).
   Abas do cliente, nesta ordem: Meu perfil, Meu processo, Contrato, Projeto inicial, Renders, Projeto final,
-  Quem somos (texto do site), Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (`src/lib/contato.js`).
-  Topo com o logo no centro, fixo ao rolar. Cliente baixa arquivos e renders (um a um ou .zip).
+  Quem somos (texto do site; 25 anos de experiência), Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (`src/lib/contato.js`).
+  Topo com o logo no centro, fixo ao rolar. Cliente baixa arquivos e renders (um a um ou .zip). A jornada aparece também embaixo das abas de documentos.
   Meu perfil: o cliente só muda foto, e-mail, celular, Instagram e senha; nome, CPF, nascimento e endereço são só leitura
   (gatilho `travar_perfil_cliente` no banco). Garantia de 10 anos na madeira +
   card "Padrão Airam" só tipográfico (dobradiças e corrediças ocultas com amortecimento; não é garantia).
@@ -25,8 +25,9 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
   - **Gestão de clientes** (`src/components/GestaoClientes.jsx`, regras em `src/lib/gestao.js`): **sistema único** — o cadastro
     da gestão é o próprio processo do portal (`processos`) + `comercial` (1:1, só gestão) + `controle_interno`.
-    Abas como a planilha 001 GESTÃO DE CLIENTES: Clientes, Futuros, Conferências, Entrega e montagem, Assistência técnica,
-    Montados, Resultados (resumo/ranking, planilha `feedback-vendas.xlsx` e PDF por período) e Controle de pastas
+    Abas: Clientes (lista total, colunas da planilha 001 GESTÃO DE CLIENTES; o status filtra as fases),
+    Resultados (controle mensal: resumo/ranking, planilha `feedback-vendas.xlsx` e PDF por período, com a lista das vendas
+    e o estado de cada pasta) e Controle de pastas (mesmo período dos Resultados)
     (`pasta_documentos`, arquivos em `documentos/<pid>/pasta/`; "Fechar venda" → PDF com pdf-lib em `src/lib/pastaPdf.js`).
     Planilha com filtro/ordenação por coluna e período de qualquer dia (`PlanilhaFiltravel.jsx`; cartões no celular).
     Importa a aba 01 CLIENTES (`registrosDaPlanilha`, `lerPlanilha` em `src/lib/xlsx.js`). **Fazer capa** preenche

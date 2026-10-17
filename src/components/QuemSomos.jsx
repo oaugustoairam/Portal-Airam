@@ -26,8 +26,7 @@ export default function QuemSomos() {
       </figure>
 
       <div className="qs-numeros" role="list">
-        <div role="listitem"><strong className="num">19</strong><span>anos de experiência em móveis planejados</span></div>
-        <div role="listitem"><strong className="num">04</strong><span>grandes fábricas do Brasil no currículo</span></div>
+        <div role="listitem"><strong className="num">25</strong><span>anos de experiência em móveis planejados</span></div>
         <div role="listitem"><strong className="num">2019</strong><span>o ano em que a Airam nasceu</span></div>
         <div role="listitem"><strong className="num">10</strong><span>anos de garantia na madeira</span></div>
       </div>
@@ -37,7 +36,7 @@ export default function QuemSomos() {
           A Airam Arquitetura &amp; Marcenaria está no mercado para idealizar e realizar o sonho de uma casa planejada, bonita e funcional.
         </p>
         <p>
-          Idealizada por empreendedores com 19 anos de experiência no mercado de móveis planejados e com passagem por 04 grandes fábricas do Brasil.
+          Idealizada por empreendedores com 25 anos de experiência no mercado de móveis planejados.
           Em 2019, foi tomada a decisão de entrar no mercado, com o propósito de trazer diferenciais em atendimento, projetos, design, entrega e
           pós-venda, além do suporte e assessoria geral em sua obra.
         </p>

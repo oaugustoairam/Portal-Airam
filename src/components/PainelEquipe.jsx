@@ -85,7 +85,7 @@ export default function PainelEquipe({ perfil }) {
         </div>
       )}
 
-      {secao === 'gestao' && <GestaoClientes aba={atual} perfil={perfil} onAbrirProcesso={abrirProcesso} />}
+      {secao === 'gestao' && <GestaoClientes aba={atual} perfil={perfil} onAbrirProcesso={abrirProcesso} onAba={(p) => irPara('gestao', p)} />}
       {secao === 'processos' && (
         <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />
       )}

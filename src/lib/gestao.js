@@ -151,66 +151,18 @@ const kpiValores = (l, rotuloQtd) => [
   ['Ticket médio', moeda(ticket(l))],
 ]
 
-// Abas estratégicas (mesmos filtros e indicadores da planilha)
+// Base de clientes: todos os clientes em lista (o status filtra futuros, conferências, montados etc.)
 export const ABAS_GESTAO = [
   {
-    id: 'clientes', nome: 'Clientes', titulo: '01 · Base de clientes',
+    id: 'clientes', nome: 'Clientes', titulo: 'Base de clientes',
     descricao: 'Todos os clientes. Cadastre aqui: o mesmo cadastro vira o acesso do cliente ao portal.',
     filtro: () => true,
     colunas: ['codigo', 'cliente_nome', 'vendedor', 'captacao', 'data_venda', 'financeira', 'valor_venda', 'valor_deflacionado', 'situacao', 'status', 'observacao',
-      'contrato', 'prazo', 'diferenca', 'deflacao', 'cidade', 'bairro', 'cep', 'zona', 'cliente_meu', 'acesso'],
+      'contrato', 'prazo', 'diferenca', 'deflacao', 'cidade', 'bairro', 'cep', 'zona', 'cliente_meu', 'acesso',
+      'data_medicao', 'liberador', 'data_conferencia', 'data_assinatura', 'previsao_entrega', 'prazo_maximo', 'status_entrega',
+      'data_entrega', 'montador', 'assistencia', 'data_vistoria', 'pos_vistoria'],
     visiveis: 11,
     kpis: (l) => kpiValores(l, 'Clientes'),
-  },
-  {
-    id: 'futuros', nome: 'Futuros', titulo: '02 · Clientes futuros',
-    descricao: 'Ainda não medidos e não montados.',
-    filtro: (x) => !x.cancelado && !x.montado && !x.medido,
-    colunas: ['codigo', 'cliente_nome', 'vendedor', 'data_venda', 'prazo', 'financeira', 'valor_venda', 'valor_deflacionado', 'diferenca', 'cidade', 'zona', 'observacao'],
-    kpis: (l) => kpiValores(l, 'Quantidade'),
-  },
-  {
-    id: 'conferencias', nome: 'Conferências', titulo: '03 · Conferências',
-    descricao: 'Medidos, ainda sem assinatura do projeto final.',
-    filtro: (x) => !x.cancelado && x.medido && !x.montado && !x.assinado,
-    colunas: ['codigo', 'cliente_nome', 'vendedor', 'data_medicao', 'liberador', 'data_conferencia', 'status', 'valor_deflacionado', 'observacao'],
-    kpis: (l) => [
-      ['Clientes', l.length],
-      ['Conferidos · falta assinar', l.filter((x) => x.conferido).length],
-      ['Não conferidos', l.filter((x) => !x.conferido).length],
-      ['Deflacionado em aberto', moeda(soma(l, 'valor_deflacionado'))],
-    ],
-  },
-  {
-    id: 'entrega', nome: 'Entrega e montagem', titulo: '04 · Entrega e montagem',
-    descricao: 'Projeto final assinado, aguardando entrega ou montando.',
-    filtro: (x) => !x.cancelado && x.assinado && !x.montado,
-    colunas: ['codigo', 'cliente_nome', 'data_assinatura', 'previsao_entrega', 'prazo_maximo', 'status_entrega', 'data_entrega', 'montagem_inicio', 'montador', 'valor_deflacionado', 'observacao'],
-    kpis: (l) => [
-      ['Clientes', l.length],
-      ['Em montagem', l.filter((x) => x.status_entrega === 'montando').length],
-      ['Prazo máximo vencido', l.filter((x) => x.prazo_vencido).length, l.some((x) => x.prazo_vencido) ? 'alerta' : ''],
-      ['Deflacionado a entregar', moeda(soma(l, 'valor_deflacionado'))],
-    ],
-  },
-  {
-    id: 'assistencia', nome: 'Assistência técnica', titulo: '05 · Assistência técnica e vistoria',
-    descricao: 'Clientes que já receberam os móveis.',
-    filtro: (x) => !x.cancelado && x.entregue,
-    colunas: ['codigo', 'cliente_nome', 'data_entrega', 'montador', 'assistencia', 'data_vistoria', 'vistoria_obs', 'prazo_pos_vistoria', 'pos_vistoria'],
-    kpis: (l) => [
-      ['Entregues', l.length],
-      ['Assistência aberta', l.filter((x) => x.assistencia_aberta).length, l.some((x) => x.assistencia_aberta) ? 'alerta' : ''],
-      ['Sem data de vistoria', l.filter((x) => !x.data_vistoria).length],
-      ['Pós vistoria em aberto', l.filter((x) => x.data_vistoria && x.pos_vistoria !== 'concluido').length],
-    ],
-  },
-  {
-    id: 'montados', nome: 'Montados', titulo: '06 · Montados',
-    descricao: 'Clientes com a montagem concluída.',
-    filtro: (x) => x.montado,
-    colunas: ['codigo', 'cliente_nome', 'vendedor', 'captacao', 'data_venda', 'data_entrega', 'montador', 'valor_venda', 'valor_deflacionado', 'assistencia', 'pos_vistoria'],
-    kpis: (l) => kpiValores(l, 'Montados'),
   },
 ]
 
