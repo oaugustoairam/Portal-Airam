@@ -225,6 +225,16 @@ const supabaseApi = {
     const { data } = await sb.from('perfil_cliente').select('*').eq('id', perfil.id).maybeSingle()
     return data
   },
+  async controleInterno(processoId) {
+    const { data, error } = await sb.from('controle_interno').select('*').eq('id', processoId).maybeSingle()
+    if (error) throw error
+    return data || { id: processoId }
+  },
+  async salvarControleInterno(processoId, dados) {
+    const { data, error } = await sb.from('controle_interno').upsert(limparControle({ ...dados, id: processoId })).select().single()
+    if (error) throw new Error('Não foi possível salvar: ' + error.message)
+    return data
+  },
   async listarAvisos(processoId) {
     const { data, error } = await sb.from('notificacoes').select('*')
       .eq('processo_id', processoId).order('criado_em', { ascending: false }).limit(100)
@@ -252,7 +262,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v9'
+const CHAVE_DEMO = 'portal-airam-demo-v10'
 let memoria = null
 const ouvintes = new Set()
 
@@ -297,6 +307,17 @@ function simularAvisos(p, eventos) {
     for (const [canal, destino] of canais)
       d.avisos.unshift({ id: novoId(), processo_id: p.id, ...e, canal, destino, status: 'simulado', criado_em: new Date().toISOString() })
   return eventos.length
+}
+
+export const CAMPOS_CONTROLE = [
+  'pendencia_resolvida_em', 'email_enviado_em', 'inicial_assinado_em', 'medido_em', 'liberador', 'liberador_recebeu_em',
+  'conferido_em', 'conferencia_enviada_em', 'pdf_recebido_em', 'projeto_final_assinado_em', 'entregue_em',
+  'montagem_inicio_em', 'montador', 'tem_att', 'vistoria_em', 'assistencia_retorno_max', 'observacoes',
+]
+function limparControle(c) {
+  const out = { id: c.id }
+  for (const k of CAMPOS_CONTROLE) out[k] = c[k] === '' || c[k] === undefined ? null : typeof c[k] === 'string' ? c[k].trim() || null : c[k]
+  return out
 }
 
 // Mesma regra do servidor: e-mail, CPF ou telefone do processo. Telefone usado por
@@ -505,6 +526,16 @@ const demoApi = {
     if (a.tipo === 'projeto_final' && proc) proc.projeto_assinado_em = proc.projeto_assinado_em || a.assinado_em
     simularAvisos(d.processos.find((x) => x.id === a.processo_id), [avisoAssinatura(a.tipo, 'assinado')])
     gravar()
+  },
+  async controleInterno(processoId) {
+    return db().controles?.[processoId] || { id: processoId }
+  },
+  async salvarControleInterno(processoId, dados) {
+    const d = db()
+    d.controles = d.controles || {}
+    d.controles[processoId] = { ...limparControle({ ...dados, id: processoId }), atualizado_em: new Date().toISOString(), atualizado_por: d.sessao.email }
+    gravar()
+    return d.controles[processoId]
   },
   async listarAvisos(processoId) {
     return (db().avisos || []).filter((a) => a.processo_id === processoId)

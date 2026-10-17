@@ -542,3 +542,49 @@ create policy "avatar proprio" on storage.objects for all
 drop policy if exists "equipe ve avatares" on storage.objects;
 create policy "equipe ve avatares" on storage.objects for select
   using (bucket_id = 'avatares' and public.eh_equipe());
+
+-- 15. Controle interno da loja (o cliente não tem acesso) -----------------------
+-- Uma linha por processo (id = id do processo). Datas reais de cada passo, liberador,
+-- montador, ATT, vistoria e assistência.
+create table if not exists public.controle_interno (
+  id uuid primary key references public.processos on delete cascade,
+  pendencia_resolvida_em date,
+  email_enviado_em date,
+  inicial_assinado_em date,
+  medido_em date,
+  liberador text,
+  liberador_recebeu_em date,
+  conferido_em date,
+  conferencia_enviada_em date,
+  pdf_recebido_em date,
+  projeto_final_assinado_em date,
+  entregue_em date,
+  montagem_inicio_em date,
+  montador text,
+  tem_att boolean,
+  vistoria_em date,
+  assistencia_retorno_max date,
+  observacoes text,
+  atualizado_em timestamptz not null default now(),
+  atualizado_por text,
+  constraint controle_textos check (coalesce(length(observacoes), 0) <= 2000
+    and coalesce(length(liberador), 0) <= 120 and coalesce(length(montador), 0) <= 120)
+);
+alter table public.controle_interno enable row level security;
+drop policy if exists "equipe controle" on public.controle_interno;
+create policy "equipe controle" on public.controle_interno for all
+  using (public.eh_equipe()) with check (public.eh_equipe());
+
+create or replace function public.carimbar_controle()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.atualizado_em := now();
+  new.atualizado_por := auth.jwt() ->> 'email';
+  return new;
+end $$;
+drop trigger if exists carimbar on public.controle_interno;
+create trigger carimbar before insert or update on public.controle_interno
+  for each row execute function public.carimbar_controle();
+drop trigger if exists auditoria on public.controle_interno;
+create trigger auditoria after insert or update or delete on public.controle_interno
+  for each row execute function public.registrar_atividade();

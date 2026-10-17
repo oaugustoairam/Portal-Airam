@@ -1288,3 +1288,14 @@ figure.recado::before { color: var(--marca); }
   .perfil-salvar { position: static; }
   .perfil-salvar .btn-principal { width: 100%; }
 }
+
+/* Controle interno da loja */
+.controle-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.controle-campo > .chip, .controle-prazo .chip { margin-left: 0; align-self: flex-start; }
+.controle-fixo { font-size: 15px; padding: 10px 0; }
+.controle-prazo { display: flex; flex-direction: column; gap: 6px; justify-content: flex-start; padding: 10px 12px;
+  border: 1px dashed var(--linha); border-radius: var(--r); background: var(--papel); }
+.controle-prazo strong { font-size: 16px; font-weight: 500; }
+.controle-prazo .celula-sub { font-size: 12px; }
+.controle-interno .grupo + .grupo { margin-top: 2px; }
+.secao-historico { margin-top: 28px; }

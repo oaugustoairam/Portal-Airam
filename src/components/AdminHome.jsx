@@ -16,6 +16,7 @@ import {
 } from '../lib/constants.js'
 import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
+import ControleInterno from './ControleInterno.jsx'
 import Avatar from './Avatar.jsx'
 import { ROTULO_STATUS_AVISO, telefoneWhatsApp } from '../lib/avisos.js'
 
@@ -288,7 +289,7 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
 
       {id && (
         <div className="abas">
-          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['cronograma', 'Cronograma interno'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
+          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['cronograma', 'Controle interno'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
             <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>{t}</button>
           ))}
         </div>
@@ -309,7 +310,15 @@ function EditorProcesso({ id, codigos, onFechar, onCriado }) {
       )}
       {aba === 'anexos' && <Anexos processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
       {aba === 'assinaturas' && <Assinaturas processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
-      {aba === 'cronograma' && <CronogramaInterno processo={processo} />}
+      {aba === 'cronograma' && (
+        <>
+          <ControleInterno processo={processo} />
+          <section className="secao-historico">
+            <h3 className="titulo-secao">Registro automático do sistema</h3>
+            <CronogramaInterno processo={processo} />
+          </section>
+        </>
+      )}
       {aba === 'avisos' && <Avisos processo={processo} />}
       {aba === 'acesso' && <Acesso processo={processo} />}
       {aba === 'cliente' && (

@@ -168,6 +168,18 @@ export function criarDadosDemo() {
       { id: `av${i}w`, processo_id: p1, evento, titulo, mensagem, canal: 'whatsapp', destino: '5511900000154', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
       { id: `av${i}e`, processo_id: p1, evento, titulo, mensagem, canal: 'email', destino: 'marina@exemplo.com', status: 'enviado', criado_em: quando(dias), enviado_em: quando(dias) },
     ]),
+    // Controle interno da loja (Marina em fabricação, Carla aguardando assinatura)
+    controles: {
+      [p1]: {
+        id: p1, pendencia_resolvida_em: dia(-55), email_enviado_em: dia(-55), inicial_assinado_em: dia(-50), medido_em: dia(-45),
+        liberador: 'Juliana', liberador_recebeu_em: dia(-44), conferido_em: dia(-38), conferencia_enviada_em: dia(-37),
+        pdf_recebido_em: dia(-31), projeto_final_assinado_em: dia(-27),
+      },
+      [p3]: {
+        id: p3, pendencia_resolvida_em: dia(-32), email_enviado_em: dia(-31), inicial_assinado_em: dia(-26), medido_em: dia(-12),
+        liberador: 'Ricardo', liberador_recebeu_em: dia(-11), conferido_em: dia(-4), conferencia_enviada_em: dia(-3),
+      },
+    },
     perfisCliente: {
       'marina@exemplo.com': {
         nome_preferido: 'Marina', telefone: '(11) 90000-0154', telefone_2: '', nascimento: null,
