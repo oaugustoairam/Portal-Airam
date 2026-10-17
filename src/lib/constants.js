@@ -7,10 +7,16 @@ export const CATEGORIAS = [
   { id: 'render', nome: 'Renders' },
   { id: 'projeto_final', nome: 'Projeto final' },
   { id: 'outro', nome: 'Outros' },
+  // arquivos internos do cliente: só a loja vê
+  { id: 'promob', nome: 'Projetos Promob vendidos', interno: true },
+  { id: 'documento_cliente', nome: 'Documentos do cliente', interno: true },
+  { id: 'ficha_cadastral', nome: 'Ficha cadastral', interno: true },
 ]
 
 export const ROTULO_PRAZO = 'Prazo máximo para entrega'
 export const CATEGORIAS_CLIENTE = CATEGORIAS.filter((c) => !c.interno)
+export const CATEGORIAS_INTERNAS = CATEGORIAS.filter((c) => c.interno)
+export const ehInterna = (categoria) => CATEGORIAS_INTERNAS.some((c) => c.id === categoria)
 
 export const LIMITE_PRAZO_NORMAL = 90 // dias entre a venda e a disponibilidade para medição
 

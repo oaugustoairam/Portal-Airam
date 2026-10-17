@@ -1404,3 +1404,93 @@ body { letter-spacing: 0; font-feature-settings: 'ss01' off; }
 .hero-foto.ativa { opacity: 1; }
 .hero-pronto .hero-foto.ativa { transform: scale(1); }
 @media (prefers-reduced-motion: reduce) { .hero-foto { transform: none !important; } }
+
+/* Arquivos internos do cliente */
+.aviso-interno { display: flex; gap: 12px; align-items: flex-start; background: var(--tinta); color: var(--superficie); border-radius: var(--r); padding: 14px 16px; font-size: 14px; line-height: 1.45; }
+.aviso-interno svg { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.aviso-interno strong { font-weight: 600; }
+.vazio-mini { margin: 0; font-size: 13.5px; color: var(--tinta-2); }
+
+/* =====================================================================
+   JORNADA: detalhes de cada etapa e transição entre fases
+   ===================================================================== */
+.jd-andamento { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-width: 420px; }
+.jd-andamento-barra { height: 6px; border-radius: 999px; background: var(--neutro-suave); overflow: hidden; }
+.jd-andamento-barra span { display: block; height: 100%; width: var(--pct); border-radius: inherit; background: var(--marca);
+  transform-origin: left; animation: encher 1s .2s cubic-bezier(.2, .7, .2, 1) both; }
+.jd-andamento-texto { font-size: 12.5px; color: var(--tinta-2); }
+@keyframes encher { from { transform: scaleX(0); } }
+
+.jd-blocos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 28px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--linha); }
+.jd-bloco { display: flex; flex-direction: column; gap: 6px; }
+.jd-bloco-titulo { font-size: 12.5px; font-weight: 600; color: var(--marca); }
+.jd-bloco .jd-sobre { margin: 0; font-size: 15px; }
+.jd-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.jd-lista li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; font-size: 15px; line-height: 1.45; color: var(--tinta); }
+.jd-lista svg { width: 18px; height: 18px; margin-top: 2px; color: var(--marca); }
+
+.jd-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+.jd-nav-btn { display: inline-flex; align-items: center; gap: 10px; background: none; border: 1px solid var(--linha); border-radius: 999px;
+  padding: 8px 14px; font: inherit; color: var(--tinta); cursor: pointer; text-align: left; transition: border-color .2s, background .2s; max-width: 48%; }
+.jd-nav-btn:hover:not(:disabled) { border-color: var(--marca); background: var(--acento-suave); }
+.jd-nav-btn:disabled { opacity: .35; cursor: default; }
+.jd-nav-prox { text-align: right; margin-left: auto; }
+.jd-nav-txt { display: flex; flex-direction: column; font-size: 13.5px; line-height: 1.25; min-width: 0; }
+.jd-nav-txt small { font-size: 11.5px; color: var(--tinta-2); }
+
+/* troca de etapa: o painel entra pelo lado da direção escolhida */
+.jornada-painel.dir-avanca, .jn-detalhe-mobile.dir-avanca { animation: entra-direita .45s cubic-bezier(.2, .7, .2, 1) both; }
+.jornada-painel.dir-volta, .jn-detalhe-mobile.dir-volta { animation: entra-esquerda .45s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes entra-direita { from { opacity: 0; transform: translateX(28px); } }
+@keyframes entra-esquerda { from { opacity: 0; transform: translateX(-28px); } }
+.jornada-painel .jd-texto > *, .jn-detalhe-mobile .jd-texto > * { animation: subir-leve .5s cubic-bezier(.2, .7, .2, 1) both; }
+.jd-texto > :nth-child(2) { animation-delay: .04s; } .jd-texto > :nth-child(3) { animation-delay: .08s; }
+.jd-texto > :nth-child(4) { animation-delay: .12s; } .jd-texto > :nth-child(5) { animation-delay: .16s; } .jd-texto > :nth-child(6) { animation-delay: .2s; }
+@keyframes subir-leve { from { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 760px) {
+  .jd-nav-btn { max-width: 50%; padding: 8px 12px; }
+  .jd-bloco .jd-sobre, .jd-lista li { font-size: 14.5px; }
+}
+
+/* Avanço de fase */
+.avanco { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px;
+  background: rgb(14 14 14 / .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: aparecer .35s ease both; }
+.avanco-cartao { width: min(520px, 100%); max-height: calc(100dvh - 40px); overflow: auto; background: var(--superficie); color: var(--tinta);
+  border-radius: 20px; padding: 28px 28px 22px; box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); animation: cartao-sobe .55s cubic-bezier(.2, .7, .2, 1) both; }
+.avanco-eyebrow { display: block; font-size: 13px; font-weight: 600; color: var(--marca); }
+.avanco-cena { display: grid; grid-template-columns: 1fr 1.2fr 1fr; align-items: start; margin: 22px 0 18px; }
+.avanco-no { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.avanco-icone { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; position: relative; }
+.avanco-icone svg { width: 28px; height: 28px; }
+.avanco-icone .cubo { width: 30px; height: 30px; }
+.avanco-rotulo { font-size: 12.5px; line-height: 1.25; color: var(--tinta-2); max-width: 14ch; }
+.avanco-de .avanco-icone { background: var(--marca); color: #fff; animation: fechar-etapa .6s .35s cubic-bezier(.2, .7, .2, 1) both; }
+.avanco-de .avanco-icone .cubo { color: #fff; }
+.avanco-ligacao { height: 3px; margin-top: 31px; border-radius: 3px; background: var(--linha); overflow: hidden; }
+.avanco-ligacao span { display: block; height: 100%; background: var(--marca); transform-origin: left; animation: ligar .7s .8s cubic-bezier(.6, 0, .2, 1) both; }
+.avanco-para .avanco-icone { border: 2px solid var(--marca); color: var(--marca); background: var(--superficie);
+  animation: abrir-etapa .6s 1.35s cubic-bezier(.3, 1.4, .5, 1) both; }
+.avanco-para .avanco-icone::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--marca);
+  opacity: 0; animation: pulso 1.8s 1.9s ease-out infinite; }
+.avanco-para .avanco-rotulo { color: var(--tinta); font-weight: 600; animation: aparecer .4s 1.5s both; }
+.avanco-titulo { margin: 0; font-size: clamp(24px, 5vw, 30px); font-weight: 300; letter-spacing: -.02em; line-height: 1.1; animation: subir-leve .5s 1.6s both; }
+.avanco-titulo em { font-style: normal; color: var(--marca); }
+.avanco-texto { margin: 10px 0 0; color: var(--tinta-2); font-size: 15px; line-height: 1.55; animation: subir-leve .5s 1.7s both; }
+.avanco-quando { margin: 8px 0 0; font-size: 14px; font-weight: 500; animation: subir-leve .5s 1.75s both; }
+.avanco-lista { margin: 12px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; animation: subir-leve .5s 1.8s both; }
+.avanco-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; animation: subir-leve .5s 1.9s both; }
+.avanco-acoes .btn-principal { background: var(--marca); color: #fff; }
+@keyframes aparecer { from { opacity: 0; } }
+@keyframes cartao-sobe { from { opacity: 0; transform: translateY(24px) scale(.98); } }
+@keyframes fechar-etapa { 0% { transform: scale(1); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes ligar { from { transform: scaleX(0); } }
+@keyframes abrir-etapa { from { opacity: 0; transform: scale(.4); } }
+@keyframes pulso { 0% { opacity: .6; transform: scale(1); } 100% { opacity: 0; transform: scale(1.35); } }
+@media (max-width: 600px) {
+  .avanco { place-items: end stretch; padding: 0; }
+  .avanco-cartao { border-radius: 20px 20px 0 0; padding: 24px 20px calc(18px + env(safe-area-inset-bottom, 0px)); width: 100%; max-height: 92dvh; }
+  .avanco-acoes .btn { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avanco, .avanco *, .jornada-painel, .jn-detalhe-mobile, .jd-texto > *, .jd-andamento-barra span { animation: none !important; }
+}

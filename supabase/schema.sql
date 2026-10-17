@@ -96,6 +96,18 @@ create table if not exists public.documentos (
   constraint medicao_interna check (categoria <> 'medicao' or arquivo_path like '%/interno/%')
 );
 
+-- Arquivos internos do cliente (só a loja vê): medição, projetos Promob vendidos,
+-- documentos pessoais e ficha cadastral. Sempre na pasta <processo>/interno/.
+create or replace function public.categoria_interna(c text) returns boolean
+language sql immutable as $$ select c in ('medicao', 'promob', 'documento_cliente', 'ficha_cadastral') $$;
+alter table public.documentos drop constraint if exists documentos_categoria_check;
+alter table public.documentos add constraint documentos_categoria_check check (categoria in
+  ('medicao', 'contrato', 'projeto_inicial', 'render', 'projeto_final', 'outro', 'promob', 'documento_cliente', 'ficha_cadastral'));
+alter table public.documentos drop constraint if exists medicao_interna;
+alter table public.documentos drop constraint if exists arquivos_internos;
+alter table public.documentos add constraint arquivos_internos
+  check (not public.categoria_interna(categoria) or arquivo_path like '%/interno/%');
+
 -- 4. Assinaturas (ZapSign) ---------------------------------------------------
 create table if not exists public.assinaturas (
   id uuid primary key default gen_random_uuid(),
@@ -141,7 +153,7 @@ create policy "equipe documentos" on public.documentos for all
   using (public.eh_equipe()) with check (public.eh_equipe());
 drop policy if exists "cliente ve documentos" on public.documentos;
 create policy "cliente ve documentos" on public.documentos for select
-  using (categoria <> 'medicao' and public.eh_meu_processo(processo_id));
+  using (not public.categoria_interna(categoria) and public.eh_meu_processo(processo_id));
 
 -- Assinaturas: só o servidor (funções zapsign-*) cria e atualiza; equipe e cliente leem.
 drop policy if exists "equipe le assinaturas" on public.assinaturas;
@@ -157,7 +169,9 @@ create policy "cliente le assinaturas" on public.assinaturas for select
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('documentos', 'documentos', false, 52428800, array[
   'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
-  'image/vnd.dwg', 'application/acad', 'application/octet-stream'
+  'image/vnd.dwg', 'application/acad', 'application/octet-stream',
+  'application/zip', 'application/x-zip-compressed',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ])
 on conflict (id) do update set
   public = false,

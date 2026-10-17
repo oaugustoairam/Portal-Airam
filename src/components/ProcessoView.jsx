@@ -13,6 +13,7 @@ import { FOTOS, fotoDoProcesso } from '../lib/fotos.js'
 import { useContador, useRevelar } from '../lib/movimento.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
+import AvancoEtapa from './AvancoEtapa.jsx'
 import ContagemObra from './ContagemObra.jsx'
 import Garantia from './Garantia.jsx'
 
@@ -28,6 +29,7 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
   return (
     <article className="processo">
       <Hero processo={processo} etapas={etapas} documentos={documentos} />
+      {!visualizacao && <AvancoEtapa processoId={processo.id} etapas={etapas} />}
 
       {(processo.recado_cliente || pendentes.length > 0) && (
         <div className="avisos-topo">
@@ -300,8 +302,9 @@ export function LinhaDoc({ doc, acoes, indice = 0 }) {
         </span>
         <span className="doc-data num">Enviado em {formatarData(doc.criado_em?.slice(0, 10))}</span>
       </div>
-      <a className="btn btn-contorno" href={url || '#'} target="_blank" rel="noreferrer" aria-disabled={!url}>
-        Abrir
+      <a className="btn btn-contorno" href={url || '#'} target="_blank" rel="noreferrer" aria-disabled={!url}
+        download={abreNoNavegador(doc) ? undefined : doc.titulo}>
+        {abreNoNavegador(doc) ? 'Abrir' : 'Baixar'}
       </a>
       {acoes}
     </li>
@@ -362,6 +365,12 @@ export function extensao(doc) {
   const m = doc.tipo_mime || ''
   if (m.includes('pdf')) return 'PDF'
   if (m.startsWith('image/')) return 'IMG'
-  if (doc.arquivo_path?.toLowerCase().endsWith('.dwg')) return 'DWG'
+  const ext = (doc.arquivo_path?.startsWith('data:') ? doc.titulo : doc.arquivo_path)?.toLowerCase().match(/\.(dwg|promob|zip|docx)$/)?.[1]
+  if (ext) return ext === 'promob' ? 'PROMOB' : ext.toUpperCase()
+  if (m.includes('zip')) return 'ZIP'
+  if (m.includes('wordprocessingml')) return 'DOCX'
   return 'DOC'
 }
+
+// PDF e imagens abrem no navegador; Promob, DWG, ZIP e DOCX são baixados
+const abreNoNavegador = (doc) => /pdf|^image\//.test(doc.tipo_mime || '')

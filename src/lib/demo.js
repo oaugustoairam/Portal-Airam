@@ -46,7 +46,7 @@ export function criarDadosDemo() {
     categoria,
     titulo,
     arquivo_path: tipo === 'img' ? extra.img : docFicticio(titulo),
-    tipo_mime: tipo === 'img' ? extra.mime || 'image/svg+xml' : 'application/pdf',
+    tipo_mime: tipo === 'img' ? extra.mime || 'image/svg+xml' : extra.mime || 'application/pdf',
     assinado: !!extra.assinado,
     criado_em: quando(dias),
   })
@@ -164,6 +164,11 @@ export function criarDadosDemo() {
       },
     ],
     documentos: [
+      doc('d20', p1, 'promob', 'Cozinha integrada — versão vendida.promob', 'arq', -58, { mime: 'application/octet-stream' }),
+      doc('d21', p1, 'promob', 'Suíte e home office — versão vendida.promob', 'arq', -58, { mime: 'application/octet-stream' }),
+      doc('d22', p1, 'ficha_cadastral', 'Ficha cadastral — Marina Duarte', 'pdf', -58),
+      doc('d23', p1, 'documento_cliente', 'RG e CPF', 'pdf', -58),
+      doc('d24', p1, 'documento_cliente', 'Comprovante de residência', 'pdf', -58),
       doc('d2', p1, 'contrato', 'Contrato assinado — 2561', 'pdf', -58, { assinado: true }),
       doc('d3', p1, 'medicao', 'Croqui de medição — ambientes', 'pdf', -44),
       doc('d4', p1, 'projeto_inicial', 'Projeto inicial — planta e vistas', 'pdf', -50),

@@ -2,7 +2,7 @@
 // caso contrário roda em modo demonstração, com dados de exemplo no navegador.
 import { createClient } from '@supabase/supabase-js'
 import { criarDadosDemo, SENHA_DEMO } from './demo.js'
-import { calcularTipoPrazo, cpfValido, telefoneNumeros } from './constants.js'
+import { calcularTipoPrazo, cpfValido, telefoneNumeros, ehInterna } from './constants.js'
 import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
@@ -12,7 +12,9 @@ export const MODO_DEMO = !url || !chave
 const sb = MODO_DEMO ? null : createClient(url, chave)
 
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-const EXTENSOES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg']
+const EXTENSOES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg', '.promob', '.zip', '.docx']
+// arquivos que o navegador costuma mandar sem tipo (ou com tipos variados)
+const EXTENSOES_LIVRES = ['.dwg', '.promob', '.zip', '.docx']
 const TAMANHO_MAXIMO = 50 * 1024 * 1024
 const ERRO_LOGIN = 'Dados de acesso ou senha incorretos.'
 
@@ -29,14 +31,14 @@ function limparPerfil(d) {
 function validarArquivo(arquivo) {
   const nome = arquivo.name.toLowerCase()
   const extOk = EXTENSOES_PERMITIDAS.some((e) => nome.endsWith(e))
-  const tipoOk = TIPOS_PERMITIDOS.includes(arquivo.type) || nome.endsWith('.dwg')
-  if (!extOk || !tipoOk) throw new Error('Tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP ou DWG.')
+  const tipoOk = TIPOS_PERMITIDOS.includes(arquivo.type) || EXTENSOES_LIVRES.some((e) => nome.endsWith(e))
+  if (!extOk || !tipoOk) throw new Error('Tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP, DWG, Promob, ZIP ou DOCX.')
   if (arquivo.size > TAMANHO_MAXIMO) throw new Error('O arquivo passa de 50 MB.')
 }
 
 function caminhoArquivo(processoId, categoria, nome) {
   const seguro = nome.normalize('NFD').replace(/[^\w.-]+/g, '_')
-  const pasta = categoria === 'medicao' ? `${processoId}/interno` : processoId
+  const pasta = ehInterna(categoria) ? `${processoId}/interno` : processoId
   return `${pasta}/${Date.now()}-${seguro}`
 }
 
@@ -267,7 +269,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v12'
+const CHAVE_DEMO = 'portal-airam-demo-v13'
 let memoria = null
 const ouvintes = new Set()
 
@@ -406,7 +408,7 @@ const demoApi = {
     const cliente = conta?.papel === 'cliente'
     return {
       ...comTipo(p),
-      documentos: d.documentos.filter((x) => x.processo_id === id && !(cliente && x.categoria === 'medicao')),
+      documentos: d.documentos.filter((x) => x.processo_id === id && !(cliente && ehInterna(x.categoria))),
       assinaturas: d.assinaturas.filter((a) => a.processo_id === id),
     }
   },

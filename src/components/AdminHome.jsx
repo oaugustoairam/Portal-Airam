@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
-  CATEGORIAS,
+  CATEGORIAS_CLIENTE,
+  CATEGORIAS_INTERNAS,
+  ehInterna,
   TIPOS_PRAZO,
   calcularTipoPrazo,
   diasEntre,
@@ -356,7 +358,7 @@ function EditorProcesso({ id, abaInicial = 'dados', codigos, onFechar, onCriado 
 
       {id && (
         <div className="abas">
-          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['assinaturas', 'Assinaturas'], ['cronograma', 'Controle interno'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
+          {[['dados', 'Dados e prazos'], ['anexos', 'Anexos'], ['internos', 'Arquivos internos'], ['assinaturas', 'Assinaturas'], ['cronograma', 'Controle interno'], ['avisos', 'Avisos'], ['acesso', 'Acesso do cliente'], ['cliente', 'Ver como cliente']].map(([k, t]) => (
             <button key={k} className={`aba ${aba === k ? 'aba-ativa' : ''}`} onClick={() => setAba(k)}>{t}</button>
           ))}
         </div>
@@ -375,7 +377,8 @@ function EditorProcesso({ id, abaInicial = 'dados', codigos, onFechar, onCriado 
           onExcluido={onFechar}
         />
       )}
-      {aba === 'anexos' && <Anexos processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'anexos' && <Anexos processo={processo} categorias={CATEGORIAS_CLIENTE} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
+      {aba === 'internos' && <Anexos processo={processo} categorias={CATEGORIAS_INTERNAS} interno onMudou={async (t) => { await recarregar(); avisar(t) }} />}
       {aba === 'assinaturas' && <Assinaturas processo={processo} onMudou={async (t) => { await recarregar(); avisar(t) }} />}
       {aba === 'cronograma' && (
         <>
@@ -390,7 +393,7 @@ function EditorProcesso({ id, abaInicial = 'dados', codigos, onFechar, onCriado 
       {aba === 'acesso' && <Acesso processo={processo} />}
       {aba === 'cliente' && (
         <div className="preview-cliente">
-          <ProcessoView processo={{ ...processo, documentos: processo.documentos.filter((d) => d.categoria !== 'medicao') }} visualizacao />
+          <ProcessoView processo={{ ...processo, documentos: processo.documentos.filter((d) => !ehInterna(d.categoria)) }} visualizacao />
         </div>
       )}
     </section>
@@ -590,8 +593,10 @@ function EtapaData({ id, rotulo, valor, onData, feito, onFeito, textoFeito, trav
 }
 
 // ============================================================ Anexos
-function Anexos({ processo, onMudou }) {
-  const [categoria, setCategoria] = useState('medicao')
+// Anexos que o cliente vê (contrato, projetos, renders) ou arquivos internos do cliente
+// (medição, Promob vendido, documentos pessoais e ficha cadastral), que só a loja vê.
+function Anexos({ processo, onMudou, categorias, interno = false }) {
+  const [categoria, setCategoria] = useState(categorias[0].id)
   const [titulo, setTitulo] = useState('')
   const [arquivo, setArquivo] = useState(null)
   const [enviando, setEnviando] = useState(false)
@@ -616,41 +621,51 @@ function Anexos({ processo, onMudou }) {
     }
   }
 
-  const cat = CATEGORIAS.find((c) => c.id === categoria)
-
   return (
     <div className="form">
+      {interno ? (
+        <div className="aviso-interno" role="note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+          <span><strong>Somente a loja vê esta aba.</strong> O cliente não tem acesso a estes arquivos no portal, nem pelo link do arquivo.</span>
+        </div>
+      ) : (
+        <p className="dica">O cliente vê estes anexos no portal. Arquivos do cliente que são só da loja ficam em Arquivos internos.</p>
+      )}
       <form className="envio" onSubmit={enviar}>
         <div className="grade grade-3">
           <Campo id="d-cat" rotulo="Tipo de anexo">
             <select id="d-cat" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-              {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.interno ? ' (somente loja)' : ''}</option>)}
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </Campo>
           <Campo id="d-titulo" rotulo="Título">
-            <input id="d-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Projeto final — rev. 2" />
+            <input id="d-titulo" value={titulo} onChange={(e) => setTitulo(e.target.value)}
+              placeholder={interno ? 'Ex.: Cozinha — versão vendida' : 'Ex.: Projeto final — rev. 2'} />
           </Campo>
-          <Campo id="d-arq" rotulo="Arquivo (PDF, JPG, PNG, WEBP ou DWG, até 50 MB)">
-            <input id="d-arq" type="file" required accept=".pdf,.jpg,.jpeg,.png,.webp,.dwg" onChange={(e) => setArquivo(e.target.files[0] || null)} />
+          <Campo id="d-arq" rotulo={interno ? 'Arquivo (Promob, PDF, imagem, ZIP, DOCX ou DWG, até 50 MB)' : 'Arquivo (PDF, JPG, PNG, WEBP ou DWG, até 50 MB)'}>
+            <input id="d-arq" type="file" required accept={interno ? '.promob,.pdf,.jpg,.jpeg,.png,.webp,.zip,.docx,.dwg' : '.pdf,.jpg,.jpeg,.png,.webp,.dwg'}
+              onChange={(e) => setArquivo(e.target.files[0] || null)} />
           </Campo>
         </div>
-        <p className={`dica ${cat.interno ? 'dica-interno' : ''}`}>
-          {cat.interno ? 'Somente a loja vê este anexo. O cliente não tem acesso.' : 'O cliente vê este anexo no portal.'}
-        </p>
         {erro && <p className="erro" role="alert">{erro}</p>}
         <div className="acoes">
           <button className="btn btn-principal" disabled={enviando || !arquivo}>{enviando ? 'Enviando…' : 'Enviar anexo'}</button>
         </div>
       </form>
 
-      {CATEGORIAS.map((c) => {
+      {categorias.map((c) => {
         const docs = processo.documentos.filter((d) => d.categoria === c.id)
-        if (!docs.length) return null
+        if (!docs.length) return interno ? (
+          <div key={c.id} className="grupo-docs">
+            <h3 className="rotulo">{c.nome}</h3>
+            <p className="vazio-mini">Nenhum arquivo ainda.</p>
+          </div>
+        ) : null
         return (
           <div key={c.id} className="grupo-docs">
             <h3 className="rotulo">
               {c.nome}
-              {c.interno && <span className="chip chip-interno chip-mini">Somente loja</span>}
+              {!interno && c.interno && <span className="chip chip-interno chip-mini">Somente loja</span>}
             </h3>
             <ul className="docs">
               {docs.map((d) => (
