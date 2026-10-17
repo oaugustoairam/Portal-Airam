@@ -23,9 +23,12 @@ export function definirCelula(xml, ref, valor) {
   return xml.replace(re, celula)
 }
 
+// modelo: endereço do arquivo ou data URI em base64.
 // celulas: { 'xl/worksheets/sheet1.xml': { A1: 'texto', B2: 12 } }; trocas: [[arquivo, de, para]]
-export async function preencherModelo(url, celulas, trocas = []) {
-  const zip = await JSZip.loadAsync(await (await fetch(url)).arrayBuffer())
+export async function preencherModelo(modelo, celulas, trocas = []) {
+  const zip = modelo.startsWith('data:')
+    ? await JSZip.loadAsync(modelo.slice(modelo.indexOf(',') + 1), { base64: true })
+    : await JSZip.loadAsync(await (await fetch(modelo)).arrayBuffer())
   for (const [arquivo, valores] of Object.entries(celulas)) {
     let xml = await zip.file(arquivo).async('string')
     for (const [ref, valor] of Object.entries(valores)) xml = definirCelula(xml, ref, valor)

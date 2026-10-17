@@ -1,7 +1,8 @@
 // Planilhas da gestão de clientes, nos modelos da Airam:
 // capa do envelope (controle de pedido) e relação mensal de clientes (feedback de vendas).
-import modeloCapa from '../assets/modelos/capa-envelope.xlsx?url'
-import modeloFeedback from '../assets/modelos/feedback-vendas.xlsx?url'
+// modelos embutidos no código (base64), carregados só quando alguém gera uma planilha
+import modeloCapa from '../assets/modelos/capa-envelope.xlsx?base64'
+import modeloFeedback from '../assets/modelos/feedback-vendas.xlsx?base64'
 import { preencherModelo, serialExcel } from './xlsx.js'
 import { financeira, nomeMes } from './vendas.js'
 
