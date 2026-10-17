@@ -3,10 +3,16 @@ import { useRef } from 'react'
 // Campo de data com calendário: abre o calendário ao tocar no campo ou no ícone.
 export default function CampoData({ id, rotulo, valor, onChange, obrigatorio, desabilitado, ajuda }) {
   const ref = useRef(null)
+  // showPicker abre o calendário (Chrome, Safari 16+). Onde não existe, o foco no campo
+  // abre o seletor nativo do aparelho (no iPhone, a roda de datas).
   const abrir = () => {
+    const el = ref.current
+    if (!el) return
     try {
-      ref.current?.showPicker?.()
+      if (el.showPicker) return el.showPicker()
     } catch {}
+    el.focus()
+    el.click()
   }
   return (
     <div className="campo">

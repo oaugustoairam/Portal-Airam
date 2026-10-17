@@ -35,3 +35,11 @@ Sem configuração, roda em **modo demonstração** (senha das contas de exemplo
    mesmas variáveis `VITE_SUPABASE_*`.
 
 Segurança e configurações obrigatórias do painel: [SEGURANCA.md](SEGURANCA.md).
+
+## App no celular (iPhone e Android)
+
+O portal funciona como aplicativo instalado (PWA), sem precisar da App Store:
+- **iPhone:** abra o portal no Safari > **Compartilhar** > **Adicionar à Tela de Início**. O portal mostra esse passo a passo ao cliente.
+- **Android:** o portal mostra o botão **Instalar**.
+
+O app abre em tela cheia, com ícone e tela de abertura da Airam. As telas ficam guardadas para abrir rápido, mas dados e documentos sempre vêm direto do servidor e nunca ficam salvos no aparelho.

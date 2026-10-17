@@ -394,3 +394,47 @@ input:disabled { opacity: .5; }
 .regras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--tinta-2); }
 .regra-ok { color: var(--tinta); font-weight: 600; }
 .doc .chip-mini { margin-left: 8px; }
+
+/* ===== iPhone / app instalado ===== */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+/* Barra de status translúcida no app instalado: o topo vermelho passa por trás do relógio/entalhe */
+.topo { top: 0; padding-top: env(safe-area-inset-top, 0px); }
+.conteudo { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+/* Campos com 16px: abaixo disso o Safari do iPhone dá zoom ao tocar */
+input, select, textarea { font-size: 16px; }
+input, select, textarea, .btn { min-height: 44px; }   /* área de toque recomendada pela Apple */
+.btn-icone, .chip { min-height: 0; }
+input[type='date'] { -webkit-appearance: none; appearance: none; text-align: left; display: flex; align-items: center; }
+input[type='date']::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input[type='search'] { -webkit-appearance: none; appearance: none; }
+select { -webkit-appearance: none; appearance: none; padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--tinta-2) 50%), linear-gradient(135deg, var(--tinta-2) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.check input { min-height: 0; }
+.modal { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.modal-assinatura { max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+.zapsign-frame { height: min(78dvh, 820px); }
+.modal-fig img { max-height: 78dvh; }
+.abas { -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.abas::-webkit-scrollbar { display: none; }
+@media (max-width: 600px) {
+  .modal { padding: env(safe-area-inset-top, 0px) 0 0; place-items: end stretch; }
+  .modal-assinatura { max-width: none; border-radius: 14px 14px 0 0; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px); }
+  .zapsign-frame { height: calc(100dvh - env(safe-area-inset-top, 0px) - 140px); }
+  .modal-assinatura-rodape { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .cartao-assinar .btn { width: 100%; }
+  .topo-email { display: none; }
+}
+
+/* Aviso de instalação */
+.instalar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--superficie); border: 1px solid var(--linha); border-radius: 12px; padding: 12px 14px;
+}
+.instalar-icone { border-radius: 10px; flex: none; }
+.instalar-texto { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; font-size: 14px; color: var(--tinta-2); }
+.instalar-texto strong { color: var(--tinta); font: 700 15px var(--f-display); }
+.icone-compartilhar { vertical-align: -3px; color: #0a84ff; }
+.instalar-acoes { display: flex; gap: 6px; align-items: center; }
+.instalar-acoes { margin-left: auto; }

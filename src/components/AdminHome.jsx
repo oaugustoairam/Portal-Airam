@@ -84,7 +84,7 @@ export default function AdminHome() {
       )}
 
       <div className="filtros">
-        <input id="busca" type="search" placeholder="Buscar por nome ou código" value={busca}
+        <input id="busca" type="search" autoCapitalize="none" autoCorrect="off" placeholder="Buscar por nome ou código" value={busca}
           onChange={(e) => setBusca(e.target.value)} aria-label="Buscar processo" />
         <div className="segmentado" role="group" aria-label="Filtrar por prazo">
           {[['todos', 'Todos'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro'], ['concluidos', 'Entregues']].map(([k, t]) => (
@@ -272,7 +272,7 @@ function FormDados({ processo, onSalvo, onExcluido }) {
               onChange={(e) => set('cliente_cpf')(formatarCpf(e.target.value))} />
           </Campo>
           <Campo id="p-email" rotulo="E-mail" obrigatorio ajuda="Login do cliente e assinatura">
-            <input id="p-email" type="email" required value={f.cliente_email} onChange={set('cliente_email')} />
+            <input id="p-email" type="email" required autoCapitalize="none" autoCorrect="off" spellCheck={false} value={f.cliente_email} onChange={set('cliente_email')} />
           </Campo>
           <Campo id="p-tel" rotulo="Telefone / WhatsApp">
             <input id="p-tel" inputMode="tel" value={f.cliente_telefone || ''} onChange={set('cliente_telefone')} />

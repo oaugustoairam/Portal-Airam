@@ -28,6 +28,15 @@
           "value": "camera=(self \"https://app.zapsign.com.br\" \"https://app.zapsign.co\"), microphone=(), geolocation=(), payment=()"
         }
       ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
   ]
 }

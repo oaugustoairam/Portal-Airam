@@ -6,3 +6,9 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self "https://app.zapsign.com.br" "https://app.zapsign.co"), microphone=(), geolocation=(), payment=()
+
+# O service worker precisa ser sempre o mais novo
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Content-Type: application/manifest+json

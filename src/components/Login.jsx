@@ -41,7 +41,7 @@ export default function Login() {
       <form className="login-form" onSubmit={entrar}>
         <div className="campo">
           <label htmlFor="login-id">E-mail ou CPF</label>
-          <input id="login-id" required autoComplete="username" value={id}
+          <input id="login-id" required autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={id}
             onChange={(e) => mudarId(e.target.value)} placeholder="nome@email.com ou 000.000.000-00" />
         </div>
         <div className="campo">

@@ -4,6 +4,7 @@ import Login from './components/Login.jsx'
 import TrocarSenha from './components/TrocarSenha.jsx'
 import ClienteHome from './components/ClienteHome.jsx'
 import AdminHome from './components/AdminHome.jsx'
+import InstalarApp from './components/InstalarApp.jsx'
 import logoBranco from './assets/logo-branco.png'
 
 export const NOME_EMPRESA = 'Airam Arquitetura & Marcenaria'
@@ -43,6 +44,7 @@ export default function App() {
         )}
       </header>
       <main className="conteudo">
+        {!equipe && <InstalarApp />}
         {!perfil && <Login />}
         {perfil?.precisa_trocar_senha && <TrocarSenha perfil={perfil} />}
         {perfil && !perfil.precisa_trocar_senha && (equipe ? <AdminHome /> : <ClienteHome />)}

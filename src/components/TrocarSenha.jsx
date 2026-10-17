@@ -39,7 +39,7 @@ export default function TrocarSenha({ perfil }) {
       <form className="login-form" onSubmit={salvar}>
         <div className="campo">
           <label htmlFor="nova-senha">Nova senha</label>
-          <input id="nova-senha" type="password" autoComplete="new-password" value={senha}
+          <input id="nova-senha" type="password" autoComplete="new-password" passwordrules="minlength: 8; required: lower; required: upper; required: digit;" value={senha}
             onChange={(e) => setSenha(e.target.value)} />
         </div>
         <div className="campo">
