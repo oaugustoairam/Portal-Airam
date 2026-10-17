@@ -267,7 +267,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v11'
+const CHAVE_DEMO = 'portal-airam-demo-v12'
 let memoria = null
 const ouvintes = new Set()
 

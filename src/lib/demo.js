@@ -1,3 +1,4 @@
+import { FOTOS } from './fotos.js'
 // Dados de exemplo para o modo demonstração. Pessoas, CPFs e endereços são fictícios.
 
 export const SENHA_DEMO = 'airam123'
@@ -11,22 +12,6 @@ function dia(desloc) {
 const quando = (desloc) => new Date(Date.now() + desloc * 86400000).toISOString()
 
 // "Render" ilustrativo em SVG (ambiente em perspectiva simples)
-function renderSvg(titulo, parede, piso, movel) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
-  <rect width="800" height="500" fill="${parede}"/>
-  <polygon points="0,500 160,360 640,360 800,500" fill="${piso}"/>
-  <polygon points="0,0 160,90 160,360 0,500" fill="#000" opacity=".08"/>
-  <polygon points="800,0 640,90 640,360 800,500" fill="#000" opacity=".14"/>
-  <rect x="190" y="120" width="250" height="240" fill="${movel}"/>
-  <rect x="200" y="130" width="110" height="220" fill="#fff" opacity=".12"/>
-  <rect x="320" y="130" width="110" height="220" fill="#fff" opacity=".08"/>
-  <rect x="470" y="150" width="140" height="120" fill="#e3ebee" stroke="#fff" stroke-width="6"/>
-  <rect x="460" y="300" width="160" height="60" fill="${movel}" opacity=".85"/>
-  <text x="24" y="476" font-family="sans-serif" font-size="20" fill="#fff">${titulo}</text>
-</svg>`
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
-}
-
 // data de nascimento fictícia que cai daqui a `desloc` dias (no ano informado)
 function nascimento(desloc, ano) {
   const d = new Date()
@@ -41,6 +26,9 @@ function docFicticio(titulo) {
 <p>Documento de exemplo do modo demonstração. No portal real, aqui abre o PDF enviado pela Airam.</p></body>`
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
 }
+
+// Renders da demonstração: fotos de ambientes da Airam
+const foto = (nome) => FOTOS.find((f) => f.nome === nome).src
 
 export function criarDadosDemo() {
   const p1 = 'demo-0154'
@@ -58,7 +46,7 @@ export function criarDadosDemo() {
     categoria,
     titulo,
     arquivo_path: tipo === 'img' ? extra.img : docFicticio(titulo),
-    tipo_mime: tipo === 'img' ? 'image/svg+xml' : 'application/pdf',
+    tipo_mime: tipo === 'img' ? extra.mime || 'image/svg+xml' : 'application/pdf',
     assinado: !!extra.assinado,
     criado_em: quando(dias),
   })
@@ -179,16 +167,16 @@ export function criarDadosDemo() {
       doc('d2', p1, 'contrato', 'Contrato assinado — 2561', 'pdf', -58, { assinado: true }),
       doc('d3', p1, 'medicao', 'Croqui de medição — ambientes', 'pdf', -44),
       doc('d4', p1, 'projeto_inicial', 'Projeto inicial — planta e vistas', 'pdf', -50),
-      doc('d5', p1, 'render', 'Cozinha integrada', 'img', -40, { img: renderSvg('Cozinha integrada', '#7d8a90', '#d9d2c7', '#a0764f') }),
-      doc('d6', p1, 'render', 'Suíte master', 'img', -40, { img: renderSvg('Suíte master', '#a39486', '#d8cdbf', '#8a5a3c') }),
-      doc('d7', p1, 'render', 'Home office', 'img', -39, { img: renderSvg('Home office', '#9aa39b', '#cdbfa9', '#5b6b73') }),
+      doc('d5', p1, 'render', 'Cozinha integrada', 'img', -40, { img: foto('Cozinha'), mime: 'image/webp' }),
+      doc('d6', p1, 'render', 'Suíte master', 'img', -40, { img: foto('Dormitório'), mime: 'image/webp' }),
+      doc('d7', p1, 'render', 'Home office', 'img', -39, { img: foto('Home office'), mime: 'image/webp' }),
       doc('d8', p1, 'projeto_final', 'Projeto final — executivo', 'pdf', -30),
       doc('d9', p1, 'projeto_final', 'Projeto final assinado', 'pdf', -27, { assinado: true }),
       doc('d10', p2, 'contrato', 'Contrato assinado — 2568', 'pdf', -70, { assinado: true }),
       doc('d16', p2, 'projeto_inicial', 'Projeto inicial — cozinha e dormitórios', 'pdf', -60),
       doc('d12', p3, 'contrato', 'Contrato assinado — 2565', 'pdf', -34, { assinado: true }),
       doc('d13', p3, 'projeto_inicial', 'Projeto inicial — closet', 'pdf', -28),
-      doc('d14', p3, 'render', 'Closet', 'img', -25, { img: renderSvg('Closet', '#6f6660', '#cfc4b6', '#3b3330') }),
+      doc('d14', p3, 'render', 'Closet', 'img', -25, { img: foto('Closet'), mime: 'image/webp' }),
       doc('d15', p3, 'projeto_final', 'Projeto final — closet e banheiro', 'pdf', -2),
     ],
     avisos: [

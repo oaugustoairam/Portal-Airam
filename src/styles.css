@@ -1398,3 +1398,9 @@ body { letter-spacing: 0; font-feature-settings: 'ss01' off; }
 .pasta-numero-alerta { border-color: var(--marca); }
 .pasta-numero-alerta .indicador-valor { color: var(--marca); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Fundo do topo do cliente: imagens alternando com transição suave */
+.hero-foto { opacity: 0; transform: scale(1.08); transition: opacity 1.4s ease, transform 7.5s ease-out; }
+.hero-foto.ativa { opacity: 1; }
+.hero-pronto .hero-foto.ativa { transform: scale(1); }
+@media (prefers-reduced-motion: reduce) { .hero-foto { transform: none !important; } }

@@ -9,7 +9,7 @@ import {
   formatarData,
   ROTULO_PRAZO,
 } from '../lib/constants.js'
-import { fotoDoProcesso } from '../lib/fotos.js'
+import { FOTOS, fotoDoProcesso } from '../lib/fotos.js'
 import { useContador, useRevelar } from '../lib/movimento.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
@@ -83,10 +83,8 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
 
 // ---------------------------------------------------------------- Topo com foto e progresso
 function Hero({ processo, etapas, documentos }) {
-  // usa o render do cliente como fundo (só fotos/imagens reais; ilustrações SVG ficam de fora)
-  const render = documentos.find((d) => d.categoria === 'render' && /^image\/(jpeg|png|webp)$/.test(d.tipo_mime || ''))
-  const urlRender = useUrlOpcional(render)
-  const fundo = urlRender || fotoDoProcesso(processo.ambientes).src
+  const fundos = useFundos(documentos, processo.ambientes)
+  const fundoAtual = useAlternar(fundos.length, 6000)
   const pct = progresso(etapas)
   const atual = etapaAtual(etapas)
   const dias = diasAte(processo.data_entrega_prevista)
@@ -103,7 +101,10 @@ function Hero({ processo, etapas, documentos }) {
 
   return (
     <header className={`hero ${montado ? 'hero-pronto' : ''}`}>
-      <img className="hero-foto" src={fundo} alt="" />
+      {fundos.map((src, i) => (
+        <img key={src} className={`hero-foto ${i === fundoAtual ? 'ativa' : ''}`} src={src} alt="" aria-hidden="true"
+          loading={i === 0 ? 'eager' : 'lazy'} />
+      ))}
       <div className="hero-veu" />
       <div className="hero-in">
         <div className="hero-texto">
@@ -240,6 +241,36 @@ function Slide({ doc, onAbrir }) {
       </span>
     </button>
   )
+}
+
+// Fundos do topo: os renders do cliente; sem render, as fotos de ambientes da loja
+// (começando pela que combina com os ambientes do processo).
+function useFundos(documentos, ambientes) {
+  const renders = documentos.filter((d) => d.categoria === 'render' && d.tipo_mime?.startsWith('image/'))
+  const chave = renders.map((d) => d.id).join(',')
+  const [urls, setUrls] = useState([])
+  useEffect(() => {
+    let vivo = true
+    setUrls([])
+    Promise.all(renders.map((d) => api.urlDocumento(d).catch(() => null)))
+      .then((lista) => vivo && setUrls(lista.filter(Boolean)))
+    return () => (vivo = false)
+  }, [chave])
+  if (urls.length) return urls
+  const primeira = fotoDoProcesso(ambientes || '').src
+  return [primeira, ...FOTOS.map((f) => f.src).filter((src) => src !== primeira)]
+}
+
+// Índice que avança sozinho; parado para quem pede menos movimento no aparelho
+function useAlternar(total, intervalo) {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    setI(0)
+    if (total < 2 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const t = setInterval(() => setI((x) => (x + 1) % total), intervalo)
+    return () => clearInterval(t)
+  }, [total, intervalo])
+  return i
 }
 
 function useUrlOpcional(doc) {
