@@ -2,7 +2,7 @@
 // caso contrário roda em modo demonstração, com dados de exemplo no navegador.
 import { createClient } from '@supabase/supabase-js'
 import { criarDadosDemo, SENHA_DEMO } from './demo.js'
-import { calcularTipoPrazo } from './constants.js'
+import { calcularTipoPrazo, cpfValido, telefoneNumeros } from './constants.js'
 import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
@@ -14,7 +14,7 @@ const sb = MODO_DEMO ? null : createClient(url, chave)
 const TIPOS_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const EXTENSOES_PERMITIDAS = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg']
 const TAMANHO_MAXIMO = 50 * 1024 * 1024
-const ERRO_LOGIN = 'E-mail/CPF ou senha incorretos.'
+const ERRO_LOGIN = 'Dados de acesso ou senha incorretos.'
 
 // campos do "Meu perfil" que o próprio cliente edita
 const CAMPOS_PERFIL = ['nome_preferido', 'telefone', 'telefone_2', 'nascimento', 'cep', 'endereco', 'numero', 'complemento',
@@ -82,7 +82,7 @@ const supabaseApi = {
       if (error) throw new Error(ERRO_LOGIN)
       return
     }
-    const { data, error } = await sb.functions.invoke('entrar-cpf', { body: { cpf: id, senha } })
+    const { data, error } = await sb.functions.invoke('entrar-cpf', { body: { identificador: id, senha } })
     if (error || !data?.access_token) throw new Error(ERRO_LOGIN)
     await sb.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token })
   },
@@ -299,6 +299,23 @@ function simularAvisos(p, eventos) {
   return eventos.length
 }
 
+// Mesma regra do servidor: e-mail, CPF ou telefone do processo. Telefone usado por
+// mais de um cliente não entra (ambíguo).
+function acharContaDemo(d, identificador, soCliente = false) {
+  const id = String(identificador || '').trim().toLowerCase()
+  const lista = soCliente ? d.contas.filter((c) => c.papel === 'cliente') : d.contas
+  if (id.includes('@')) return lista.find((c) => c.email === id)
+  const n = id.replace(/\D/g, '')
+  if (n.length === 11 && cpfValido(n)) {
+    const porCpf = lista.find((c) => c.cpf === n)
+    if (porCpf) return porCpf
+  }
+  const tel = telefoneNumeros(n)
+  if (tel.length < 10) return undefined
+  const emails = [...new Set(d.processos.filter((p) => telefoneNumeros(p.cliente_telefone) === tel).map((p) => p.cliente_email))]
+  return emails.length === 1 ? lista.find((c) => c.email === emails[0] && c.papel === 'cliente') : undefined
+}
+
 const demoApi = {
   aoMudarSessao(cb) {
     ouvintes.add(cb)
@@ -306,10 +323,7 @@ const demoApi = {
   },
   async entrar(identificador, senha) {
     const d = db()
-    const id = identificador.trim().toLowerCase()
-    const conta = d.contas.find(
-      (c) => c.email === id || (c.cpf && c.cpf === id.replace(/\D/g, '') && id.replace(/\D/g, '').length === 11)
-    )
+    const conta = acharContaDemo(d, identificador)
     if (!conta || conta.senha !== senha) throw new Error(ERRO_LOGIN)
     d.sessao = { email: conta.email }
     gravar()
@@ -317,8 +331,7 @@ const demoApi = {
   },
   async recuperarSenha(identificador, canal) {
     const d = db()
-    const id = identificador.trim().toLowerCase()
-    const conta = d.contas.find((c) => c.papel === 'cliente' && (c.email === id || (c.cpf && c.cpf === id.replace(/\D/g, ''))))
+    const conta = acharContaDemo(d, identificador, true)
     d.codigoDemo = conta ? { email: conta.email, codigo: '123456', canal } : null
     gravar()
     return 'Se o cadastro existir, enviamos um código de 6 dígitos. Ele vale por 10 minutos. (Demonstração: use 123456)'

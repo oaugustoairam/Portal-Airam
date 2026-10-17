@@ -387,7 +387,7 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           <Campo id="p-email" rotulo="E-mail" obrigatorio ajuda="Login do cliente e assinatura">
             <input id="p-email" type="email" required autoCapitalize="none" autoCorrect="off" spellCheck={false} value={f.cliente_email} onChange={set('cliente_email')} />
           </Campo>
-          <Campo id="p-tel" rotulo="Telefone / WhatsApp">
+          <Campo id="p-tel" rotulo="Telefone / WhatsApp" ajuda="Também serve para o cliente entrar no portal">
             <input id="p-tel" inputMode="tel" value={f.cliente_telefone || ''} onChange={set('cliente_telefone')} />
           </Campo>
           <CampoData id="p-nasc" rotulo="Data de nascimento" valor={f.cliente_nascimento} onChange={set('cliente_nascimento')}

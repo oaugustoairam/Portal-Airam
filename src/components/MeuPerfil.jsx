@@ -1,18 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
-import { formatarCpf } from '../lib/constants.js'
+import { formatarCpf, formatarTelefone } from '../lib/constants.js'
 import CampoData from './CampoData.jsx'
 import Avatar from './Avatar.jsx'
 
 const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
 
-function formatarTelefone(v) {
-  const n = String(v || '').replace(/\D/g, '').slice(0, 11)
-  if (n.length <= 2) return n
-  if (n.length <= 6) return `(${n.slice(0, 2)}) ${n.slice(2)}`
-  if (n.length <= 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`
-  return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`
-}
 const formatarCep = (v) => String(v || '').replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2')
 
 // Corta a foto no centro (quadrado) e reduz para 512px em JPEG, para enviar leve

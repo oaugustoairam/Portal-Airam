@@ -227,6 +227,11 @@ end $$;
 -- `enviar-notificacoes` envia os pendentes (agendada a cada minuto; veja AVISOS.md).
 alter table public.processos add column if not exists notificar boolean not null default true;
 
+-- Telefone só com números (sem o 55), para o cliente entrar no portal pelo telefone
+alter table public.processos add column if not exists telefone_numeros text
+  generated always as (regexp_replace(regexp_replace(coalesce(cliente_telefone, ''), '\D', '', 'g'), '^55(\d{10,11})$', '\1')) stored;
+create index if not exists processos_telefone_idx on public.processos (telefone_numeros);
+
 create table if not exists public.notificacoes (
   id uuid primary key default gen_random_uuid(),
   processo_id uuid not null references public.processos on delete cascade,

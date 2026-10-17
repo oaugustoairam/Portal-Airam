@@ -120,6 +120,31 @@ export function formatarCpf(v) {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 }
 
+export function formatarTelefone(v) {
+  const n = String(v || '').replace(/\D/g, '').slice(0, 11)
+  if (n.length <= 2) return n
+  if (n.length <= 6) return `(${n.slice(0, 2)}) ${n.slice(2)}`
+  if (n.length <= 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`
+  return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`
+}
+
+// Telefone só com números, sem o 55 do país: (11) 98977-6738 → 11989776738
+export function telefoneNumeros(v) {
+  const n = String(v || '').replace(/\D/g, '')
+  return /^55\d{10,11}$/.test(n) ? n.slice(2) : n
+}
+
+// Campo de entrada "E-mail, CPF ou telefone": formata quando o número fica completo.
+// 11 dígitos com CPF válido viram CPF; 10 ou 11 dígitos sem CPF válido viram telefone.
+export function formatarIdentificador(v) {
+  if (!/^[\d.\-\s()+]*$/.test(v)) return v
+  const n = v.replace(/\D/g, '')
+  if (n.length === 11 && cpfValido(n)) return formatarCpf(n)
+  if (n.length === 10 || n.length === 11) return formatarTelefone(n)
+  if (n.length === 13 && n.startsWith('55')) return formatarTelefone(n.slice(2))
+  return n
+}
+
 export function cpfValido(v) {
   const n = String(v || '').replace(/\D/g, '')
   if (n.length !== 11 || /^(\d)\1+$/.test(n)) return false

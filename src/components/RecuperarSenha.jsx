@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
-import { formatarCpf } from '../lib/constants.js'
+import { formatarIdentificador } from '../lib/constants.js'
 
 // "Esqueci minha senha": o cliente recebe um código por SMS ou e-mail e cria a nova senha sozinho.
 export default function RecuperarSenha({ onVoltar, inicial = '' }) {
@@ -60,13 +60,10 @@ export default function RecuperarSenha({ onVoltar, inicial = '' }) {
         <form className="login-form" onSubmit={pedirCodigo}>
           <p className="login-texto">Enviamos um código de verificação para o contato do seu cadastro na Airam.</p>
           <div className="campo">
-            <label htmlFor="rec-id">E-mail ou CPF</label>
+            <label htmlFor="rec-id">E-mail, CPF ou telefone</label>
             <input id="rec-id" required autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-              value={id} placeholder="nome@email.com ou 000.000.000-00"
-              onChange={(e) => {
-                const v = e.target.value
-                setId(/^[\d.\-\s]*$/.test(v) && v.replace(/\D/g, '').length > 3 ? formatarCpf(v) : v)
-              }} />
+              value={id} placeholder="E-mail, CPF ou celular"
+              onChange={(e) => setId(formatarIdentificador(e.target.value))} />
           </div>
           <fieldset className="canal">
             <legend>Receber o código por</legend>

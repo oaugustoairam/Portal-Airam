@@ -35,7 +35,7 @@ export default function ClienteHome({ aba = 'processo', onPerfilAtualizado }) {
     return (
       <div className="vazio-grande">
         <h1 className="titulo-grande">Nenhum processo por aqui ainda</h1>
-        <p>Seu processo aparece assim que a Airam cadastrá-lo com este e-mail ou CPF.</p>
+        <p>Seu processo aparece assim que a Airam cadastrá-lo com este e-mail, CPF ou telefone.</p>
       </div>
     )
 

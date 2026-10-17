@@ -2,7 +2,7 @@
 
 Sistema de processos pós-venda da Airam, com duas áreas:
 
-**Cliente** (entra com e-mail ou CPF e senha; no primeiro acesso cria a própria senha; se esquecer,
+**Cliente** (entra com e-mail, CPF ou telefone e senha; no primeiro acesso cria a própria senha; se esquecer,
 recebe um código por SMS ou e-mail e redefine sozinho)
 - Jornada: solução financeira → projeto inicial → medição → projeto final · conferência →
   projeto final · assinatura (PDF assinado pelo portal) → fabricação (ícone animado) → montagem

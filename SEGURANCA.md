@@ -4,7 +4,7 @@
 
 | Camada | O que faz | Onde está |
 |---|---|---|
-| **Login com senha** | O cliente entra com e-mail ou CPF e senha. A equipe gera uma senha provisória e o cliente é obrigado a trocá-la no primeiro acesso. O login por CPF roda no servidor e não revela se o CPF existe. | Supabase Auth + `entrar-cpf` |
+| **Login com senha** | O cliente entra com e-mail, CPF ou telefone e senha. A equipe gera uma senha provisória e o cliente é obrigado a trocá-la no primeiro acesso. O login por CPF ou telefone roda no servidor e não revela se o cadastro existe; um telefone cadastrado para mais de um cliente não serve para entrar (o cliente usa e-mail ou CPF). | Supabase Auth + `entrar-cpf` |
 | **Esqueci minha senha** | O cliente pede um código de 6 dígitos por SMS ou e-mail e cria a nova senha sozinho. O código vale 10 minutos e é guardado só como *hash*. São no máximo 5 tentativas por código e 3 códigos a cada 15 minutos. A resposta é a mesma exista ou não o cadastro. | `recuperar-senha` + `redefinir-senha` |
 | **Isolamento por cliente** | O banco só entrega um processo, um documento, uma assinatura ou um arquivo se o e-mail **confirmado** do usuário for o e-mail cadastrado no projeto. A regra fica no banco, então nem um app adulterado consegue burlar. | `supabase/schema.sql` (Row Level Security) |
 | **Cliente só lê** | Clientes não criam, editam nem apagam nada. Medição é interna: o cliente não vê nem o registro nem o arquivo. | `schema.sql` |

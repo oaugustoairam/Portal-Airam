@@ -45,18 +45,46 @@ export function gerarSenhaProvisoria() {
 }
 
 // Encontra a conta do cliente pelo e-mail ou CPF. Retorna { userId, email, telefone, nome } ou null.
-export async function acharCliente(sb, identificador) {
+function cpfValido(n: string) {
+  if (n.length !== 11 || /^(\d)\1+$/.test(n)) return false
+  const dig = (len: number) => {
+    let s = 0
+    for (let i = 0; i < len; i++) s += Number(n[i]) * (len + 1 - i)
+    const r = (s * 10) % 11
+    return r === 10 ? 0 : r
+  }
+  return dig(9) === Number(n[9]) && dig(10) === Number(n[10])
+}
+
+// E-mail do cliente a partir do que ele digitou: e-mail, CPF ou telefone do processo.
+// CPF válido tem preferência; telefone compartilhado por clientes diferentes não identifica ninguém.
+export async function emailDoIdentificador(sb, identificador) {
   const id = String(identificador ?? '').trim().toLowerCase()
-  const cpf = somenteNumeros(id)
-  let consulta = sb.from('processos').select('cliente_email, cliente_telefone, cliente_nome').limit(1)
-  if (id.includes('@')) consulta = consulta.ilike('cliente_email', id)
-  else if (cpf.length === 11) consulta = consulta.eq('cliente_cpf', cpf)
-  else return null
-  const { data: proc } = await consulta.maybeSingle()
+  if (id.includes('@')) {
+    const { data } = await sb.from('processos').select('cliente_email').ilike('cliente_email', id).limit(1)
+    return data?.[0]?.cliente_email?.toLowerCase() ?? null
+  }
+  const n = somenteNumeros(id)
+  if (cpfValido(n)) {
+    const { data } = await sb.from('processos').select('cliente_email').eq('cliente_cpf', n).limit(1)
+    if (data?.length) return data[0].cliente_email.toLowerCase()
+  }
+  const tel = /^55\d{10,11}$/.test(n) ? n.slice(2) : n
+  if (tel.length !== 10 && tel.length !== 11) return null
+  const { data } = await sb.from('processos').select('cliente_email').eq('telefone_numeros', tel).limit(20)
+  const emails = [...new Set((data ?? []).map((p) => p.cliente_email.toLowerCase()))]
+  return emails.length === 1 ? emails[0] : null
+}
+
+export async function acharCliente(sb, identificador) {
+  const email = await emailDoIdentificador(sb, identificador)
+  if (!email) return null
+  const { data: proc } = await sb.from('processos').select('cliente_email, cliente_telefone, cliente_nome')
+    .ilike('cliente_email', email).limit(1).maybeSingle()
   if (!proc) return null
-  const { data: perfil } = await sb.from('perfis').select('id, papel').ilike('email', proc.cliente_email).maybeSingle()
+  const { data: perfil } = await sb.from('perfis').select('id, papel').ilike('email', email).maybeSingle()
   if (!perfil || perfil.papel !== 'cliente') return null
-  return { userId: perfil.id, email: proc.cliente_email.toLowerCase(), telefone: proc.cliente_telefone, nome: proc.cliente_nome }
+  return { userId: perfil.id, email, telefone: proc.cliente_telefone, nome: proc.cliente_nome }
 }
 
 export async function hashCodigo(codigo, userId) {

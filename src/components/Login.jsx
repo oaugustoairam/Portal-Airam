@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, MODO_DEMO } from '../lib/api.js'
-import { formatarCpf } from '../lib/constants.js'
+import { formatarIdentificador } from '../lib/constants.js'
 import logoVermelho from '../assets/logo-vermelho.png'
 import RecuperarSenha from './RecuperarSenha.jsx'
 
@@ -24,10 +24,8 @@ export default function Login() {
     }
   }
 
-  // formata como CPF enquanto digita, se não for e-mail
-  function mudarId(v) {
-    setId(/^[\d.\-\s]*$/.test(v) && v.replace(/\D/g, '').length > 3 ? formatarCpf(v) : v)
-  }
+  // formata como CPF ou telefone quando o número fica completo
+  const mudarId = (v) => setId(formatarIdentificador(v))
 
   const demo = MODO_DEMO ? api.contasDemo() : null
   if (recuperando) return <RecuperarSenha inicial={id} onVoltar={() => setRecuperando(false)} />
@@ -38,14 +36,14 @@ export default function Login() {
       <span className="rotulo login-eyebrow">Portal do cliente</span>
       <h1 className="titulo-entrada">Acompanhe <em>seus móveis</em> do projeto à montagem</h1>
       <p className="login-texto">
-        Prazos, contrato e projetos em um só lugar. Entre com o e-mail ou o CPF cadastrado na Airam.
+        Prazos, contrato e projetos em um só lugar. Entre com o e-mail, o CPF ou o telefone cadastrado na Airam.
       </p>
 
       <form className="login-form" onSubmit={entrar}>
         <div className="campo">
-          <label htmlFor="login-id">E-mail ou CPF</label>
+          <label htmlFor="login-id">E-mail, CPF ou telefone</label>
           <input id="login-id" required autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={id}
-            onChange={(e) => mudarId(e.target.value)} placeholder="nome@email.com ou 000.000.000-00" />
+            onChange={(e) => mudarId(e.target.value)} placeholder="E-mail, CPF ou celular" />
         </div>
         <div className="campo">
           <label htmlFor="login-senha">Senha</label>
