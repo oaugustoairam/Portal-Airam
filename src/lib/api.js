@@ -18,7 +18,7 @@ const ERRO_LOGIN = 'E-mail/CPF ou senha incorretos.'
 
 // campos do "Meu perfil" que o próprio cliente edita
 const CAMPOS_PERFIL = ['nome_preferido', 'telefone', 'telefone_2', 'nascimento', 'cep', 'endereco', 'numero', 'complemento',
-  'bairro', 'cidade', 'uf', 'melhor_horario', 'observacoes', 'receber_novidades', 'foto_path']
+  'bairro', 'cidade', 'uf', 'observacoes', 'receber_novidades', 'foto_path']
 function limparPerfil(d) {
   const out = {}
   for (const k of CAMPOS_PERFIL) if (k in d) out[k] = d[k] === '' ? null : d[k]

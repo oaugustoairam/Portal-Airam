@@ -214,11 +214,7 @@ export default function MeuPerfil({ processo, onAtualizado }) {
         </fieldset>
 
         <fieldset className="grupo">
-          <legend>Para a medição e a montagem</legend>
-          <div className="campo">
-            <label htmlFor="pf-hora">Melhor dia e horário para falarmos com você</label>
-            <input id="pf-hora" value={f.melhor_horario || ''} onChange={set('melhor_horario')} placeholder="Ex.: dias úteis, depois das 18h" />
-          </div>
+          <legend>Sobre o imóvel</legend>
           <div className="campo">
             <label htmlFor="pf-obs">Informações sobre o imóvel</label>
             <textarea id="pf-obs" rows={4} maxLength={1000} value={f.observacoes || ''} onChange={set('observacoes')}

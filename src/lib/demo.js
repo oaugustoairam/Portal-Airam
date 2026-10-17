@@ -172,7 +172,7 @@ export function criarDadosDemo() {
       'marina@exemplo.com': {
         nome_preferido: 'Marina', telefone: '(11) 90000-0154', telefone_2: '', nascimento: null,
         cep: '03164000', endereco: 'Rua das Acácias', numero: '120', complemento: 'ap. 82', bairro: 'Mooca', cidade: 'São Paulo', uf: 'SP',
-        melhor_horario: 'Manhã, das 9h às 12h', observacoes: 'Portaria 24h. Elevador de serviço disponível das 8h às 17h. Tenho um gato.',
+        observacoes: 'Portaria 24h. Elevador de serviço disponível das 8h às 17h. Tenho um gato.',
         receber_novidades: true, foto_path: null,
       },
     },

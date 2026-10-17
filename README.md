@@ -70,7 +70,7 @@ não entram no cálculo.
 
 O cliente tem as abas **Meu processo** e **Meu perfil**. No perfil ele adiciona a foto (cortada e reduzida no
 próprio celular antes do envio), como prefere ser chamado, celular/WhatsApp, outro telefone, data de nascimento,
-endereço para correspondência (com busca pelo CEP), melhor horário e informações do imóvel para a montagem, além
+endereço para correspondência (com busca pelo CEP) e informações do imóvel, além
 da preferência de novidades e da troca de senha. E-mail de acesso e CPF ficam só para consulta.
 O celular, a data de nascimento e a preferência de novidades atualizam o processo automaticamente (avisos,
 aniversários e e-mail marketing). A equipe vê tudo em Processos > Dados e prazos.

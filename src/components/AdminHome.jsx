@@ -911,7 +911,6 @@ function InfoDoCliente({ processo }) {
     ['Prefere ser chamado(a)', p.nome_preferido],
     ['Celular', p.telefone],
     ['Outro telefone', p.telefone_2],
-    ['Melhor horário', p.melhor_horario],
     ['Novidades por e-mail', p.receber_novidades === false ? 'Não quer receber' : 'Aceita'],
     ['Endereço para correspondência', endereco, true],
     ['Informações sobre o imóvel', p.observacoes, true],
