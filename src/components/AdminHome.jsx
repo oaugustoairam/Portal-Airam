@@ -12,6 +12,7 @@ import {
   prazoTexto,
   formatarCpf,
   cpfValido,
+  prazosContratuais,
 } from '../lib/constants.js'
 import ProcessoView, { LinhaDoc } from './ProcessoView.jsx'
 import CampoData from './CampoData.jsx'
@@ -164,7 +165,7 @@ export default function AdminHome({ abrirInicial = null }) {
             ['financeiro', 'Financeiro pendente'], ['entrega30', 'Prazo máximo em 30 dias'], ['entregues', 'Montagem concluída'],
           ]} />
           <Filtro id="f-prazo" rotulo="Prazo" valor={f.prazo} onChange={set('prazo')}
-            opcoes={[['', 'Normal e futuro'], ['normal', 'Prazo normal'], ['futuro', 'Projeto futuro']]} />
+            opcoes={[['', 'Normal e futuro'], ['normal', 'Prazo normal'], ['futuro', 'Entrega futura']]} />
           <Filtro id="f-etapa" rotulo="Etapa atual" valor={f.etapa} onChange={set('etapa')}
             opcoes={[['', 'Todas as etapas'], ...ETAPAS_FILTRO]} />
           <Filtro id="f-fin" rotulo="Solução financeira" valor={f.financeiro} onChange={set('financeiro')}
@@ -242,9 +243,10 @@ function Filtro({ id, rotulo, valor, onChange, opcoes }) {
 }
 
 // ============================================================ Editor
+// próximo código numérico do cliente (o mesmo usado no contrato, ex.: 2561)
 function proximoCodigo(codigos) {
-  const n = codigos.map((c) => Number(String(c).replace(/\D/g, ''))).filter(Number.isFinite)
-  return 'AIR-' + String((n.length ? Math.max(...n) : 0) + 1).padStart(4, '0')
+  const n = codigos.map((c) => Number(String(c).replace(/\D/g, ''))).filter((x) => Number.isFinite(x) && x > 0)
+  return String((n.length ? Math.max(...n) : 0) + 1)
 }
 
 const VAZIO = {
@@ -342,7 +344,9 @@ function FormDados({ processo, onSalvo, onExcluido }) {
 
   const tipo = calcularTipoPrazo(f.data_venda, f.data_disponivel_medicao)
   const dias = diasEntre(f.data_venda, f.data_disponivel_medicao)
-  const projetoAssinadoZapSign = processo.assinaturas?.some((a) => a.tipo === 'projeto_final' && a.status === 'assinado')
+  const assinaturaZapSign = processo.assinaturas?.find((a) => a.tipo === 'projeto_final' && a.status === 'assinado')
+  const projetoAssinadoZapSign = !!assinaturaZapSign
+  const sugestao = prazosContratuais({ ...f, tipo_prazo: tipo }, assinaturaZapSign?.assinado_em)
 
   async function salvar(e) {
     e.preventDefault()
@@ -367,6 +371,9 @@ function FormDados({ processo, onSalvo, onExcluido }) {
         <div className="grade">
           <Campo id="p-codigo" rotulo="Código do cliente" obrigatorio>
             <input id="p-codigo" required value={f.codigo} onChange={set('codigo')} />
+          </Campo>
+          <Campo id="p-contrato" rotulo="Nº do contrato">
+            <input id="p-contrato" value={f.numero_contrato || ''} onChange={set('numero_contrato')} placeholder="100000503-1" />
           </Campo>
           <Campo id="p-nome" rotulo="Nome do cliente" obrigatorio>
             <input id="p-nome" required value={f.cliente_nome} onChange={set('cliente_nome')} />
@@ -396,8 +403,8 @@ function FormDados({ processo, onSalvo, onExcluido }) {
         <legend>Venda e prazo</legend>
         <div className="grade">
           <CampoData id="p-venda" rotulo="Data da venda" obrigatorio valor={f.data_venda} onChange={set('data_venda')} />
-          <CampoData id="p-disp" rotulo="Disponível para medição" obrigatorio valor={f.data_disponivel_medicao}
-            onChange={set('data_disponivel_medicao')} ajuda="Quando o imóvel fica pronto para medir" />
+          <CampoData id="p-disp" rotulo="Previsão do imóvel pronto para os móveis" obrigatorio valor={f.data_disponivel_medicao}
+            onChange={set('data_disponivel_medicao')} ajuda="Na entrega futura, o cliente vê a contagem regressiva até esta data" />
           <CampoData id="p-entrega" rotulo="Prazo máximo para entrega" obrigatorio
             valor={f.data_entrega_prevista} onChange={set('data_entrega_prevista')} />
         </div>
@@ -405,10 +412,10 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           {tipo ? (
             <>
               <strong>{TIPOS_PRAZO[tipo].nome}</strong>
-              <span>{dias} dias entre a venda e a medição. {TIPOS_PRAZO[tipo].desc}.</span>
+              <span>{dias} dias entre a venda e o imóvel pronto. {TIPOS_PRAZO[tipo].desc}. Uso interno: o cliente não vê esta classificação.</span>
             </>
           ) : (
-            <span>Informe a data da venda e a disponibilidade para medição: o sistema classifica em Prazo normal (até 90 dias) ou Projeto futuro (acima de 90).</span>
+            <span>Informe a data da venda e a previsão do imóvel pronto: o sistema classifica em Prazo normal (até 90 dias) ou Entrega futura (acima de 90).</span>
           )}
         </div>
       </fieldset>
@@ -436,9 +443,17 @@ function FormDados({ processo, onSalvo, onExcluido }) {
           <EtapaData id="p-assproj" rotulo="Projeto final · Assinatura" valor={f.data_assinatura_projeto}
             onData={set('data_assinatura_projeto')} feito={projetoAssinadoZapSign || f.projeto_assinado_manual}
             travado={projetoAssinadoZapSign} onFeito={set('projeto_assinado_manual')}
-            textoFeito={projetoAssinadoZapSign ? 'Assinado pelo portal' : 'Assinado fora do portal'} />
+            textoFeito={projetoAssinadoZapSign ? 'Assinado pelo portal' : 'Assinado fora do portal'}
+            sugestao={sugestao.assinaturaProjeto && {
+              data: sugestao.assinaturaProjeto,
+              texto: `10 dias úteis após ${sugestao.baseAssinatura}`,
+            }} />
           <EtapaData id="p-entr" rotulo="Montagem (prazo máximo para entrega)" valor={f.data_entrega_prevista} onData={set('data_entrega_prevista')}
-            feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Montagem concluída" obrigatorio />
+            feito={f.entrega_concluida} onFeito={set('entrega_concluida')} textoFeito="Montagem concluída" obrigatorio
+            sugestao={sugestao.entrega && {
+              data: sugestao.entrega,
+              texto: `45 dias úteis a partir do 2º dia útil após a assinatura${sugestao.entregaReal ? '' : ' prevista'}`,
+            }} />
         </div>
         <p className="dica">Ao anexar o PDF do projeto inicial, a etapa é marcada como enviada sozinha. A fabricação aparece para o cliente depois da assinatura do projeto final, até a montagem.</p>
         <label className="check check-destaque">
@@ -478,10 +493,16 @@ function FormDados({ processo, onSalvo, onExcluido }) {
   )
 }
 
-function EtapaData({ id, rotulo, valor, onData, feito, onFeito, textoFeito, travado, obrigatorio }) {
+function EtapaData({ id, rotulo, valor, onData, feito, onFeito, textoFeito, travado, obrigatorio, sugestao }) {
   return (
     <div className={`etapa-data ${feito ? 'etapa-data-feita' : ''}`}>
       <CampoData id={id} rotulo={rotulo} valor={valor} onChange={onData} obrigatorio={obrigatorio} />
+      {sugestao && !feito && (
+        <div className="sugestao-prazo">
+          <span>Pelo contrato: <strong className="num">{formatarData(sugestao.data)}</strong> <small>({sugestao.texto}, sem feriados municipais)</small></span>
+          {sugestao.data !== valor && <button type="button" className="btn btn-leve" onClick={() => onData(sugestao.data)}>Usar</button>}
+        </div>
+      )}
       <label className="check">
         <input type="checkbox" checked={!!feito} disabled={travado} onChange={(e) => onFeito(e.target.checked)} />
         {textoFeito}

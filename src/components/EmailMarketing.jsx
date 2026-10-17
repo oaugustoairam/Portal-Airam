@@ -10,7 +10,7 @@ const SEGMENTOS = [
   ['andamento', 'Processo em andamento'],
   ['concluidos', 'Montagem concluída'],
   ['normal', 'Prazo normal'],
-  ['futuro', 'Projeto futuro'],
+  ['futuro', 'Entrega futura'],
   ['aniversario', 'Aniversariantes do mês'],
 ]
 

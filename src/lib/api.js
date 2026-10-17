@@ -37,7 +37,7 @@ const CAMPOS = [
   'projeto_inicial_enviado', 'data_projeto_inicial',
   'medicao_concluida', 'data_conferencia', 'conferencia_concluida', 'data_assinatura_projeto',
   'projeto_assinado_manual', 'data_entrega_prevista', 'entrega_concluida', 'recado_cliente', 'notificar',
-  'cliente_nascimento', 'aceita_marketing',
+  'cliente_nascimento', 'aceita_marketing', 'numero_contrato',
 ]
 function limpar(p) {
   const out = {}
@@ -206,7 +206,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v6'
+const CHAVE_DEMO = 'portal-airam-demo-v8'
 let memoria = null
 const ouvintes = new Set()
 

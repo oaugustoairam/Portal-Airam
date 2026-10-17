@@ -5,13 +5,13 @@ import IconeCubo from './IconeCubo.jsx'
 
 // O que cada etapa significa, na linguagem do cliente.
 const SOBRE = {
-  financeiro: 'Confirmação da forma de pagamento escolhida por você.',
-  projeto_inicial: 'O primeiro desenho dos seus ambientes. O PDF fica disponível em Documentos.',
-  medicao: 'Nossa equipe vai até o imóvel e mede cada ambiente com precisão, para tudo encaixar perfeitamente.',
-  conferencia: 'Revisamos juntos o projeto final: medidas, cores, acabamentos e ferragens.',
-  assinatura_projeto: 'Você assina o PDF do projeto final aqui pelo portal. A partir daí seus móveis seguem para a fábrica.',
+  financeiro: 'Análise e aprovação do crédito, em até 5 dias úteis. Os prazos começam a contar quando não há pendências financeiras.',
+  projeto_inicial: 'A representação dos seus móveis com as especificações combinadas. O PDF fica em Documentos.',
+  medicao: 'Nossa equipe mede cada ambiente no imóvel, em até 10 dias após o agendamento, para tudo encaixar com precisão.',
+  conferencia: 'Revisamos com você medidas, cores, acabamentos e ferragens. Envie as medidas dos eletrodomésticos que serão embutidos até 5 dias antes da assinatura.',
+  assinatura_projeto: 'Você assina o PDF do projeto final aqui pelo portal. A contagem de 45 dias úteis para a entrega começa no 2º dia útil após a assinatura.',
   producao: 'Seus móveis estão sendo fabricados.',
-  entrega: 'Montamos tudo no seu imóvel. Seus móveis têm 10 anos de garantia.',
+  entrega: 'Entregamos de segunda a sexta, em horário comercial. A montagem começa em até 7 dias úteis após a entrega e termina em até 10 dias úteis. Deixe o local livre, exceto os eletrodomésticos que serão embutidos. No final, você assina o Termo de Vistoria.',
 }
 
 const tracos = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }

@@ -14,9 +14,63 @@ export const CATEGORIAS_CLIENTE = CATEGORIAS.filter((c) => !c.interno)
 
 export const LIMITE_PRAZO_NORMAL = 90 // dias entre a venda e a disponibilidade para medição
 
+// Tipo do contrato (uso interno: o cliente não vê essa classificação)
 export const TIPOS_PRAZO = {
-  normal: { nome: 'Prazo normal', desc: 'Medição disponível em até 90 dias' },
-  futuro: { nome: 'Projeto futuro', desc: 'Medição disponível acima de 90 dias' },
+  normal: { nome: 'Prazo normal', desc: 'Imóvel pronto para os móveis em até 90 dias' },
+  futuro: { nome: 'Entrega futura', desc: 'Imóvel pronto para os móveis acima de 90 dias' },
+}
+
+// Prazos do contrato Airam (em dias úteis)
+export const PRAZOS_CONTRATO = {
+  aprovacaoFinanceira: 5, // aprovação de crédito
+  medicaoEProjetoFinal: 10, // medição + assinatura do projeto final executivo
+  entrega: 45, // a partir do 2º dia útil após a assinatura do projeto final
+  inicioMontagem: 7, // após a entrega
+  conclusaoMontagem: 10,
+}
+
+// Feriados nacionais (fixos + Sexta-feira Santa). Feriados municipais não entram.
+function pascoa(ano) {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(ano, mes - 1, dia)
+}
+const FIXOS = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25']
+function ehFeriado(d) {
+  const md = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  if (FIXOS.includes(md)) return true
+  const sexta = pascoa(d.getFullYear())
+  sexta.setDate(sexta.getDate() - 2)
+  return d.getMonth() === sexta.getMonth() && d.getDate() === sexta.getDate()
+}
+const paraISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+// Soma dias úteis (seg a sex, sem feriados nacionais) a uma data AAAA-MM-DD
+export function somarDiasUteis(dataISO, dias) {
+  if (!dataISO) return null
+  const d = new Date(dataISO.slice(0, 10) + 'T00:00:00')
+  let n = 0
+  while (n < dias) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() !== 0 && d.getDay() !== 6 && !ehFeriado(d)) n++
+  }
+  return paraISO(d)
+}
+
+// Datas sugeridas pelo contrato, a partir do que já aconteceu no processo
+export function prazosContratuais(p, assinaturaProjeto) {
+  const inicio = p.tipo_prazo === 'futuro' ? p.data_disponivel_medicao : p.financeiro_ok_em?.slice(0, 10)
+  const assinado = assinaturaProjeto?.slice(0, 10) || (p.projeto_assinado_manual ? p.projeto_assinado_em?.slice(0, 10) : null)
+  const baseEntrega = assinado || p.data_assinatura_projeto
+  return {
+    assinaturaProjeto: inicio ? somarDiasUteis(inicio, PRAZOS_CONTRATO.medicaoEProjetoFinal) : null,
+    baseAssinatura: inicio ? (p.tipo_prazo === 'futuro' ? 'imóvel pronto' : 'solução financeira') : null,
+    // contagem começa no 2º dia útil após a assinatura: 1 dia útil de carência + 45
+    entrega: baseEntrega ? somarDiasUteis(baseEntrega, PRAZOS_CONTRATO.entrega + 1) : null,
+    entregaReal: !!assinado,
+  }
 }
 
 export function hojeISO() {

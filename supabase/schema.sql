@@ -475,3 +475,6 @@ create policy "equipe apaga rascunho" on public.campanhas for delete using (publ
 drop policy if exists "equipe le envios" on public.campanha_envios;
 create policy "equipe le envios" on public.campanha_envios for select using (public.eh_equipe());
 -- envios só pelo servidor (função enviar-campanha)
+
+-- 13. Número do contrato (o mesmo do contrato impresso, ex.: 100000503-1)
+alter table public.processos add column if not exists numero_contrato text;

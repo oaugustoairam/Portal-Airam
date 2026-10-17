@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
   CATEGORIAS_CLIENTE,
-  TIPOS_PRAZO,
   linhaDoTempo,
   etapaAtual,
   progresso,
@@ -14,6 +13,8 @@ import { fotoDoProcesso } from '../lib/fotos.js'
 import { useContador, useRevelar } from '../lib/movimento.js'
 import AssinaturaModal from './AssinaturaModal.jsx'
 import Jornada from './Jornada.jsx'
+import ContagemObra from './ContagemObra.jsx'
+import Garantia from './Garantia.jsx'
 
 const NOME_ASSINATURA = { contrato: 'Seu contrato', projeto_final: 'O PDF do seu projeto final' }
 
@@ -54,9 +55,15 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao }) {
         </div>
       )}
 
+      {processo.tipo_prazo === 'futuro' && !processo.medicao_concluida && processo.data_disponivel_medicao && (
+        <ContagemObra dataVenda={processo.data_venda} dataPronto={processo.data_disponivel_medicao} />
+      )}
+
       <Jornada etapas={etapas} />
 
       <Documentos documentos={documentos} />
+
+      <Garantia montagemEm={processo.entrega_concluida ? processo.montagem_concluida_em : null} />
 
       {assinando && (
         <AssinaturaModal
@@ -83,7 +90,8 @@ function Hero({ processo, etapas, documentos }) {
   const pct = progresso(etapas)
   const atual = etapaAtual(etapas)
   const dias = diasAte(processo.data_entrega_prevista)
-  const tipo = TIPOS_PRAZO[processo.tipo_prazo]
+  // o tipo do contrato (normal / entrega futura) é interno: o cliente não vê
+  const aguardandoImovel = processo.tipo_prazo === 'futuro' && diasAte(processo.data_disponivel_medicao) > 0 && !processo.medicao_concluida
   const [montado, setMontado] = useState(false)
   useEffect(() => {
     const t = requestAnimationFrame(() => setMontado(true))
@@ -101,7 +109,7 @@ function Hero({ processo, etapas, documentos }) {
         <div className="hero-texto">
           <span className="hero-eyebrow">
             Código do cliente {processo.codigo}
-            {tipo && <span className="hero-tag">{tipo.nome}</span>}
+            {processo.numero_contrato && <span className="hero-tag">Contrato {processo.numero_contrato}</span>}
           </span>
           <h1 className="hero-nome">{processo.cliente_nome}</h1>
           {processo.ambientes && <p className="hero-amb">{processo.ambientes}</p>}
@@ -118,7 +126,7 @@ function Hero({ processo, etapas, documentos }) {
           <dl className="hero-dados">
             <div>
               <dt>Etapa atual</dt>
-              <dd>{processo.entrega_concluida ? 'Montagem concluída' : atual.nome}</dd>
+              <dd>{processo.entrega_concluida ? 'Montagem concluída' : aguardandoImovel && atual.id !== 'financeiro' && atual.id !== 'projeto_inicial' ? 'Aguardando o imóvel ficar pronto' : atual.nome}</dd>
             </div>
             <div>
               <dt>{ROTULO_PRAZO}</dt>
