@@ -12,34 +12,35 @@ export const SEXOS = [['F', 'Feminino'], ['M', 'Masculino']]
 export const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')
 
 export const AMBIENTE_VAZIO = {
-  tipo: 'Projeto Principal', fornecedor: 'AIRAM', linha: '', descricao: '', corpo: '', porta: '', complemento: '',
-  puxador: '', modelo: 'CONFORME PROJETO', observacoes: '', qtd: 1, prazo: 45, valor: '',
+  tipo: 'Projeto Principal', fornecedor: 'AIRAM', linha: '', nome: '', corpo: '', porta: '', complemento: '',
+  puxador: '', modelo: 'CONFORME PROJETO', observacoes: '', qtd: 1, prazo: 45, valor_bruto: '', valor: '',
 }
-const ENDERECO_VAZIO = { cep: '', uf: '', cidade: '', endereco: '', numero: '', complemento: '', bairro: '' }
+export const PAGAMENTO_VAZIO = { condicao: '', forma: 'Boleto', primeiroVencimento: '', entrada: '', parcelas: [] }
 
-// Contrato novo a partir do que a gestão já sabe do cliente
-export function contratoInicial(g, perfil) {
-  const c = g?.comercial || {}
+// Monta os dados do PDF a partir do que está salvo (contrato, cliente, ambientes e comercial)
+export function montarContratoPdf({ g, cliente, ambientes, lojaNome }) {
+  const k0 = g.comercial?.contrato || {}
+  const c = cliente || {}
   return {
-    numero: g?.numero_contrato || '',
-    data: new Date().toISOString().slice(0, 10),
-    responsavel: c.vendedor_nome || perfil?.nome || '',
-    loja: c.loja === 'mooca' ? 'Mooca' : 'Guarulhos',
-    tipo: g?.tipo_prazo === 'futuro' ? 'Futura' : 'Normal',
-    substitui: '',
+    numero: g.codigo,
+    codigo: '',
+    data: k0.data || g.data_venda,
+    responsavel: g.comercial?.vendedor_nome || '',
+    loja: lojaNome || '',
+    tipo: g.tipo_prazo === 'futuro' ? 'Futura' : 'Normal',
+    substitui: k0.substitui || '',
+    substituiData: k0.substituiData || '',
     cliente: {
-      nome: g?.cliente_nome || '', cpf: g?.cliente_cpf || '', rg: '', sexo: '', nascimento: g?.cliente_nascimento || '',
-      mae: '', profissao: '', telefone1: g?.cliente_telefone || '', telefone2: '', email: g?.cliente_email || '',
-      endereco: { ...ENDERECO_VAZIO, cep: g?.cep || '', cidade: g?.cidade || '', bairro: g?.bairro || '', endereco: g?.endereco || '' },
+      nome: c.nome || g.cliente_nome || '', cpf: formatarDocumento(c.cpf || g.cliente_cpf || ''), rg: c.rg || '', sexo: c.sexo || '',
+      nascimento: c.nascimento || g.cliente_nascimento || '', mae: c.mae || '', profissao: c.profissao || '',
+      telefone1: c.telefone || g.cliente_telefone || '', telefone2: c.telefone2 || '', email: c.email || g.cliente_email || '',
+      endereco: { endereco: c.logradouro || '', numero: c.numero || '', complemento: c.complemento || '', bairro: c.bairro || '', cidade: c.cidade || '', uf: c.uf || '', cep: c.cep || '' },
     },
-    entregaIgual: true,
-    entrega: { ...ENDERECO_VAZIO, edificio: '', referencia: '' },
-    ambientes: [],
-    pagamento: {
-      condicao: c.forma_pagamento || '', forma: 'Boleto', primeiroVencimento: c.vencimento_primeira || '',
-      entrada: c.valor_entrada || '', parcelas: [],
-    },
-    observacao: '',
+    entregaIgual: k0.entregaIgual !== false,
+    entrega: { endereco: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', cep: '', edificio: '', referencia: '', ...(k0.entrega || {}) },
+    ambientes: (ambientes || []).map((a) => ({ ...a, descricao: a.nome, valor: a.valor ?? a.valor_bruto })),
+    pagamento: { ...PAGAMENTO_VAZIO, ...(k0.pagamento || {}) },
+    observacao: k0.observacao || '',
   }
 }
 
@@ -93,25 +94,10 @@ export const condicaoTexto = (condicao) => String(condicao || '').toUpperCase().
 
 export const enderecoLinha = (e) => [e.endereco, e.numero].filter(Boolean).join(', ') + (e.complemento ? ` - ${e.complemento}` : '')
 
-// O que falta para o contrato poder ser criado
-export function faltaNoContrato(k) {
-  const f = []
-  const c = k.cliente
-  if (!k.numero) f.push('Número do contrato')
-  if (!c.nome) f.push('Nome do cliente')
-  if (!c.cpf) f.push('CPF/CNPJ')
-  if (!c.endereco.endereco || !c.endereco.cidade) f.push('Endereço do cliente')
-  if (!k.entregaIgual && (!k.entrega.endereco || !k.entrega.cidade)) f.push('Endereço de entrega')
-  if (!k.ambientes.length) f.push('Pelo menos um ambiente')
-  k.ambientes.forEach((a, i) => {
-    if (!a.linha) f.push(`Ambiente ${i + 1}: linha de produção`)
-    if (!num(a.valor)) f.push(`Ambiente ${i + 1}: valor`)
-  })
-  if (!k.pagamento.condicao) f.push('Condição de pagamento')
-  if (!k.pagamento.parcelas.length) f.push('Parcelas')
-  else {
-    const soma = k.pagamento.parcelas.reduce((t, p) => t + num(p.valor), 0)
-    if (Math.abs(soma - totalContrato(k)) > 0.05) f.push(`As parcelas somam ${valorBR(soma)}, mas o total é ${valorBR(totalContrato(k))}`)
-  }
-  return f
+// CPF 000.000.000-00 ou CNPJ 00.000.000/0000-00
+export function formatarDocumento(v) {
+  const n = String(v || '').replace(/\D/g, '')
+  if (n.length === 11) return n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+  if (n.length === 14) return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+  return n
 }

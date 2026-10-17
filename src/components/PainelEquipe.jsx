@@ -22,7 +22,7 @@ const SECOES = {
 export default function PainelEquipe({ perfil }) {
   const secoes = Object.entries(SECOES).filter(([, s]) => (s.master ? perfil?.papel === 'admin' : temPermissao(perfil, s.permissao)))
   const [secao, setSecao] = useState(() => secoes[0]?.[0] || 'processos')
-  const [pasta, setPasta] = useState({ gestao: 'clientes', processos: 'geral', marketing: 'aniversarios' })
+  const [pasta, setPasta] = useState({ gestao: 'novo', processos: 'geral', marketing: 'aniversarios' })
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
   const marketing = temPermissao(perfil, 'marketing')
@@ -33,7 +33,9 @@ export default function PainelEquipe({ perfil }) {
 
   const hoje = marketing ? aniversariantesDoDia(processos) : []
   const atual = pasta[secao]
+  const [toque, setToque] = useState(0) // tocar de novo na pasta aberta volta para a lista
   const irPara = (s, p) => {
+    setToque((n) => n + 1)
     setSecao(s)
     if (p) setPasta((x) => ({ ...x, [s]: p }))
     setAbrir(null)
@@ -85,7 +87,7 @@ export default function PainelEquipe({ perfil }) {
         </div>
       )}
 
-      {secao === 'gestao' && <GestaoClientes aba={atual} perfil={perfil} onAbrirProcesso={abrirProcesso} onAba={(p) => irPara('gestao', p)} />}
+      {secao === 'gestao' && <GestaoClientes aba={atual} toque={toque} perfil={perfil} onAbrirProcesso={abrirProcesso} onAba={(p) => irPara('gestao', p)} />}
       {secao === 'processos' && (
         <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />
       )}

@@ -1865,3 +1865,48 @@ button.slide-img { padding: 0; border: 0; width: 100%; cursor: zoom-in; font: in
 .tabela-parcelas input { min-height: 34px; padding: 4px 8px; max-width: 170px; }
 .ambiente-form { max-width: 640px; }
 @media (max-width: 760px) { .contrato-resumo { grid-template-columns: 1fr 1fr; } }
+
+/* ===================== Novo cliente / contrato ===================== */
+.campo-erro input, .campo-erro select { border-color: var(--alerta); box-shadow: 0 0 0 1px var(--alerta); }
+.erro-campo { color: var(--alerta); font-size: 12.5px; }
+.campo-busca { display: flex; gap: 6px; }
+.campo-busca input { flex: 1; min-width: 0; }
+.btn-lupa { flex: none; width: 46px; padding: 0; display: grid; place-items: center; }
+.btn-lupa svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.cartoes-escolha { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.cartao-escolha { display: flex; align-items: center; gap: 10px; text-align: left; font: 500 15px var(--f-texto); color: var(--tinta);
+  background: var(--superficie); border: 1.5px solid var(--linha); border-radius: var(--r); padding: 14px 16px; cursor: pointer; min-height: 52px; }
+.cartao-escolha:hover { border-color: var(--acento); }
+.cartao-escolha.ativo { border-color: var(--marca); background: var(--acento-suave); color: var(--marca); }
+.cartao-escolha-marca { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--linha); flex: none; }
+.cartao-escolha.ativo .cartao-escolha-marca { border: 5px solid var(--marca); }
+.aviso-existente { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--alerta-suave); border: 1px solid var(--alerta); border-radius: var(--r); padding: 12px 14px; font-size: 14.5px; }
+.aviso-ok { background: var(--ok-suave); border-radius: var(--r); padding: 10px 14px; font-size: 14px; margin: 0; }
+.aviso-config { background: var(--alerta-suave); border-radius: var(--r); padding: 10px 14px; font-size: 14px; margin: 0; color: var(--tinta); }
+.valor-fixo { display: block; padding: 10px 0; font-size: 15.5px; }
+.carregando-linha { margin: 0; color: var(--tinta-2); font-size: 14px; }
+.ocr { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 18px; align-items: start; margin-top: 12px; }
+.ocr-foto { width: 100%; border-radius: var(--r); border: 1px solid var(--linha); background: var(--papel); }
+.ocr-dados { display: flex; flex-direction: column; gap: 10px; }
+.ocr-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; }
+.ocr-lista em { color: var(--tinta-2); }
+.ocr-dados .btn { align-self: flex-start; }
+.contrato-criado { background: var(--superficie); border: 1px solid var(--linha); border-top: 4px solid var(--marca); border-radius: var(--r);
+  padding: 28px; display: flex; flex-direction: column; gap: 12px; }
+.contrato-criado p { margin: 0; color: var(--tinta-2); }
+.xml-estado { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.acoes-linha { white-space: nowrap; }
+.acoes-linha .btn { min-height: 0; padding: 6px 10px; font-size: 13px; }
+.xml-campo { gap: 6px; }
+.xml-campo .btn { align-self: flex-start; }
+.lista-pecas { max-width: 980px; gap: 10px; }
+.lista-pecas h2 { margin: 2px 0 0; }
+.lista-pecas .tabela-wrap { max-height: 60vh; overflow: auto; }
+.tabela-pecas td, .tabela-pecas th { font-size: 12.5px; white-space: nowrap; padding: 6px 8px; }
+.novo-contrato .grupo legend { font-size: 15px; }
+@media (max-width: 760px) {
+  .ocr { grid-template-columns: 1fr; }
+  .ocr-foto { max-height: 220px; object-fit: contain; }
+  .cartoes-escolha { grid-template-columns: 1fr; }
+}

@@ -23,7 +23,7 @@ export function celulasCapa(v) {
       // dados financeiros
       D11: valor(v.valor_venda), N11: v.forma_pagamento, E12: valor(v.valor_entrada), N12: valor(v.valor_parcela),
       E13: financeira(v.financeira)?.nome || '', N13: data(v.vencimento_primeira),
-      C14: marca(meios.includes('dinheiro')), F14: marca(meios.includes('pix')), I14: marca(meios.includes('boletos')),
+      C14: marca(meios.includes('dinheiro')), F14: marca(meios.includes('pix')), I14: marca(meios.includes('boletos') || meios.includes('boletos_casa')),
       N14: marca(meios.includes('cartao')), Q14: marca(meios.includes('cheques')),
       // informações da loja
       E17: marca(v.prazo_tipo === '45_dias'), J17: marca(v.prazo_tipo === 'futura'), O17: data(v.previsao_imovel),

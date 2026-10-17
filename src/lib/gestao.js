@@ -103,9 +103,10 @@ const OP_SIM = OP([['Sim', 'Sim'], ['Não', 'Não']])
 
 // Colunas possíveis. tipo: texto | opcao | moeda | numero | data | pct
 export const COLUNAS = {
-  codigo: { t: 'Código', tipo: 'texto', fixa: true },
+  codigo: { t: 'Nº contrato', tipo: 'texto', fixa: true },
   cliente_nome: { t: 'Cliente', tipo: 'texto', fixa: true, larga: true },
   vendedor: { t: 'Vendedor', tipo: 'opcao' },
+  loja: { t: 'Loja / canal', tipo: 'opcao', opcoes: OP([['guarulhos', 'Loja Guarulhos'], ['mooca', 'Loja Mooca'], ['online', 'Online']]), fmt: (v) => ({ guarulhos: 'Loja Guarulhos', mooca: 'Loja Mooca', online: 'Online' })[v] || v },
   captacao: { t: 'Captação', tipo: 'opcao', opcoes: OP(CAPTACOES.map((c) => [c, c])) },
   data_venda: { t: 'Data da venda', tipo: 'data' },
   contrato: { t: 'Nº contrato', tipo: 'texto' },
@@ -157,11 +158,11 @@ export const ABAS_GESTAO = [
     id: 'clientes', nome: 'Clientes', titulo: 'Base de clientes',
     descricao: 'Todos os clientes. Cadastre aqui: o mesmo cadastro vira o acesso do cliente ao portal.',
     filtro: () => true,
-    colunas: ['codigo', 'cliente_nome', 'vendedor', 'captacao', 'data_venda', 'financeira', 'valor_venda', 'valor_deflacionado', 'situacao', 'status', 'observacao',
-      'contrato', 'prazo', 'diferenca', 'deflacao', 'cidade', 'bairro', 'cep', 'zona', 'cliente_meu', 'acesso',
+    colunas: ['codigo', 'cliente_nome', 'vendedor', 'loja', 'captacao', 'data_venda', 'financeira', 'valor_venda', 'valor_deflacionado', 'situacao', 'status', 'observacao',
+      'prazo', 'diferenca', 'deflacao', 'cidade', 'bairro', 'cep', 'zona', 'acesso',
       'data_medicao', 'liberador', 'data_conferencia', 'data_assinatura', 'previsao_entrega', 'prazo_maximo', 'status_entrega',
       'data_entrega', 'montador', 'assistencia', 'data_vistoria', 'pos_vistoria'],
-    visiveis: 11,
+    visiveis: 12,
     kpis: (l) => kpiValores(l, 'Clientes'),
   },
 ]
@@ -289,7 +290,7 @@ export function registrosDaPlanilha(linhas, { dataDoExcel, financeiraPorNome, so
     const status = String(l.AC || '')
     out.push({
       processo: {
-        codigo: txt(l.A) || txt(l.E), numero_contrato: txt(l.E), cliente_nome: txt(l.B), data_venda: venda,
+        codigo: txt(l.E) || txt(l.A), numero_contrato: txt(l.E) || txt(l.A), cliente_nome: txt(l.B), data_venda: venda,
         data_disponivel_medicao: futura ? (previsao && previsao > somarDias(venda, 90) ? previsao : somarDias(venda, 91)) : venda,
         data_entrega_prevista: dataDoExcel(l.AB), cidade: txt(l.L), bairro: txt(l.M), cep: txt(l.N),
         solucao_financeira: sim(l.R) || assinado || montado ? 'ok' : 'pendente',

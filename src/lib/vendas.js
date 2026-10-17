@@ -31,7 +31,7 @@ export function financeiraPorNome(t) {
 export const financeira = (id) => FINANCEIRAS.find((f) => f.id === id)
 
 export const MEIOS = [
-  ['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['boletos', 'Boletos'], ['cartao', 'Cartão de crédito'], ['cheques', 'Cheques'],
+  ['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['boletos', 'Boletos'], ['boletos_casa', 'Boletos Casa'], ['cartao', 'Cartão de crédito'], ['cheques', 'Cheques'],
 ]
 // fontes de captação (iguais à planilha de gestão)
 export const CAPTACOES = [

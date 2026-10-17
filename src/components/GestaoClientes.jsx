@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api.js'
 import {
   FINANCEIRAS, financeira, financeiraPorNome, MEIOS, CAPTACOES, LIBERADORES, LOJAS_VENDA, SITUACOES, DOCS_PASTA,
@@ -15,9 +15,18 @@ import PlanilhaFiltravel from './PlanilhaFiltravel.jsx'
 import ConfirmarExclusao from './ConfirmarExclusao.jsx'
 import { Acesso } from './AdminHome.jsx'
 import ContratoEditor from './ContratoEditor.jsx'
+import NovoContrato from './NovoContrato.jsx'
 
 const CHIP_SIT = { pendente: 'chip-sit-andamento', resolvido: 'chip-sit-ok', cancelado: 'chip-sit-atraso' }
 const CHIP_STATUS = { montado: 'chip-sit-ok', assinado: 'chip-sit-andamento', conferido: 'chip-sit-andamento', medido: 'chip-sit-neutro', aguarda: 'chip-sit-neutro', cancelado: 'chip-sit-atraso' }
+// ISO -> valor do campo datetime-local (horário local)
+const paraDataHora = (iso) => {
+  if (!iso) return ''
+  const d = new Date(String(iso).length === 10 ? iso + 'T12:00:00' : iso)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
 const dataBR = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '')
 const somarDias = (iso, n) => {
   const d = new Date(iso + 'T12:00:00')
@@ -25,11 +34,11 @@ const somarDias = (iso, n) => {
   return d.toISOString().slice(0, 10)
 }
 
-export const PASTAS_GESTAO = [...ABAS_GESTAO.map((a) => [a.id, a.nome]), ['resultados', 'Resultados'], ['pastas', 'Controle de pastas']]
+export const PASTAS_GESTAO = [['novo', 'Novo cliente / Contrato'], ...ABAS_GESTAO.map((a) => [a.id, a.nome]), ['resultados', 'Resultados'], ['pastas', 'Controle de pastas']]
 
 // Gestão de clientes: um cadastro só para a venda, o processo e o acesso do cliente ao portal.
 // O vendedor vê só os clientes dele; quem tem "ver todos" vê a loja inteira.
-export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) {
+export default function GestaoClientes({ aba, toque, perfil, onAbrirProcesso, onAba }) {
   const [lista, setLista] = useState(null)
   const [erro, setErro] = useState('')
   const [ficha, setFicha] = useState(null) // linha da gestão ou 'novo'
@@ -39,6 +48,8 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
   const [filtros, setFiltros] = useState({})
   const [ordens, setOrdens] = useState({})
   const [importar, setImportar] = useState(false)
+  const [novoPara, setNovoPara] = useState(null) // cliente para um novo contrato
+  const abrirDepois = useRef(null) // ficha para abrir depois de trocar de aba
 
   const carregar = () => api.listarGestao().then(setLista).catch((e) => setErro(e.message))
   useEffect(() => {
@@ -48,7 +59,18 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
     setFicha(null)
     setPasta(null)
     setContrato(null)
-  }, [aba])
+    if (aba !== 'novo') setNovoPara(null)
+    if (abrirDepois.current) {
+      const id = abrirDepois.current
+      abrirDepois.current = null
+      api.clienteGestao(id).then((g) => setFicha(linhaGestao(g))).catch(() => {})
+    }
+  }, [aba, toque])
+  const abrirFicha = (id) => {
+    abrirDepois.current = id
+    carregar()
+    onAba?.('clientes')
+  }
 
   // Resultados e Controle de pastas usam o mesmo período (um leva ao outro)
   const chavePeriodo = aba === 'pastas' ? 'resultados' : aba
@@ -70,7 +92,10 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
   if (!lista) return <div className="carregando">Carregando…</div>
 
   if (contrato)
-    return <ContratoEditor g={contrato} perfil={perfil} onFechar={() => { const id = contrato.id; setContrato(null); carregar(); api.clienteGestao(id).then((g) => setFicha(linhaGestao(g))) }} />
+    return <ContratoEditor g={contrato} perfil={perfil} onFechar={() => { const id = contrato.id; setContrato(null); carregar(); api.clienteGestao(id).then((g) => setFicha(linhaGestao(g))) }}
+      onNovoContrato={(cli) => { setNovoPara(cli || { id: contrato.cliente_id }); setContrato(null); onAba?.('novo') }} />
+  if (aba === 'novo')
+    return <NovoContrato key={novoPara?.id || 'novo'} perfil={perfil} clienteInicial={novoPara} onCriado={carregar} onAbrirFicha={abrirFicha} />
   if (ficha)
     return (
       <FichaCliente g={ficha === 'novo' ? null : ficha.g} perfil={perfil} lista={lista} onFechar={fecharFicha}
@@ -97,7 +122,7 @@ export default function GestaoClientes({ aba, perfil, onAbrirProcesso, onAba }) 
         </div>
         <div className="acoes">
           {def.id === 'clientes' && verTodos && <button className="btn btn-leve" onClick={() => setImportar(true)}>Importar planilha</button>}
-          <button className="btn btn-principal" onClick={() => setFicha('novo')}>Novo cliente</button>
+          <button className="btn btn-principal" onClick={() => onAba?.('novo')}>Novo cliente / Contrato</button>
         </div>
       </div>
       {barraPeriodo}
@@ -460,9 +485,8 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
           <legend>Cliente e acesso ao portal</legend>
           <p className="dica">É o mesmo cadastro que o cliente usa no portal: ele entra com o e-mail, o CPF ou o celular.</p>
           <div className="grade grade-3">
-            <Texto id="g-codigo" rotulo="Código" valor={p.codigo} onChange={sp('codigo')} obrigatorio />
+            <div className="campo"><span className="rotulo-campo">Nº do contrato</span><strong className="valor-fixo num">{p.codigo || 'gerado ao criar'}</strong></div>
             <Texto id="g-nome" rotulo="Nome do cliente" valor={p.cliente_nome} onChange={sp('cliente_nome')} obrigatorio />
-            <Texto id="g-contrato" rotulo="Nº do contrato" valor={p.numero_contrato} onChange={sp('numero_contrato')} />
             <Texto id="g-cpf" rotulo="CPF" valor={p.cliente_cpf} inputMode="numeric" onChange={(v) => setP((x) => ({ ...x, cliente_cpf: formatarCpf(v) }))} />
             <Texto id="g-email" rotulo="E-mail (login do portal)" type="email" valor={p.cliente_email} onChange={sp('cliente_email')} autoComplete="off" />
             <Texto id="g-tel" rotulo="Celular / WhatsApp" type="tel" valor={p.cliente_telefone} onChange={(v) => setP((x) => ({ ...x, cliente_telefone: formatarTelefone(v) }))} />
@@ -508,7 +532,6 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
             <CampoData id="g-data" rotulo="Data da venda" valor={p.data_venda} onChange={sp('data_venda')} obrigatorio />
             <Segmentado id="g-loja" rotulo="Loja" valor={c.loja || null} opcoes={LOJAS_VENDA} onChange={sc('loja')} />
             <Segmentado id="g-sit" rotulo="Situação" valor={c.situacao} opcoes={SITUACOES} onChange={sc('situacao')} largo />
-            <Segmentado id="g-meu" rotulo="Cliente meu?" valor={c.cliente_meu ?? null} opcoes={SIM_NAO} onChange={sc('cliente_meu')} />
             <Segmentado id="g-prazo" rotulo="Prazo" valor={futura} opcoes={[[false, 'Normal'], [true, 'Futura']]} onChange={setFutura} />
             {futura && <CampoData id="g-pronto" rotulo="Imóvel pronto em" valor={p.data_disponivel_medicao} onChange={sp('data_disponivel_medicao')} ajuda="Acima de 90 dias da venda" />}
             <Segmentado id="g-fin-ok" rotulo="Solução financeira" valor={p.solucao_financeira} opcoes={[['pendente', 'Pendente'], ['ok', 'Resolvida']]} onChange={sp('solucao_financeira')} />
@@ -554,7 +577,11 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
             </div>
           </div>
           <div className="grade grade-3">
-            <CampoData id="g-email-env" rotulo="E-mail de formalização" valor={c.envio_email} onChange={sc('envio_email')} />
+            <div className="campo">
+              <label htmlFor="g-email-env">Envio do e-mail de formalização</label>
+              <input id="g-email-env" type="datetime-local" value={paraDataHora(c.envio_email)} onChange={(e) => sc('envio_email')(e.target.value ? new Date(e.target.value).toISOString() : '')} />
+              <span className="ajuda">Data e hora em que o e-mail foi enviado de verdade.</span>
+            </div>
             <CampoData id="g-assin-ini" rotulo="Assinatura inicial" valor={c.assinatura_inicial} onChange={sc('assinatura_inicial')} />
             <Segmentado id="g-google" rotulo="Avaliação Google" valor={c.avaliacao_google ?? null} opcoes={SIM_NAO} onChange={sc('avaliacao_google')} />
             <Texto id="g-fab" rotulo="Nº do pedido de fábrica" valor={c.pedido_fabrica} onChange={sc('pedido_fabrica')} />
@@ -614,7 +641,7 @@ function FichaCliente({ g: inicial, perfil, lista, onFechar, onAbrirPasta, onAbr
         <div className="acoes acoes-venda">
           <button className="btn btn-principal" disabled={!!salvando}>{salvando === 'salvar' ? 'Salvando…' : g ? 'Salvar' : 'Cadastrar cliente'}</button>
           <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('capa')}>{salvando === 'capa' ? 'Gerando capa…' : 'Fazer capa'}</button>
-          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('contrato')}>{g?.comercial?.contrato ? 'Contrato' : 'Criar contrato'}</button>
+          <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('contrato')}>Contrato e ambientes</button>
           <button type="button" className="btn btn-contorno" disabled={!!salvando} onClick={() => acao('pasta')}>Controle de pastas</button>
           {onAbrirProcesso && <button type="button" className="btn btn-leve" disabled={!!salvando} onClick={() => acao('processo')}>Processo, anexos e renders →</button>}
           {g && podeExcluir && <button type="button" className="btn btn-perigo-leve" onClick={() => setExcluir(true)}>Excluir cliente</button>}

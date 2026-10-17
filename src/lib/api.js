@@ -5,6 +5,8 @@ import { criarDadosDemo, SENHA_DEMO } from './demo.js'
 import { calcularTipoPrazo, cpfValido, telefoneNumeros, ehInterna } from './constants.js'
 import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
 import { temPermissao } from './permissoes.js'
+import { lerXmlPromob, LIMITE_XML } from './promob.js'
+import { errosCliente, errosAmbiente, numeros } from './cadastro.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -71,6 +73,51 @@ async function chamarFuncao(nome, corpo) {
   }
   return data
 }
+
+// ---------------------------------------------------------------- Contratos e ambientes (regras comuns)
+const CAMPOS_AMBIENTE = ['id', 'processo_id', 'ordem', 'nome', 'linha', 'tipo', 'fornecedor', 'corpo', 'porta', 'complemento',
+  'puxador', 'modelo', 'observacoes', 'qtd', 'prazo', 'valor_bruto', 'valor']
+function limparAmbiente(a) {
+  const out = {}
+  for (const k of CAMPOS_AMBIENTE) {
+    if (!(k in a)) continue
+    let v = typeof a[k] === 'string' ? a[k].trim() : a[k]
+    if (v === '') v = null
+    if (['qtd', 'prazo', 'valor_bruto', 'valor'].includes(k) && v !== null) v = Number(v)
+    out[k] = v
+  }
+  return out
+}
+// valida o pedido de criação antes de mandar ao servidor (o servidor valida de novo)
+function validarPedidoContrato(dados) {
+  const e = errosCliente(dados.cliente)
+  if (Object.keys(e).length) throw new Error(Object.values(e)[0])
+  if (!dados.contrato?.loja) throw new Error('Escolha a loja ou canal de origem.')
+  if (!dados.ambientes?.length) throw new Error('Cadastre pelo menos um ambiente.')
+  dados.ambientes.forEach((a, i) => {
+    const ea = errosAmbiente(a)
+    if (Object.keys(ea).length) throw new Error(`Ambiente ${i + 1}: ${Object.values(ea)[0]}`)
+  })
+}
+async function prepararXml(arquivo) {
+  if (!/\.xml$/i.test(arquivo.name)) throw new Error('Envie o arquivo .xml exportado do Promob.')
+  if (arquivo.size > LIMITE_XML) throw new Error('O XML passa de 20 MB.')
+  const texto = await arquivo.text()
+  let pecas = null
+  let erro = null
+  try {
+    pecas = lerXmlPromob(texto)
+  } catch (e) {
+    erro = e.message
+  }
+  return { texto, pecas, erro }
+}
+const arquivoBase64 = (arquivo) => new Promise((ok, falha) => {
+  const r = new FileReader()
+  r.onload = () => ok(String(r.result).split(',')[1])
+  r.onerror = falha
+  r.readAsDataURL(arquivo)
+})
 
 // ---------------------------------------------------------------- Supabase
 const supabaseApi = {
@@ -200,6 +247,15 @@ const supabaseApi = {
     return normalizarGestao(data)
   },
   async salvarClienteGestao({ processo, comercial, controle }) {
+    // o cadastro do cliente é um só: nome, CPF, e-mail, telefone e nascimento vão para "clientes" (o banco repassa aos contratos)
+    if (processo.cliente_id) {
+      const { error: e1 } = await sb.from('clientes').update({
+        nome: processo.cliente_nome, cpf: String(processo.cliente_cpf || '').replace(/\D/g, '') || null,
+        email: processo.cliente_email?.trim().toLowerCase() || null, telefone: processo.cliente_telefone || null,
+        nascimento: processo.cliente_nascimento || null,
+      }).eq('id', processo.cliente_id)
+      if (e1) throw new Error(e1.code === '23505' ? 'Este CPF já é de outro cliente.' : 'Não foi possível salvar o cliente: ' + e1.message)
+    }
     const p = await this.salvarProcesso(processo)
     if (comercial) {
       const { error } = await sb.from('comercial').upsert(limparComercial({ ...comercial, id: p.id }))
@@ -230,6 +286,80 @@ const supabaseApi = {
       aoAvancar?.(feitos, novos.length)
     }
     return { importados: feitos, pulados: registros.length - novos.length }
+  },
+  // ---------------- Cadastro de clientes e contratos
+  async lojas() {
+    const { data, error } = await sb.from('lojas').select('*').eq('ativa', true).order('ordem')
+    if (error) throw error
+    return data
+  },
+  async procurarCliente({ cpf, email, telefone }) {
+    const { data, error } = await sb.rpc('procurar_cliente', { cpf_: numeros(cpf) || null, email_: email || null, telefone_: telefone || null })
+    if (error) throw new Error(error.message)
+    return data
+  },
+  async cliente(id) {
+    const { data, error } = await sb.from('clientes').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data
+  },
+  async criarContrato(dados) {
+    validarPedidoContrato(dados)
+    const { data, error } = await sb.rpc('criar_contrato', { dados })
+    if (error) throw new Error(error.message)
+    return data
+  },
+  async numeracaoContratos() {
+    const { data, error } = await sb.rpc('numeracao_contratos')
+    if (error) throw new Error(error.message)
+    return data
+  },
+  async definirNumeracao(proximo) {
+    const { error } = await sb.rpc('definir_numeracao', { proximo: Number(proximo) })
+    if (error) throw new Error(error.message)
+  },
+  async ambientes(processoId) {
+    const { data, error } = await sb.from('ambientes').select('*').eq('processo_id', processoId).order('ordem')
+    if (error) throw error
+    return data
+  },
+  async salvarAmbiente(a) {
+    const e = errosAmbiente(a)
+    if (Object.keys(e).length) throw new Error(Object.values(e)[0])
+    const { data, error } = await sb.from('ambientes').upsert(limparAmbiente(a)).select().single()
+    if (error) throw new Error('Não foi possível salvar o ambiente: ' + error.message)
+    return data
+  },
+  async excluirAmbiente(a) {
+    if (a.xml_path) await sb.storage.from('documentos').remove([a.xml_path])
+    const { error } = await sb.from('ambientes').delete().eq('id', a.id)
+    if (error) throw new Error('Não foi possível remover o ambiente: ' + error.message)
+  },
+  // guarda o XML original e a listagem de peças (quando o formato é reconhecido)
+  async enviarXmlAmbiente(a, arquivo) {
+    const { pecas, erro } = await prepararXml(arquivo)
+    const seguro = arquivo.name.normalize('NFD').replace(/[^\w.-]+/g, '_')
+    const caminho = `${a.processo_id}/interno/promob/${a.id}-${Date.now()}-${seguro}`
+    const up = await sb.storage.from('documentos').upload(caminho, arquivo, { contentType: 'application/xml' })
+    if (up.error) throw new Error('Não foi possível guardar o XML: ' + up.error.message)
+    const { data, error } = await sb.from('ambientes').update({
+      xml_path: caminho, xml_nome: arquivo.name, xml_enviado_em: new Date().toISOString(), pecas, pecas_erro: erro,
+    }).eq('id', a.id).select().single()
+    if (error) {
+      await sb.storage.from('documentos').remove([caminho])
+      throw new Error('Não foi possível salvar o XML: ' + error.message)
+    }
+    if (a.xml_path) await sb.storage.from('documentos').remove([a.xml_path])
+    return data
+  },
+  async urlXmlAmbiente(a) {
+    const { data, error } = await sb.storage.from('documentos').createSignedUrl(a.xml_path, 300, { download: a.xml_nome || true })
+    if (error) throw error
+    return data.signedUrl
+  },
+  async lerDocumento(arquivo) {
+    if (!/^image\/(jpeg|png|webp)$/.test(arquivo.type)) throw new Error('Envie uma foto do documento (JPG, PNG ou WEBP).')
+    return chamarFuncao('ler-documento', { imagem: await arquivoBase64(arquivo), tipo: arquivo.type })
   },
   async listarVendedores() {
     const { data, error } = await sb.from('perfis').select('id, nome, email, papel').in('papel', ['vendedor', 'admin']).order('nome')
@@ -566,10 +696,12 @@ const demoApi = {
   async salvarProcesso(p) {
     const d = db()
     const campos = limpar(p)
-    const conflito = d.processos.find(
-      (x) => x.id !== campos.id && (x.codigo === campos.codigo || (campos.cliente_cpf && x.cliente_cpf === campos.cliente_cpf))
-    )
-    if (conflito) throw new Error('Já existe um processo com esse código ou CPF.')
+    // o número do contrato é único; o CPF é único no cadastro de clientes (um cliente pode ter vários contratos)
+    const conflito = d.processos.find((x) => x.id !== campos.id && x.codigo === campos.codigo)
+    if (conflito) throw new Error('Já existe um contrato com esse número.')
+    const outroCliente = campos.cliente_cpf && d.processos.find((x) => x.id !== campos.id && x.cliente_cpf === campos.cliente_cpf
+      && (x.cliente_id || x.id) !== (campos.cliente_id || d.processos.find((y) => y.id === campos.id)?.cliente_id || campos.id))
+    if (outroCliente) throw new Error('Este CPF já é de outro cliente.')
     if (campos.id) {
       const antes = d.processos.find((x) => x.id === campos.id)
       const depois = marcarDatas(antes, { ...antes, ...campos })
@@ -658,6 +790,11 @@ const demoApi = {
     const conta = contaAtual(d)
     if (!temPermissao(conta, 'ver_todos') && processo.vendedor_id !== conta.email) throw new Error('Você só pode cadastrar vendas suas.')
     const p = await this.salvarProcesso(processo)
+    const cli = processo.cliente_id && (d.clientes || []).find((x) => x.id === processo.cliente_id)
+    if (cli) {
+      Object.assign(cli, { nome: p.cliente_nome, cpf: p.cliente_cpf || cli.cpf, email: p.cliente_email, telefone: p.cliente_telefone, nascimento: p.cliente_nascimento })
+      d.processos.filter((x) => x.cliente_id === cli.id && x.id !== p.id).forEach((x) => Object.assign(x, { cliente_nome: cli.nome, cliente_cpf: p.cliente_cpf, cliente_email: cli.email, cliente_telefone: cli.telefone }))
+    }
     if (comercial) {
       d.comercial = d.comercial || {}
       d.comercial[p.id] = { ...(d.comercial[p.id] || {}), ...limparComercial({ ...comercial, id: p.id }), atualizado_em: new Date().toISOString() }
@@ -685,6 +822,121 @@ const demoApi = {
     gravar()
     aoAvancar?.(novos.length, novos.length)
     return { importados: novos.length, pulados: registros.length - novos.length }
+  },
+  // ---------------- Cadastro de clientes e contratos (demonstração: mesmas regras do servidor)
+  async lojas() {
+    return [{ id: 'guarulhos', nome: 'Loja Guarulhos' }, { id: 'mooca', nome: 'Loja Mooca' }, { id: 'online', nome: 'Online' }]
+  },
+  async procurarCliente({ cpf, email, telefone }) {
+    const d = db()
+    const doc = numeros(cpf)
+    const tel = numeros(telefone)
+    const conta = contaAtual(d)
+    return (d.clientes || []).filter((c) => (doc && c.cpf === doc) || (email && c.email === email.trim().toLowerCase()) || (tel.length >= 10 && numeros(c.telefone) === tel))
+      .slice(0, 5).map((c) => ({
+        id: c.id, nome: c.nome, motivo: doc && c.cpf === doc ? 'cpf' : email && c.email === email.trim().toLowerCase() ? 'email' : 'telefone',
+        posso_ver: temPermissao(conta, 'ver_todos') || c.criado_por === conta.email || d.processos.some((p) => p.cliente_id === c.id && p.vendedor_id === conta.email),
+        contratos: d.processos.filter((p) => p.cliente_id === c.id).length,
+      }))
+  },
+  async cliente(id) {
+    return (db().clientes || []).find((c) => c.id === id) || null
+  },
+  async criarContrato(dados) {
+    validarPedidoContrato(dados)
+    const d = db()
+    const conta = contaAtual(d)
+    if (!temPermissao(conta, 'gestao')) throw new Error('Você não tem permissão para criar contratos.')
+    d.clientes = d.clientes || []
+    d.ambientesDemo = d.ambientesDemo || []
+    d.chaves = d.chaves || {}
+    if (d.chaves[dados.chave]) return { ...d.chaves[dados.chave], repetido: true }
+    const c = dados.cliente
+    const doc = numeros(c.cpf)
+    let cli = dados.cliente_id ? d.clientes.find((x) => x.id === dados.cliente_id) : d.clientes.find((x) => x.cpf === doc)
+    if (cli && d.clientes.some((x) => x.cpf === doc && x.id !== cli.id)) throw new Error('Este CPF já é de outro cliente.')
+    const campos = { ...c, cpf: doc, email: c.email.trim().toLowerCase(), uf: c.uf.toUpperCase() }
+    if (cli) Object.assign(cli, campos)
+    else {
+      cli = { ...campos, id: novoId(), criado_por: conta.email, criado_em: new Date().toISOString() }
+      d.clientes.push(cli)
+    }
+    const vendedor = temPermissao(conta, 'ver_todos') && dados.contrato.vendedor_id ? d.contas.find((x) => x.email === dados.contrato.vendedor_id) || conta : conta
+    let n = d.seqContrato || 100002126
+    while (d.processos.some((x) => x.codigo === String(n))) n++ // como a sequência do banco: nunca repete
+    const codigo = String(n)
+    d.seqContrato = n + 1
+    const hoje = new Date().toISOString().slice(0, 10)
+    const total = dados.ambientes.reduce((t, a) => t + Number(a.valor === '' || a.valor == null ? a.valor_bruto : a.valor) * (Number(a.qtd) || 1), 0)
+    const p = {
+      id: novoId(), codigo, numero_contrato: codigo, cliente_id: cli.id, cliente_nome: cli.nome, cliente_cpf: doc.length === 11 ? doc : null,
+      cliente_email: cli.email, cliente_telefone: cli.telefone, cliente_nascimento: cli.nascimento || null,
+      endereco: [[cli.logradouro, cli.numero].filter(Boolean).join(', ') + (cli.complemento ? ` - ${cli.complemento}` : ''), cli.bairro, cli.cidade].filter(Boolean).join(' — '),
+      cep: cli.cep, bairro: cli.bairro, cidade: cli.cidade, data_venda: dados.contrato.data || hoje,
+      data_disponivel_medicao: dados.contrato.imovel_pronto || dados.contrato.data || hoje, tipo_prazo: dados.contrato.tipo === 'Futura' ? 'futuro' : 'normal',
+      solucao_financeira: 'pendente', vendedor_id: vendedor.email, ambientes: dados.ambientes.map((a) => a.nome).join(', '),
+      medicao_concluida: false, conferencia_concluida: false, projeto_assinado_manual: false, entrega_concluida: false, projeto_inicial_enviado: false,
+      notificar: true, criado_em: new Date().toISOString(),
+    }
+    d.processos.unshift(p)
+    dados.ambientes.forEach((a, i) => d.ambientesDemo.push({ ...limparAmbiente(a), id: novoId(), processo_id: p.id, ordem: i + 1, valor: a.valor === '' || a.valor == null ? Number(a.valor_bruto) : Number(a.valor) }))
+    const com = dados.comercial || {}
+    const { vendedor_id, loja, ...resto } = dados.contrato
+    d.comercial = d.comercial || {}
+    d.comercial[p.id] = { id: p.id, vendedor_nome: vendedor.nome, captacao: com.captacao || null, loja, financeira: com.financeira || null,
+      forma_pagamento: com.forma_pagamento || null, meios: com.meios || [], valor_venda: total, vencimento_primeira: com.vencimento_primeira || null,
+      valor_entrada: com.valor_entrada || null, situacao: 'pendente', observacao: com.observacao || null, contrato: resto }
+    d.controles = d.controles || {}
+    d.controles[p.id] = { id: p.id }
+    d.chaves[dados.chave] = { id: p.id, codigo, cliente_id: cli.id }
+    gravar()
+    return { id: p.id, codigo, cliente_id: cli.id, repetido: false }
+  },
+  async numeracaoContratos() {
+    return { proximo: db().seqContrato || 100002126 }
+  },
+  async definirNumeracao(proximo) {
+    const d = db()
+    if (contaAtual(d)?.papel !== 'admin') throw new Error('Somente o master define a numeração.')
+    const atual = d.seqContrato || 100002126
+    if (Number(proximo) < atual) throw new Error(`A numeração só pode avançar: o próximo número precisa ser maior que ${atual - 1}.`)
+    d.seqContrato = Number(proximo)
+    gravar()
+  },
+  async ambientes(processoId) {
+    return (db().ambientesDemo || []).filter((a) => a.processo_id === processoId).sort((a, b) => a.ordem - b.ordem)
+  },
+  async salvarAmbiente(a) {
+    const e = errosAmbiente(a)
+    if (Object.keys(e).length) throw new Error(Object.values(e)[0])
+    const d = db()
+    d.ambientesDemo = d.ambientesDemo || []
+    const x = limparAmbiente(a)
+    const i = d.ambientesDemo.findIndex((y) => y.id === x.id)
+    if (i >= 0) d.ambientesDemo[i] = { ...d.ambientesDemo[i], ...x }
+    else d.ambientesDemo.push({ ...x, id: novoId(), ordem: x.ordem || d.ambientesDemo.filter((y) => y.processo_id === x.processo_id).length + 1 })
+    gravar()
+    return i >= 0 ? d.ambientesDemo[i] : d.ambientesDemo[d.ambientesDemo.length - 1]
+  },
+  async excluirAmbiente(a) {
+    const d = db()
+    d.ambientesDemo = (d.ambientesDemo || []).filter((y) => y.id !== a.id)
+    gravar()
+  },
+  async enviarXmlAmbiente(a, arquivo) {
+    const { texto, pecas, erro } = await prepararXml(arquivo)
+    const d = db()
+    const x = (d.ambientesDemo || []).find((y) => y.id === a.id)
+    Object.assign(x, { xml_path: 'data:application/xml;charset=utf-8,' + encodeURIComponent(texto.slice(0, 400000)), xml_nome: arquivo.name,
+      xml_enviado_em: new Date().toISOString(), pecas, pecas_erro: erro })
+    gravar()
+    return x
+  },
+  async urlXmlAmbiente(a) {
+    return a.xml_path
+  },
+  async lerDocumento() {
+    throw new Error('A leitura automática do documento funciona no portal real, depois de configurar a chave da Anthropic no Supabase. Na demonstração, preencha à mão.')
   },
   async listarVendedores() {
     return db().contas.filter((c) => ['vendedor', 'admin'].includes(c.papel)).map((c) => ({ id: c.email, nome: c.nome, email: c.email, papel: c.papel }))

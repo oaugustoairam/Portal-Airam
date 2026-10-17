@@ -82,7 +82,7 @@ create table if not exists public.processos (
   criado_em timestamptz not null default now(),
   constraint cpf_numeros check (cliente_cpf is null or cliente_cpf ~ '^[0-9]{11}$')
 );
-create unique index if not exists processos_cpf_idx on public.processos (cliente_cpf) where cliente_cpf is not null;
+-- (o CPF é único em "clientes"; um cliente pode ter vários contratos — veja a seção 17)
 create index if not exists processos_email_idx on public.processos (lower(cliente_email));
 
 -- 3. Documentos ---------------------------------------------------------------
@@ -882,3 +882,361 @@ create trigger auditoria after insert or update or delete on public.pasta_docume
 
 -- Contrato feito pelo portal (dados do cliente, ambientes e pagamento); só a gestão vê
 alter table public.comercial add column if not exists contrato jsonb;
+
+-- =============================================================================
+-- 17. Etapa 2: cadastro único de clientes, numeração automática de contratos,
+--     ambientes (com XML do Promob) e lojas/canais. Migração segura: nada é apagado.
+-- =============================================================================
+
+-- Lojas e canais de origem (novas lojas entram aqui, sem mudar código)
+create table if not exists public.lojas (
+  id text primary key check (id ~ '^[a-z0-9_]{2,30}$'),
+  nome text not null,
+  ativa boolean not null default true,
+  ordem int not null default 0
+);
+insert into public.lojas (id, nome, ordem) values
+  ('guarulhos', 'Loja Guarulhos', 1), ('mooca', 'Loja Mooca', 2), ('online', 'Online', 3)
+on conflict (id) do nothing;
+alter table public.lojas enable row level security;
+drop policy if exists "equipe le lojas" on public.lojas;
+create policy "equipe le lojas" on public.lojas for select using (public.eh_equipe());
+drop policy if exists "master lojas" on public.lojas;
+create policy "master lojas" on public.lojas for all using (public.eh_admin()) with check (public.eh_admin());
+
+alter table public.comercial drop constraint if exists comercial_loja_check;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'comercial_loja_fk') then
+    alter table public.comercial add constraint comercial_loja_fk foreign key (loja) references public.lojas (id);
+  end if;
+end $$;
+
+-- Data e hora do envio do e-mail de formalização (antes era só a data)
+do $$ begin
+  if (select data_type from information_schema.columns
+      where table_schema = 'public' and table_name = 'comercial' and column_name = 'envio_email') = 'date' then
+    alter table public.comercial alter column envio_email type timestamptz using (envio_email::timestamp at time zone 'America/Sao_Paulo');
+  end if;
+end $$;
+
+-- CPF válido (mesma regra do app)
+create or replace function public.cpf_valido(c text)
+returns boolean language plpgsql immutable as $$
+declare d int[]; s int; r int; i int;
+begin
+  if c is null or c !~ '^[0-9]{11}$' or c ~ '^(.)\1{10}$' then return false; end if;
+  d := array(select substr(c, g, 1)::int from generate_series(1, 11) g);
+  s := 0; for i in 1..9 loop s := s + d[i] * (11 - i); end loop;
+  r := (s * 10) % 11 % 10; if r <> d[10] then return false; end if;
+  s := 0; for i in 1..10 loop s := s + d[i] * (12 - i); end loop;
+  r := (s * 10) % 11 % 10; return r = d[11];
+end $$;
+
+-- Clientes: uma pessoa (ou empresa), com quantos contratos precisar
+create table if not exists public.clientes (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null check (length(trim(nome)) between 3 and 200),
+  cpf text check (cpf is null or cpf ~ '^[0-9]{11}$' or cpf ~ '^[0-9]{14}$'),
+  email text check (email is null or email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  telefone text,
+  telefone2 text,
+  rg text,
+  mae text,
+  nascimento date,
+  sexo text check (sexo is null or sexo in ('F', 'M')),
+  profissao text,
+  cep text, logradouro text, numero text, complemento text, bairro text, cidade text, uf text,
+  criado_por uuid references public.perfis (id) on delete set null default auth.uid(),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create unique index if not exists clientes_cpf_idx on public.clientes (cpf) where cpf is not null;
+create index if not exists clientes_email_idx on public.clientes (lower(email));
+alter table public.clientes enable row level security;
+
+alter table public.processos add column if not exists cliente_id uuid references public.clientes (id) on delete restrict;
+create index if not exists processos_cliente_idx on public.processos (cliente_id);
+-- um cliente pode ter vários contratos: o CPF deixa de ser único no contrato (continua único em "clientes")
+drop index if exists public.processos_cpf_idx;
+create index if not exists processos_cpf_busca_idx on public.processos (cliente_cpf);
+-- chave de criação: o mesmo envio repetido (clique duplo, recarregar) nunca cria dois contratos
+alter table public.processos add column if not exists chave_criacao uuid;
+create unique index if not exists processos_chave_criacao_idx on public.processos (chave_criacao) where chave_criacao is not null;
+
+-- Pode ver/editar o cliente: quem vê todos, quem cadastrou, ou o vendedor de um contrato dele
+create or replace function public.pode_ver_cliente(cid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.eh_equipe() and (
+    public.ve_todos()
+    or exists (select 1 from public.clientes where id = cid and criado_por = auth.uid())
+    or exists (select 1 from public.processos where cliente_id = cid and vendedor_id = auth.uid()));
+$$;
+drop policy if exists "equipe clientes" on public.clientes;
+create policy "equipe clientes" on public.clientes for select using (public.pode_ver_cliente(id));
+drop policy if exists "gestao edita clientes" on public.clientes;
+create policy "gestao edita clientes" on public.clientes for update
+  using (public.pode_ver_cliente(id) and public.tem_permissao('gestao'))
+  with check (public.pode_ver_cliente(id) and public.tem_permissao('gestao'));
+drop policy if exists "master apaga clientes" on public.clientes;
+create policy "master apaga clientes" on public.clientes for delete using (public.eh_admin());
+-- (a criação passa pela função criar_contrato, que valida tudo no servidor)
+
+-- Clientes que já existem nos contratos antigos: um cadastro por CPF (ou por contrato, sem CPF)
+do $$
+declare p record; cid uuid;
+begin
+  for p in select * from public.processos where cliente_id is null order by criado_em loop
+    cid := null;
+    if p.cliente_cpf is not null then select id into cid from public.clientes where cpf = p.cliente_cpf; end if;
+    if cid is null then
+      insert into public.clientes (nome, cpf, email, telefone, nascimento, cep, logradouro, bairro, cidade, criado_por)
+      values (p.cliente_nome, p.cliente_cpf, nullif(lower(p.cliente_email), ''), p.cliente_telefone, p.cliente_nascimento,
+              p.cep, p.endereco, p.bairro, p.cidade, p.vendedor_id)
+      returning id into cid;
+    end if;
+    update public.processos set cliente_id = cid where id = p.id;
+  end loop;
+end $$;
+
+-- Dados do cliente mudam em um lugar só e chegam em todos os contratos dele (portal, pastas, resultados)
+create or replace function public.sincronizar_cliente()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.atualizado_em := now();
+  update public.processos set
+    cliente_nome = new.nome,
+    cliente_cpf = case when new.cpf ~ '^[0-9]{11}$' then new.cpf end,
+    cliente_email = coalesce(lower(new.email), cliente_email),
+    cliente_telefone = coalesce(new.telefone, cliente_telefone),
+    cliente_nascimento = coalesce(new.nascimento, cliente_nascimento)
+  where cliente_id = new.id;
+  return new;
+end $$;
+drop trigger if exists sincronizar on public.clientes;
+create trigger sincronizar before update on public.clientes
+  for each row execute function public.sincronizar_cliente();
+drop trigger if exists auditoria on public.clientes;
+create trigger auditoria after insert or update or delete on public.clientes
+  for each row execute function public.registrar_atividade();
+
+-- Numeração automática: o número do contrato é o código (um identificador só).
+-- Sequência do banco: nunca repete, nem com dois vendedores salvando ao mesmo tempo,
+-- e números de contratos apagados não voltam.
+-- começa depois do maior número da planilha de gestão (100002125); o master pode avançar
+create sequence if not exists public.contrato_numero_seq start 100002126 minvalue 1;
+create or replace function public.numerar_contrato()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare n bigint;
+begin
+  if tg_op = 'INSERT' then
+    if new.codigo is null or trim(new.codigo) = '' then
+      loop
+        n := nextval('public.contrato_numero_seq');
+        exit when not exists (select 1 from public.processos where codigo = n::text);
+      end loop;
+      new.codigo := n::text;
+    end if;
+  elsif new.codigo is distinct from old.codigo and auth.uid() is not null then
+    raise exception 'O número do contrato não pode ser alterado.' using errcode = 'P0001';
+  end if;
+  new.numero_contrato := new.codigo;
+  return new;
+end $$;
+drop trigger if exists numerar on public.processos;
+create trigger numerar before insert or update on public.processos
+  for each row execute function public.numerar_contrato();
+
+-- Próximo número (o master define o início uma vez; só pode avançar)
+create or replace function public.numeracao_contratos()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare ultimo bigint; chamado boolean;
+begin
+  if not public.eh_equipe() then raise exception 'Sem acesso.'; end if;
+  select last_value, is_called into ultimo, chamado from public.contrato_numero_seq;
+  return jsonb_build_object('proximo', case when chamado then ultimo + 1 else ultimo end);
+end $$;
+create or replace function public.definir_numeracao(proximo bigint)
+returns void language plpgsql security definer set search_path = public as $$
+declare atual bigint; maior bigint;
+begin
+  if not public.eh_admin() then raise exception 'Somente o master define a numeração.'; end if;
+  atual := (public.numeracao_contratos() ->> 'proximo')::bigint;
+  select coalesce(max(codigo::bigint), 0) into maior from public.processos where codigo ~ '^[0-9]{1,15}$';
+  if proximo < atual or proximo <= maior then
+    raise exception 'A numeração só pode avançar: o próximo número precisa ser maior que % e que %.', atual - 1, maior;
+  end if;
+  perform setval('public.contrato_numero_seq', proximo, false);
+end $$;
+
+-- Ambientes do contrato (valor bruto separado do valor no contrato; XML do Promob em <contrato>/interno/promob/)
+create table if not exists public.ambientes (
+  id uuid primary key default gen_random_uuid(),
+  processo_id uuid not null references public.processos on delete cascade,
+  ordem int not null default 0,
+  nome text not null check (length(trim(nome)) between 2 and 120),
+  linha text, tipo text, fornecedor text default 'AIRAM',
+  corpo text, porta text, complemento text, puxador text, modelo text, observacoes text,
+  qtd numeric(10, 2) not null default 1 check (qtd > 0),
+  prazo int not null default 45 check (prazo between 0 and 720),
+  valor_bruto numeric(12, 2) not null check (valor_bruto >= 0),
+  valor numeric(12, 2) check (valor >= 0),
+  xml_path text check (xml_path is null or xml_path like '%/interno/promob/%'),
+  xml_nome text,
+  xml_enviado_em timestamptz,
+  pecas jsonb,
+  pecas_erro text,
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create index if not exists ambientes_processo_idx on public.ambientes (processo_id, ordem);
+alter table public.ambientes enable row level security;
+drop policy if exists "equipe le ambientes" on public.ambientes;
+create policy "equipe le ambientes" on public.ambientes for select using (public.pode_gerir(processo_id));
+drop policy if exists "gestao ambientes" on public.ambientes;
+create policy "gestao ambientes" on public.ambientes for all
+  using (public.pode_gerir(processo_id) and public.tem_permissao('gestao'))
+  with check (public.pode_gerir(processo_id) and public.tem_permissao('gestao'));
+create or replace function public.carimbar_ambiente()
+returns trigger language plpgsql as $$ begin new.atualizado_em := now(); return new; end $$;
+drop trigger if exists carimbar on public.ambientes;
+create trigger carimbar before update on public.ambientes for each row execute function public.carimbar_ambiente();
+drop trigger if exists auditoria on public.ambientes;
+create trigger auditoria after insert or update or delete on public.ambientes
+  for each row execute function public.registrar_atividade();
+
+-- Procura cliente já cadastrado (CPF, e-mail ou telefone) antes de criar outro.
+-- Mostra só o nome e de quem é, para não duplicar; os dados completos seguem a regra normal de acesso.
+create or replace function public.procurar_cliente(cpf_ text, email_ text, telefone_ text)
+returns table (id uuid, nome text, motivo text, posso_ver boolean, contratos int)
+language plpgsql stable security definer set search_path = public as $$
+declare tel text := regexp_replace(coalesce(telefone_, ''), '\D', '', 'g');
+begin
+  if not (public.eh_equipe() and public.tem_permissao('gestao')) then raise exception 'Sem acesso.'; end if;
+  return query
+    select c.id, c.nome,
+      case when c.cpf = cpf_ then 'cpf' when lower(c.email) = lower(email_) then 'email' else 'telefone' end,
+      public.pode_ver_cliente(c.id),
+      (select count(*)::int from public.processos p where p.cliente_id = c.id)
+    from public.clientes c
+    where (cpf_ is not null and c.cpf = cpf_)
+       or (coalesce(email_, '') <> '' and lower(c.email) = lower(email_))
+       or (length(tel) >= 10 and regexp_replace(coalesce(c.telefone, ''), '\D', '', 'g') = tel)
+    limit 5;
+end $$;
+
+-- Cria (ou atualiza) o cliente e cria o contrato com ambientes, tudo de uma vez e validado no servidor.
+-- dados: { chave, cliente_id?, cliente{...}, contrato{...}, comercial{...}, ambientes[...] }
+create or replace function public.criar_contrato(dados jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  eu uuid := auth.uid();
+  c jsonb := dados -> 'cliente';
+  k jsonb := coalesce(dados -> 'contrato', '{}'::jsonb);
+  com jsonb := coalesce(dados -> 'comercial', '{}'::jsonb);
+  chave uuid := nullif(dados ->> 'chave', '')::uuid;
+  cid uuid := nullif(dados ->> 'cliente_id', '')::uuid;
+  pid uuid; num text; vendedor uuid; vnome text; doc text; a jsonb; i int := 0; total numeric := 0;
+  loja_ text := k ->> 'loja';
+begin
+  if eu is null or not public.eh_equipe() or not public.tem_permissao('gestao') then
+    raise exception 'Você não tem permissão para criar contratos.';
+  end if;
+  if chave is null then raise exception 'Envio inválido (sem chave de criação).'; end if;
+  -- mesmo envio repetido: devolve o contrato já criado
+  select id, codigo into pid, num from public.processos where chave_criacao = chave;
+  if pid is not null then return jsonb_build_object('id', pid, 'codigo', num, 'repetido', true); end if;
+
+  -- validações do cliente
+  doc := regexp_replace(coalesce(c ->> 'cpf', ''), '\D', '', 'g');
+  if length(trim(coalesce(c ->> 'nome', ''))) < 5 or position(' ' in trim(c ->> 'nome')) = 0 then raise exception 'Informe o nome completo do cliente.'; end if;
+  if not (public.cpf_valido(doc) or length(doc) = 14) then raise exception 'CPF inválido.'; end if;
+  if coalesce(c ->> 'email', '') !~* '^[^@\s]+@[^@\s]+\.[^@\s]+$' then raise exception 'E-mail inválido.'; end if;
+  if length(regexp_replace(coalesce(c ->> 'telefone', ''), '\D', '', 'g')) < 10 then raise exception 'Informe o telefone com DDD.'; end if;
+  if coalesce(trim(c ->> 'logradouro'), '') = '' or coalesce(trim(c ->> 'numero'), '') = ''
+     or coalesce(trim(c ->> 'cidade'), '') = '' or coalesce(trim(c ->> 'uf'), '') = '' then
+    raise exception 'Preencha o endereço completo (rua, número, cidade e estado).';
+  end if;
+  if loja_ is null or not exists (select 1 from public.lojas where id = loja_ and ativa) then raise exception 'Escolha a loja ou canal de origem.'; end if;
+  if jsonb_array_length(coalesce(dados -> 'ambientes', '[]'::jsonb)) = 0 then raise exception 'Cadastre pelo menos um ambiente.'; end if;
+
+  -- vendedor: o vendedor é sempre quem está logado; quem vê todos pode escolher
+  vendedor := eu;
+  if public.ve_todos() and nullif(k ->> 'vendedor_id', '') is not null then
+    vendedor := (k ->> 'vendedor_id')::uuid;
+    if not exists (select 1 from public.perfis where id = vendedor and papel in ('admin', 'equipe', 'vendedor')) then
+      raise exception 'Vendedor inválido.';
+    end if;
+  end if;
+  select nome into vnome from public.perfis where id = vendedor;
+
+  -- cliente: usa o informado, o do mesmo CPF, ou cria
+  if cid is null then select id into cid from public.clientes where cpf = doc; end if;
+  if cid is null then
+    insert into public.clientes (nome, cpf, email, telefone, telefone2, rg, mae, nascimento, sexo, profissao,
+      cep, logradouro, numero, complemento, bairro, cidade, uf, criado_por)
+    values (trim(c ->> 'nome'), doc, lower(trim(c ->> 'email')), c ->> 'telefone', nullif(c ->> 'telefone2', ''),
+      nullif(c ->> 'rg', ''), nullif(c ->> 'mae', ''), nullif(c ->> 'nascimento', '')::date, nullif(c ->> 'sexo', ''),
+      nullif(c ->> 'profissao', ''), c ->> 'cep', c ->> 'logradouro', c ->> 'numero', nullif(c ->> 'complemento', ''),
+      c ->> 'bairro', c ->> 'cidade', upper(c ->> 'uf'), eu)
+    returning id into cid;
+  else
+    if exists (select 1 from public.clientes where cpf = doc and id <> cid) then raise exception 'Este CPF já é de outro cliente.'; end if;
+    update public.clientes set nome = trim(c ->> 'nome'), cpf = doc, email = lower(trim(c ->> 'email')), telefone = c ->> 'telefone',
+      telefone2 = nullif(c ->> 'telefone2', ''), rg = nullif(c ->> 'rg', ''), mae = nullif(c ->> 'mae', ''),
+      nascimento = nullif(c ->> 'nascimento', '')::date, sexo = nullif(c ->> 'sexo', ''), profissao = nullif(c ->> 'profissao', ''),
+      cep = c ->> 'cep', logradouro = c ->> 'logradouro', numero = c ->> 'numero', complemento = nullif(c ->> 'complemento', ''),
+      bairro = c ->> 'bairro', cidade = c ->> 'cidade', uf = upper(c ->> 'uf')
+    where id = cid;
+  end if;
+
+  -- contrato (o número sai da sequência no gatilho "numerar")
+  begin
+    insert into public.processos (cliente_id, chave_criacao, cliente_nome, cliente_cpf, cliente_email, cliente_telefone,
+      cliente_nascimento, endereco, cep, bairro, cidade, data_venda, data_disponivel_medicao, tipo_prazo,
+      solucao_financeira, vendedor_id, ambientes)
+    values (cid, chave, trim(c ->> 'nome'), case when length(doc) = 11 then doc end, lower(trim(c ->> 'email')), c ->> 'telefone',
+      nullif(c ->> 'nascimento', '')::date,
+      concat_ws(' — ', concat_ws(', ', c ->> 'logradouro', c ->> 'numero') || coalesce(' - ' || nullif(c ->> 'complemento', ''), ''), c ->> 'bairro', c ->> 'cidade'),
+      c ->> 'cep', c ->> 'bairro', c ->> 'cidade',
+      coalesce(nullif(k ->> 'data', '')::date, current_date),
+      coalesce(nullif(k ->> 'imovel_pronto', '')::date, nullif(k ->> 'data', '')::date, current_date),
+      case when k ->> 'tipo' = 'Futura' then 'futuro' else 'normal' end,
+      'pendente', vendedor,
+      (select string_agg(x ->> 'nome', ', ') from jsonb_array_elements(dados -> 'ambientes') x))
+    returning id, codigo into pid, num;
+  exception when unique_violation then
+    -- envio simultâneo com a mesma chave: devolve o que foi criado
+    select id, codigo into pid, num from public.processos where chave_criacao = chave;
+    if pid is null then raise; end if;
+    return jsonb_build_object('id', pid, 'codigo', num, 'repetido', true);
+  end;
+
+  for a in select * from jsonb_array_elements(dados -> 'ambientes') loop
+    i := i + 1;
+    if coalesce(trim(a ->> 'nome'), '') = '' then raise exception 'Ambiente %: informe o nome.', i; end if;
+    if coalesce((a ->> 'valor_bruto')::numeric, -1) < 0 then raise exception 'Ambiente %: informe o valor bruto.', i; end if;
+    insert into public.ambientes (processo_id, ordem, nome, linha, tipo, fornecedor, corpo, porta, complemento, puxador, modelo,
+      observacoes, qtd, prazo, valor_bruto, valor)
+    values (pid, i, trim(a ->> 'nome'), a ->> 'linha', a ->> 'tipo', coalesce(nullif(a ->> 'fornecedor', ''), 'AIRAM'),
+      a ->> 'corpo', a ->> 'porta', a ->> 'complemento', a ->> 'puxador', a ->> 'modelo', a ->> 'observacoes',
+      coalesce(nullif(a ->> 'qtd', '')::numeric, 1), coalesce(nullif(a ->> 'prazo', '')::int, 45),
+      (a ->> 'valor_bruto')::numeric, coalesce(nullif(a ->> 'valor', '')::numeric, (a ->> 'valor_bruto')::numeric));
+    total := total + coalesce(nullif(a ->> 'valor', '')::numeric, (a ->> 'valor_bruto')::numeric) * coalesce(nullif(a ->> 'qtd', '')::numeric, 1);
+  end loop;
+
+  insert into public.comercial (id, vendedor_nome, captacao, loja, financeira, forma_pagamento, meios, valor_venda,
+    vencimento_primeira, valor_entrada, situacao, observacao, contrato)
+  values (pid, vnome, nullif(com ->> 'captacao', ''), loja_, nullif(com ->> 'financeira', ''), nullif(com ->> 'forma_pagamento', ''),
+    coalesce(array(select jsonb_array_elements_text(com -> 'meios')), '{}'), total,
+    nullif(com ->> 'vencimento_primeira', '')::date, nullif(com ->> 'valor_entrada', '')::numeric, 'pendente',
+    nullif(com ->> 'observacao', ''), k - 'vendedor_id' - 'loja');
+  insert into public.controle_interno (id) values (pid) on conflict do nothing;
+  return jsonb_build_object('id', pid, 'codigo', num, 'cliente_id', cid, 'repetido', false);
+end $$;
+revoke all on function public.criar_contrato(jsonb) from public, anon;
+grant execute on function public.criar_contrato(jsonb) to authenticated;
+
+-- XML do Promob nos arquivos internos do contrato
+update storage.buckets set allowed_mime_types = (
+  select array(select distinct unnest(coalesce(allowed_mime_types, '{}') || array['application/xml', 'text/xml']))
+) where id = 'documentos';

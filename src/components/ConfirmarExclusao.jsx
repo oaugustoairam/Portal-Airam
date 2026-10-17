@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // Pergunta de segurança antes de apagar um cliente: mostra o que será perdido e
 // só libera o botão depois de digitar EXCLUIR.
-export default function ConfirmarExclusao({ nome, codigo, onConfirmar, onCancelar }) {
+export default function ConfirmarExclusao({ nome, codigo, texto: explicacao, onConfirmar, onCancelar }) {
   const [texto, setTexto] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState('')
@@ -36,7 +36,7 @@ export default function ConfirmarExclusao({ nome, codigo, onConfirmar, onCancela
         <span className="rotulo texto-atraso">Atenção · não dá para desfazer</span>
         <h2 id="exc-titulo">Tem certeza que quer apagar {nome}{codigo ? ` (${codigo})` : ''}?</h2>
         <p id="exc-texto">
-          Some tudo deste cliente: dados da venda, processo, anexos, renders, pasta, assinaturas e controle interno. O cliente deixa de ver o processo no portal.
+          {explicacao || 'Some tudo deste cliente: dados da venda, processo, anexos, renders, pasta, assinaturas e controle interno. O cliente deixa de ver o processo no portal.'}
         </p>
         <label htmlFor="exc-confirma">Para confirmar, digite <strong>EXCLUIR</strong></label>
         <input id="exc-confirma" ref={ref} value={texto} onChange={(e) => setTexto(e.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} />

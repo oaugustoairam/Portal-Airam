@@ -23,6 +23,13 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   O master muda acessos na seção **Usuários** (`definir_acesso`, função `criar-usuario`).
 - **Equipe** (ordem da barra): Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
+  - **Novo cliente / Contrato** (1ª pasta da Gestão, `NovoContrato.jsx`): cria cliente + contrato pela função do banco
+    `criar_contrato` (valida no servidor; chave de criação impede duplicar; vendedor = quem está logado, só quem vê todos escolhe).
+    Tabela `clientes` (CPF único) → `processos.cliente_id`; um cliente pode ter vários contratos. **Número do contrato = código**,
+    gerado pela sequência `contrato_numero_seq` (gatilho `numerar_contrato`, não editável; master avança com `definir_numeracao`).
+    Ambientes em `ambientes` (valor bruto ≠ valor no contrato; XML do Promob em `<contrato>/interno/promob/`, peças lidas por
+    `src/lib/promob.js`, só uso interno). Lojas/canais em `lojas` (Guarulhos, Mooca, Online). CEP pelo ViaCEP (`src/lib/cadastro.js`).
+    RG/CNH: função `ler-documento` (Claude, segredo `ANTHROPIC_API_KEY`); o usuário confere antes de aplicar. Plano: `PLANO.md`.
   - **Gestão de clientes** (`src/components/GestaoClientes.jsx`, regras em `src/lib/gestao.js`): **sistema único** — o cadastro
     da gestão é o próprio processo do portal (`processos`) + `comercial` (1:1, só gestão) + `controle_interno`.
     Abas: Clientes (lista total, colunas da planilha 001 GESTÃO DE CLIENTES; o status filtra as fases),
@@ -30,10 +37,8 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
     e o estado de cada pasta) e Controle de pastas (mesmo período dos Resultados)
     (`pasta_documentos`, arquivos em `documentos/<pid>/pasta/`; "Fechar venda" → PDF com pdf-lib em `src/lib/pastaPdf.js`).
     Planilha com filtro/ordenação por coluna e período de qualquer dia (`PlanilhaFiltravel.jsx`; cartões no celular).
-    **Contrato** (ficha do cliente → "Criar contrato", `ContratoEditor.jsx`, regras em `src/lib/contrato.js`): dados do cliente
-    (inclui nome da mãe), endereço de entrega, ambientes (tipo, fornecedor, linha, descrição, corpo, porta, complemento,
-    puxador, modelo, observações, valor, prazo) e parcelas; salva em `comercial.contrato` e atualiza o cadastro do portal.
-    O PDF (`relatorio/PdfContrato.jsx`) repete o modelo e o texto do contrato da loja; só os dados mudam.
+    **Contrato e ambientes** (ficha do cliente, `ContratoEditor.jsx`): ambientes do contrato, XML/peças e o PDF
+    (`relatorio/PdfContrato.jsx`, modelo e texto do contrato da loja; `montarContratoPdf` em `src/lib/contrato.js`).
     Importa a aba 01 CLIENTES (`registrosDaPlanilha`, `lerPlanilha` em `src/lib/xlsx.js`). **Fazer capa** preenche
     `capa-envelope.xlsx` (`src/lib/planilhas.js`, via `paraVenda`). Excluir cliente pede digitar EXCLUIR (`ConfirmarExclusao.jsx`).
   - **Processos**: Geral e pastas Financeiro, Medição, Conferência, Assinatura do projeto final, Entregas, Vistoria,

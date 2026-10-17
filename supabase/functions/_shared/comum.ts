@@ -82,12 +82,12 @@ export async function emailDoIdentificador(sb, identificador) {
   }
   const n = somenteNumeros(id)
   if (cpfValido(n)) {
-    const { data } = await sb.from('processos').select('cliente_email').eq('cliente_cpf', n).limit(1)
+    const { data } = await sb.from('processos').select('cliente_email').eq('cliente_cpf', n).not('cliente_email', 'is', null).limit(1)
     if (data?.length) return data[0].cliente_email.toLowerCase()
   }
   const tel = /^55\d{10,11}$/.test(n) ? n.slice(2) : n
   if (tel.length !== 10 && tel.length !== 11) return null
-  const { data } = await sb.from('processos').select('cliente_email').eq('telefone_numeros', tel).limit(20)
+  const { data } = await sb.from('processos').select('cliente_email').eq('telefone_numeros', tel).not('cliente_email', 'is', null).limit(20)
   const emails = [...new Set((data ?? []).map((p) => p.cliente_email.toLowerCase()))]
   return emails.length === 1 ? emails[0] : null
 }
