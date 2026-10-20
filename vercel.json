@@ -26,6 +26,14 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(self \"https://app.zapsign.com.br\" \"https://app.zapsign.co\"), microphone=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
         }
       ]
     },

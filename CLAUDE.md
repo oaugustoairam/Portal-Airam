@@ -67,7 +67,7 @@ Dias úteis sem feriados municipais (`somarDiasUteis` em `src/lib/constants.js`)
   localStorage, `src/lib/demo.js`, senha `airam123`). Ao mudar os dados de exemplo, suba a versão em `CHAVE_DEMO`.
 - PDFs com `@react-pdf/renderer`, carregado só quando alguém gera relatório (`src/components/relatorio`).
 - Segredos de servidor ficam em Supabase > Edge Functions > Secrets. Nunca coloque tokens no código.
-- Documentação: `README.md`, `SEGURANCA.md`, `ZAPSIGN.md`, `AVISOS.md`.
+- Documentação: `README.md`, `SEGURANCA.md`, `ZAPSIGN.md`, `AVISOS.md`, `HOSPEDAGEM.md` (portal em portal.airam.arq.br).
 
 ## Pendências
 

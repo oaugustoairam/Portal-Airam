@@ -18,5 +18,7 @@ export default defineConfig({
   plugins: [modelosXlsx, react()],
   base: './',
   // caracteres especiais escritos como \uXXXX no código final (evita problemas de codificação)
-  esbuild: { charset: 'ascii' },
+  esbuild: { charset: 'ascii', legalComments: 'none' },
+  // produção: código minificado e sem mapas de código-fonte (não publica o código original legível)
+  build: { sourcemap: false, minify: 'esbuild', cssCodeSplit: true },
 })
