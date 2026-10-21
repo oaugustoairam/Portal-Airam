@@ -1908,3 +1908,463 @@ $$;
 alter table public.lead_eventos drop constraint if exists lead_eventos_tipo_check;
 alter table public.lead_eventos add constraint lead_eventos_tipo_check check (tipo in ('criado', 'movido', 'nota', 'agendamento', 'remarcado',
   'comparecimento', 'lembrete', 'briefing', 'vendido', 'perdido', 'editado', 'vendedor', 'venda_editada'));
+
+-- =============================================================================
+-- 23. FERRAMENTAS · calculadora de dias úteis: feriados e recessos da empresa (o master cadastra)
+-- =============================================================================
+create table if not exists public.feriados_empresa (
+  id uuid primary key default gen_random_uuid(),
+  data date not null,
+  data_fim date,
+  nome text not null check (length(trim(nome)) between 2 and 80),
+  tipo text not null default 'recesso' check (tipo in ('feriado', 'recesso')),
+  abrangencia text not null default 'todas' check (abrangencia in ('todas', 'sao_paulo', 'guarulhos')),
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now(),
+  constraint feriado_periodo check (data_fim is null or data_fim >= data)
+);
+alter table public.feriados_empresa enable row level security;
+drop policy if exists "ferramentas le feriados" on public.feriados_empresa;
+create policy "ferramentas le feriados" on public.feriados_empresa for select using (public.tem_permissao('ferramentas') or public.eh_equipe());
+drop policy if exists "master feriados" on public.feriados_empresa;
+create policy "master feriados" on public.feriados_empresa for all using (public.eh_admin()) with check (public.eh_admin());
+drop trigger if exists auditoria on public.feriados_empresa;
+create trigger auditoria after insert or update or delete on public.feriados_empresa for each row execute function public.registrar_atividade();
+
+-- =============================================================================
+-- 24. FERRAMENTAS · Formalização por e-mail (conta Hostinger do próprio vendedor)
+-- =============================================================================
+-- Caixa de e-mail de cada usuário: a senha fica cifrada (AES-GCM, chave só no servidor) e o app não lê a tabela.
+create table if not exists public.caixas_email (
+  usuario_id uuid primary key references public.perfis (id) on delete cascade,
+  email text not null check (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  senha_cifrada text not null,
+  testado_em timestamptz,
+  teste_ok boolean,
+  erro text,
+  atualizado_em timestamptz not null default now()
+);
+alter table public.caixas_email enable row level security;
+-- só o estado (nunca a senha) volta para a tela
+create or replace function public.minha_caixa()
+returns table (email text, testado_em timestamptz, teste_ok boolean, erro text)
+language sql stable security definer set search_path = public as $$
+  select email, testado_em, teste_ok, erro from public.caixas_email where usuario_id = auth.uid();
+$$;
+
+-- Tipos de formalização (o master edita os modelos e cria tipos novos)
+create table if not exists public.tipos_formalizacao (
+  id text primary key check (id ~ '^[a-z0-9_]{2,40}$'),
+  nome text not null,
+  titulo_modelo text not null default '{codigo} - {cliente}',
+  texto_modelo text not null,
+  campos jsonb not null default '[]',        -- "previsao" e/ou "origem"
+  anexos jsonb not null default '[]',        -- [{id, nome, multiplo, obrigatorio}]
+  checklist jsonb not null default '[]',     -- [{pergunta, texto}]
+  bloco_checklist text,                      -- ex.: "Solicito medição." (só entra com todos marcados)
+  ativo boolean not null default true,
+  ordem int not null default 0,
+  atualizado_em timestamptz not null default now()
+);
+insert into public.tipos_formalizacao (id, nome, texto_modelo, campos, anexos, checklist, bloco_checklist, ordem) values
+  ('venda_futura', 'Formalização Venda Futura',
+   E'{codigo} - {cliente}\n\nSegue em anexo o projeto inicial do cliente.\n\nPROJETO FUTURO\nPrevisão do imóvel: {previsao}',
+   '["previsao"]', '[{"id":"promob","nome":"Promob(s) vendido(s)","multiplo":true,"obrigatorio":true},{"id":"capa","nome":"Capa do pedido do contrato","multiplo":false,"obrigatorio":true}]',
+   '[]', null, 1),
+  ('venda_normal', 'Formalização Venda Normal',
+   E'{codigo} - {cliente}\n\nSegue em anexo o projeto inicial do cliente.\n\n{checklist}',
+   '[]', '[{"id":"promob","nome":"Promob(s) vendido(s)","multiplo":true,"obrigatorio":true},{"id":"capa","nome":"Capa do pedido do contrato","multiplo":false,"obrigatorio":true}]',
+   '[{"pergunta":"Paredes definidas? (sem mudanças)","texto":"Paredes definidas (sem mudanças)"},{"pergunta":"Pé-direito / gesso definido?","texto":"Pé-direito / gesso definido"},{"pergunta":"Pias / bancadas instaladas?","texto":"Pias / bancadas instaladas"},{"pergunta":"Tem lista de eletros?","texto":"Lista de eletros disponível"}]',
+   'Solicito medição.', 2),
+  ('venda_complemento', 'Formalização Venda Complemento',
+   E'{codigo} - {cliente}\n\nComplemento referente ao pedido de origem: {codigo_origem} - {nome_origem}',
+   '["origem"]', '[{"id":"capa","nome":"Capa do pedido do contrato","multiplo":false,"obrigatorio":true}]', '[]', null, 3),
+  ('solicitacao_medicao', 'Solicitação de Medição',
+   E'{codigo} - {cliente}\n\nSegue em anexo o projeto inicial do cliente.\n\n{checklist}',
+   '[]', '[{"id":"promob","nome":"Promob(s) vendido(s)","multiplo":true,"obrigatorio":true},{"id":"capa","nome":"Capa do pedido do contrato","multiplo":false,"obrigatorio":true}]',
+   '[{"pergunta":"Paredes definidas? (sem mudanças)","texto":"Paredes definidas (sem mudanças)"},{"pergunta":"Pé-direito / gesso definido?","texto":"Pé-direito / gesso definido"},{"pergunta":"Pias / bancadas instaladas?","texto":"Pias / bancadas instaladas"},{"pergunta":"Tem lista de eletros?","texto":"Lista de eletros disponível"}]',
+   'Solicito medição.', 4)
+on conflict (id) do nothing;
+
+create table if not exists public.formalizacoes (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads on delete cascade,
+  tipo_id text not null references public.tipos_formalizacao (id),
+  tipo_nome text,
+  codigo text not null check (length(trim(codigo)) between 1 and 40),
+  cliente_nome text not null,
+  titulo text not null check (length(trim(titulo)) between 2 and 300),
+  texto text not null check (length(texto) <= 20000),
+  para text[] not null check (cardinality(para) between 1 and 30),
+  cc text[] not null default '{}',
+  cco text[] not null default '{}',
+  dados jsonb not null default '{}',
+  situacao text not null default 'pendente' check (situacao in ('pendente', 'enviado', 'falhou')),
+  erro text,
+  copia_enviados text,
+  tentativas int not null default 0,
+  enviado_por uuid not null default auth.uid() references public.perfis (id),
+  criado_em timestamptz not null default now(),
+  enviado_em timestamptz
+);
+create index if not exists formalizacoes_lead_idx on public.formalizacoes (lead_id, criado_em);
+create table if not exists public.formalizacao_anexos (
+  id uuid primary key default gen_random_uuid(),
+  formalizacao_id uuid not null references public.formalizacoes on delete cascade,
+  anexo_id text not null,
+  nome text not null,
+  caminho text not null check (caminho like 'comercial/%/formalizacoes/%'),
+  mime text,
+  tamanho bigint not null default 0
+);
+create table if not exists public.emails_usados (
+  usuario_id uuid not null references public.perfis (id) on delete cascade,
+  email text not null,
+  ultimo_uso timestamptz not null default now(),
+  primary key (usuario_id, email)
+);
+
+alter table public.tipos_formalizacao enable row level security;
+alter table public.formalizacoes enable row level security;
+alter table public.formalizacao_anexos enable row level security;
+alter table public.emails_usados enable row level security;
+drop policy if exists "tipos le" on public.tipos_formalizacao;
+create policy "tipos le" on public.tipos_formalizacao for select using (public.tem_permissao('ferramentas') or public.eh_admin());
+drop policy if exists "tipos master" on public.tipos_formalizacao;
+create policy "tipos master" on public.tipos_formalizacao for all using (public.eh_admin()) with check (public.eh_admin());
+-- quem vê o cliente vê as formalizações dele; só cria quem tem Ferramentas; o envio (e o resultado) é do servidor
+drop policy if exists "formalizacoes le" on public.formalizacoes;
+create policy "formalizacoes le" on public.formalizacoes for select using (public.pode_ver_lead(lead_id));
+drop policy if exists "formalizacoes cria" on public.formalizacoes;
+create policy "formalizacoes cria" on public.formalizacoes for insert
+  with check (public.tem_permissao('ferramentas') and public.pode_ver_lead(lead_id) and enviado_por = auth.uid() and situacao = 'pendente');
+drop policy if exists "formalizacao anexos" on public.formalizacao_anexos;
+create policy "formalizacao anexos" on public.formalizacao_anexos for select
+  using (exists (select 1 from public.formalizacoes f where f.id = formalizacao_id and public.pode_ver_lead(f.lead_id)));
+drop policy if exists "formalizacao anexos cria" on public.formalizacao_anexos;
+create policy "formalizacao anexos cria" on public.formalizacao_anexos for insert
+  with check (exists (select 1 from public.formalizacoes f where f.id = formalizacao_id and f.enviado_por = auth.uid() and f.situacao = 'pendente'));
+drop policy if exists "emails usados" on public.emails_usados;
+create policy "emails usados" on public.emails_usados for select using (usuario_id = auth.uid());
+
+-- =============================================================================
+-- 25. GESTÃO MENSAL · checklist de venda, régua de comissão, pular venda e fechamento do mês
+-- =============================================================================
+alter table public.lead_eventos drop constraint if exists lead_eventos_tipo_check;
+alter table public.lead_eventos add constraint lead_eventos_tipo_check check (tipo in ('criado', 'movido', 'nota', 'agendamento', 'remarcado',
+  'comparecimento', 'lembrete', 'briefing', 'vendido', 'perdido', 'editado', 'vendedor', 'venda_editada', 'formalizacao', 'checklist', 'pulo'));
+
+create table if not exists public.venda_checklist (
+  lead_id uuid primary key references public.leads on delete cascade,
+  contrato_em timestamptz, contrato_por uuid,
+  documento_em timestamptz, documento_por uuid,
+  formalizacao_em timestamptz, formalizacao_por uuid,
+  financeiro_em timestamptz, financeiro_por uuid,
+  pasta_em timestamptz, pasta_por uuid,
+  completa_em timestamptz,          -- preenchido pelo banco quando os 5 itens ficam prontos
+  atualizado_em timestamptz not null default now()
+);
+alter table public.venda_checklist enable row level security;
+drop policy if exists "checklist le" on public.venda_checklist;
+create policy "checklist le" on public.venda_checklist for select using (public.pode_ver_lead(lead_id));
+drop policy if exists "checklist marca" on public.venda_checklist;
+create policy "checklist marca" on public.venda_checklist for all
+  using (public.pode_ver_lead(lead_id) and public.papel_atual() <> 'captador')
+  with check (public.pode_ver_lead(lead_id) and public.papel_atual() <> 'captador');
+
+-- regras: só em VENDIDOS; "formalização enviada" é automática (ou gerente/master); quem marcou fica registrado
+create or replace function public.regras_checklist()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare item text; mudou text[] := '{}';
+begin
+  if (select c.tipo from public.leads l join public.crm_colunas c on c.id = l.coluna_id where l.id = new.lead_id) is distinct from 'ganho' then
+    raise exception 'O checklist é só para vendas (cartão em Vendidos).';
+  end if;
+  if auth.uid() is not null and not public.comercial_todos()
+     and new.formalizacao_em is distinct from (case when tg_op = 'UPDATE' then old.formalizacao_em end) then
+    raise exception 'O item "E-mail de formalização enviado" é marcado sozinho quando a formalização sai pelo portal.';
+  end if;
+  -- formalização enviada antes de o cartão ir para Vendidos também conta
+  if new.formalizacao_em is null and (tg_op = 'INSERT' or old.formalizacao_em is null) then
+    new.formalizacao_em := (select min(f.enviado_em) from public.formalizacoes f where f.lead_id = new.lead_id and f.situacao = 'enviado');
+  end if;
+  foreach item in array array['contrato', 'documento', 'formalizacao', 'financeiro', 'pasta'] loop
+    if (to_jsonb(new) ->> (item || '_em')) is distinct from (case when tg_op = 'UPDATE' then to_jsonb(old) ->> (item || '_em') end) then
+      mudou := mudou || (item || case when to_jsonb(new) ->> (item || '_em') is null then ':desmarcado' else ':marcado' end);
+      new := jsonb_populate_record(new, jsonb_build_object(item || '_por', case when to_jsonb(new) ->> (item || '_em') is null then null else auth.uid() end));
+    end if;
+  end loop;
+  if new.contrato_em is not null and new.documento_em is not null and new.formalizacao_em is not null
+     and new.financeiro_em is not null and new.pasta_em is not null then
+    new.completa_em := coalesce(case when tg_op = 'UPDATE' then old.completa_em end, now());
+  else
+    new.completa_em := null;
+  end if;
+  new.atualizado_em := now();
+  if cardinality(mudou) > 0 then
+    insert into public.lead_eventos (lead_id, tipo, por, dados) values (new.lead_id, 'checklist', auth.uid(), jsonb_build_object('itens', mudou, 'completa', new.completa_em is not null));
+  end if;
+  return new;
+end $$;
+drop trigger if exists regras on public.venda_checklist;
+create trigger regras before insert or update on public.venda_checklist for each row execute function public.regras_checklist();
+
+-- Régua de comissão com vigência (a mudança vale a partir do mês escolhido; meses fechados não mudam)
+create table if not exists public.regua_comissao (
+  id uuid primary key default gen_random_uuid(),
+  vigente_desde date not null unique check (extract(day from vigente_desde) = 1),
+  faixas jsonb not null,             -- [{de, pct, fixo}] em ordem crescente, a primeira com de = 0
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now()
+);
+insert into public.regua_comissao (vigente_desde, faixas) values ('2000-01-01',
+  '[{"de":0,"pct":0,"fixo":2000},{"de":20000,"pct":3,"fixo":2000},{"de":50000,"pct":4,"fixo":2000},{"de":100000,"pct":5,"fixo":2500},{"de":150000,"pct":6,"fixo":3000},{"de":200000,"pct":7,"fixo":3500}]')
+on conflict (vigente_desde) do nothing;
+create or replace function public.validar_regua()
+returns trigger language plpgsql as $$
+declare f jsonb; anterior numeric := -1; i int := 0;
+begin
+  if jsonb_typeof(new.faixas) <> 'array' or jsonb_array_length(new.faixas) < 1 then raise exception 'Informe pelo menos uma faixa.'; end if;
+  for f in select * from jsonb_array_elements(new.faixas) loop
+    if i = 0 and (f ->> 'de')::numeric <> 0 then raise exception 'A primeira faixa começa em R$ 0,00.'; end if;
+    if (f ->> 'de')::numeric <= anterior then raise exception 'As faixas precisam estar em ordem crescente.'; end if;
+    if (f ->> 'pct')::numeric not between 0 and 100 or (f ->> 'fixo')::numeric < 0 then raise exception 'Percentual ou fixo inválido.'; end if;
+    anterior := (f ->> 'de')::numeric; i := i + 1;
+  end loop;
+  return new;
+end $$;
+drop trigger if exists validar on public.regua_comissao;
+create trigger validar before insert or update on public.regua_comissao for each row execute function public.validar_regua();
+
+create table if not exists public.venda_pulos (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads on delete cascade,
+  mes date not null check (extract(day from mes) = 1),
+  motivo text not null check (length(trim(motivo)) between 3 and 500),
+  por uuid not null default auth.uid(),
+  em timestamptz not null default now(),
+  desfeito_por uuid,
+  desfeito_em timestamptz
+);
+create unique index if not exists venda_pulo_ativo on public.venda_pulos (lead_id) where desfeito_em is null;
+
+create table if not exists public.fechamentos_mes (
+  mes date not null,
+  vendedor_id uuid not null references public.perfis (id),
+  total_deflacionado numeric(14, 2) not null,
+  faixa jsonb not null,
+  comissao numeric(14, 2) not null,
+  fixo numeric(14, 2) not null,
+  total numeric(14, 2) not null,
+  vendas jsonb not null,
+  regua_id uuid references public.regua_comissao (id),
+  fechado_por uuid not null default auth.uid(),
+  fechado_em timestamptz not null default now(),
+  primary key (mes, vendedor_id)
+);
+
+alter table public.regua_comissao enable row level security;
+alter table public.venda_pulos enable row level security;
+alter table public.fechamentos_mes enable row level security;
+drop policy if exists "regua le" on public.regua_comissao;
+create policy "regua le" on public.regua_comissao for select using (public.tem_permissao('gestao_mensal'));
+drop policy if exists "regua master" on public.regua_comissao;
+create policy "regua master" on public.regua_comissao for all using (public.eh_admin()) with check (public.eh_admin());
+drop policy if exists "pulos le" on public.venda_pulos;
+create policy "pulos le" on public.venda_pulos for select
+  using (public.tem_permissao('gestao_mensal_todos') or (public.tem_permissao('gestao_mensal') and exists (select 1 from public.leads l where l.id = lead_id and l.vendedor_id = auth.uid())));
+-- pular / desfazer: só gerente e master (por funções abaixo, com histórico)
+drop policy if exists "fechamentos le" on public.fechamentos_mes;
+create policy "fechamentos le" on public.fechamentos_mes for select
+  using (public.tem_permissao('gestao_mensal_todos') or (public.tem_permissao('gestao_mensal') and vendedor_id = auth.uid()));
+
+-- competência: mês da venda, ou o mês em que o checklist ficou completo, ou o mês em que um "pulo" foi desfeito (o mais tarde)
+create or replace view public.vendas_competencia with (security_invoker = true) as
+select l.id as lead_id, l.vendedor_id, l.nome as cliente, l.codigo_pedido, l.venda_data, l.venda_valor, l.venda_deflacionado,
+  ck.completa_em,
+  date_trunc('month', greatest(l.venda_data::timestamp, ck.completa_em at time zone 'America/Sao_Paulo',
+    (select max(p.desfeito_em) from public.venda_pulos p where p.lead_id = l.id) at time zone 'America/Sao_Paulo'))::date as mes,
+  exists (select 1 from public.venda_pulos p where p.lead_id = l.id and p.desfeito_em is null) as pulada,
+  ck.contrato_em, ck.documento_em, ck.formalizacao_em, ck.financeiro_em, ck.pasta_em
+from public.leads l
+join public.crm_colunas c on c.id = l.coluna_id and c.tipo = 'ganho'
+left join public.venda_checklist ck on ck.lead_id = l.id;
+
+-- faixa da régua para um total
+create or replace function public.faixa_salario(total numeric, faixas jsonb)
+returns jsonb language sql immutable as $$
+  select f from jsonb_array_elements(faixas) f where (f ->> 'de')::numeric <= coalesce(total, 0)
+  order by (f ->> 'de')::numeric desc limit 1;
+$$;
+create or replace function public.regua_do_mes(m date)
+returns public.regua_comissao language sql stable security definer set search_path = public as $$
+  select * from public.regua_comissao where vigente_desde <= date_trunc('month', m)::date order by vigente_desde desc limit 1;
+$$;
+
+-- salário do mês por vendedor (vendedor: só o próprio; gerente/master: todos). Mês fechado vem congelado.
+create or replace function public.salario_mes(m date)
+returns table (vendedor_id uuid, vendedor text, total_deflacionado numeric, faixa jsonb, comissao numeric, fixo numeric, total numeric,
+               vendas int, pendentes int, fechado boolean, fechado_em timestamptz, proxima jsonb)
+language plpgsql stable security definer set search_path = public as $$
+declare mes0 date := date_trunc('month', m)::date; todos boolean := public.tem_permissao('gestao_mensal_todos'); r public.regua_comissao;
+begin
+  if not (todos or public.tem_permissao('gestao_mensal')) then raise exception 'Sem acesso à Gestão Mensal.'; end if;
+  r := public.regua_do_mes(mes0);
+  return query
+  with pessoas as (
+    select p.id, coalesce(p.nome, p.email) as nome from public.perfis p
+    where (todos or p.id = auth.uid())
+      and ((p.papel = 'vendedor' and p.ativo) or (not todos and p.id = auth.uid())
+           or exists (select 1 from public.vendas_competencia v where v.vendedor_id = p.id and v.mes = mes0)
+           or exists (select 1 from public.fechamentos_mes f where f.vendedor_id = p.id and f.mes = mes0))
+      and p.papel <> 'cliente'
+  ), validas as (
+    select v.vendedor_id, sum(v.venda_deflacionado) as soma, count(*)::int as n from public.vendas_competencia v
+    where v.mes = mes0 and v.completa_em is not null and not v.pulada group by v.vendedor_id
+  ), pend as (
+    select v.vendedor_id, count(*)::int as n from public.vendas_competencia v
+    where (v.completa_em is null or v.pulada) and v.venda_data < (mes0 + interval '1 month') group by v.vendedor_id
+  )
+  select pe.id, pe.nome,
+    coalesce(f.total_deflacionado, coalesce(va.soma, 0)),
+    coalesce(f.faixa, public.faixa_salario(coalesce(va.soma, 0), r.faixas)),
+    coalesce(f.comissao, round(coalesce(va.soma, 0) * (public.faixa_salario(coalesce(va.soma, 0), r.faixas) ->> 'pct')::numeric / 100, 2)),
+    coalesce(f.fixo, (public.faixa_salario(coalesce(va.soma, 0), r.faixas) ->> 'fixo')::numeric),
+    coalesce(f.total, (public.faixa_salario(coalesce(va.soma, 0), r.faixas) ->> 'fixo')::numeric
+      + round(coalesce(va.soma, 0) * (public.faixa_salario(coalesce(va.soma, 0), r.faixas) ->> 'pct')::numeric / 100, 2)),
+    coalesce(case when f.mes is not null then jsonb_array_length(f.vendas) end, va.n, 0)::int,
+    coalesce(pd.n, 0),
+    f.mes is not null, f.fechado_em,
+    (select x from jsonb_array_elements(coalesce((select rr.faixas from public.regua_comissao rr where rr.id = f.regua_id), r.faixas)) x
+      where (x ->> 'de')::numeric > coalesce(f.total_deflacionado, va.soma, 0) order by (x ->> 'de')::numeric limit 1)
+  from pessoas pe
+  left join validas va on va.vendedor_id = pe.id
+  left join pend pd on pd.vendedor_id = pe.id
+  left join public.fechamentos_mes f on f.vendedor_id = pe.id and f.mes = mes0
+  order by pe.nome;
+end $$;
+
+-- vendas do mês: válidas, pendentes (com o que falta) e puladas
+create or replace function public.vendas_do_mes(m date, vend uuid default null)
+returns table (lead_id uuid, vendedor_id uuid, cliente text, codigo_pedido text, venda_data date, venda_valor numeric, venda_deflacionado numeric,
+               situacao text, faltando text[], pulo_motivo text, pulo_por uuid, pulo_em timestamptz, competencia date)
+language plpgsql stable security definer set search_path = public as $$
+declare mes0 date := date_trunc('month', m)::date; todos boolean := public.tem_permissao('gestao_mensal_todos'); fech public.fechamentos_mes;
+begin
+  if not (todos or public.tem_permissao('gestao_mensal')) then raise exception 'Sem acesso à Gestão Mensal.'; end if;
+  if not todos then vend := auth.uid(); end if;
+  return query
+  select v.lead_id, v.vendedor_id, v.cliente, v.codigo_pedido, v.venda_data, v.venda_valor, v.venda_deflacionado,
+    case when v.pulada then 'pulada' when v.completa_em is null then 'pendente' else 'valida' end,
+    array_remove(array[case when v.contrato_em is null then 'Contrato feito e assinado' end, case when v.documento_em is null then 'Documento do cliente' end,
+      case when v.formalizacao_em is null then 'E-mail de formalização enviado' end, case when v.financeiro_em is null then 'Solução financeira 100% resolvida' end,
+      case when v.pasta_em is null then 'Pasta do cliente feita' end], null),
+    p.motivo, p.por, p.em, v.mes
+  from public.vendas_competencia v
+  left join public.venda_pulos p on p.lead_id = v.lead_id and p.desfeito_em is null
+  where (vend is null or v.vendedor_id = vend)
+    and ((v.mes = mes0 and v.completa_em is not null and not v.pulada)
+         or ((v.completa_em is null or v.pulada) and v.venda_data < (mes0 + interval '1 month')))
+    -- mês fechado: as válidas são as congeladas no fechamento
+    and not (v.completa_em is not null and not v.pulada and exists (select 1 from public.fechamentos_mes f where f.mes = mes0 and f.vendedor_id = v.vendedor_id))
+  union all
+  select (x ->> 'lead_id')::uuid, f.vendedor_id, x ->> 'cliente', x ->> 'codigo_pedido', (x ->> 'venda_data')::date, (x ->> 'venda_valor')::numeric,
+    (x ->> 'venda_deflacionado')::numeric, 'valida', '{}'::text[], null, null, null, mes0
+  from public.fechamentos_mes f cross join jsonb_array_elements(f.vendas) x
+  where f.mes = mes0 and (vend is null or f.vendedor_id = vend)
+  order by 4, 3;
+end $$;
+
+-- pular / desfazer (gerente e master), com histórico no cartão
+create or replace function public.pular_venda(lid uuid, motivo_ text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v record;
+begin
+  if not public.tem_permissao('gestao_mensal_todos') then raise exception 'Somente o gerente ou o master pode pular uma venda.'; end if;
+  if coalesce(length(trim(motivo_)), 0) < 3 then raise exception 'Escreva o motivo.'; end if;
+  select * into v from public.vendas_competencia where lead_id = lid;
+  if v.lead_id is null then raise exception 'Venda não encontrada.'; end if;
+  if v.pulada then raise exception 'Esta venda já foi pulada.'; end if;
+  if exists (select 1 from public.fechamentos_mes f where f.mes = v.mes and f.vendedor_id = v.vendedor_id) and v.completa_em is not null then
+    raise exception 'O mês desta venda já foi fechado.';
+  end if;
+  insert into public.venda_pulos (lead_id, mes, motivo) values (lid, v.mes, trim(motivo_));
+  insert into public.lead_eventos (lead_id, tipo, por, texto, dados) values (lid, 'pulo', auth.uid(), trim(motivo_), jsonb_build_object('acao', 'pulou', 'mes', v.mes));
+end $$;
+create or replace function public.desfazer_pulo(lid uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.tem_permissao('gestao_mensal_todos') then raise exception 'Somente o gerente ou o master pode desfazer.'; end if;
+  update public.venda_pulos set desfeito_por = auth.uid(), desfeito_em = now() where lead_id = lid and desfeito_em is null;
+  if not found then raise exception 'Esta venda não está pulada.'; end if;
+  insert into public.lead_eventos (lead_id, tipo, por, dados) values (lid, 'pulo', auth.uid(), jsonb_build_object('acao', 'desfez'));
+end $$;
+
+-- fechar o mês: congela o cálculo de cada vendedor (só meses que já terminaram)
+create or replace function public.fechar_mes(m date)
+returns int language plpgsql security definer set search_path = public as $$
+declare mes0 date := date_trunc('month', m)::date; n int := 0; s record; r public.regua_comissao := public.regua_do_mes(mes0);
+begin
+  if not public.tem_permissao('gestao_mensal_todos') then raise exception 'Somente o gerente ou o master fecha o mês.'; end if;
+  if mes0 >= date_trunc('month', now() at time zone 'America/Sao_Paulo')::date then raise exception 'Só dá para fechar um mês que já terminou.'; end if;
+  for s in select * from public.salario_mes(mes0) where not fechado loop
+    insert into public.fechamentos_mes (mes, vendedor_id, total_deflacionado, faixa, comissao, fixo, total, vendas, regua_id)
+    values (mes0, s.vendedor_id, s.total_deflacionado, s.faixa, s.comissao, s.fixo, s.total,
+      coalesce((select jsonb_agg(jsonb_build_object('lead_id', v.lead_id, 'cliente', v.cliente, 'codigo_pedido', v.codigo_pedido, 'venda_data', v.venda_data,
+        'venda_valor', v.venda_valor, 'venda_deflacionado', v.venda_deflacionado))
+        from public.vendas_competencia v where v.vendedor_id = s.vendedor_id and v.mes = mes0 and v.completa_em is not null and not v.pulada), '[]'), r.id);
+    n := n + 1;
+  end loop;
+  insert into public.registro_atividades (usuario_id, usuario_email, tabela, acao, antes, depois)
+  values (auth.uid(), auth.jwt() ->> 'email', 'fechamentos_mes', 'FECHAR', null, jsonb_build_object('mes', mes0, 'vendedores', n));
+  return n;
+end $$;
+revoke execute on function public.salario_mes(date) from anon;
+revoke execute on function public.vendas_do_mes(date, uuid) from anon;
+revoke execute on function public.pular_venda(uuid, text) from anon;
+revoke execute on function public.desfazer_pulo(uuid) from anon;
+revoke execute on function public.fechar_mes(date) from anon;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['tipos_formalizacao', 'formalizacoes', 'venda_checklist', 'regua_comissao', 'venda_pulos'] loop
+    execute format('drop trigger if exists auditoria on public.%I', t);
+    execute format('create trigger auditoria after insert or update or delete on public.%I for each row execute function public.registrar_atividade()', t);
+  end loop;
+end $$;
+
+-- =============================================================================
+-- 26. MARKETING · Criador de conteúdo com IA (diretrizes da marca editadas pelo master + histórico de cada usuário)
+-- =============================================================================
+create table if not exists public.diretrizes_marca (
+  id int primary key default 1 check (id = 1),
+  tom_de_voz text not null default 'Elegante, persuasivo e sem exageros. Próximo, mas sofisticado.',
+  palavras_evitar text not null default 'barato, promoção imperdível, o melhor do mundo, incrível!!!',
+  hashtags_padrao text not null default '#airam #moveisplanejados #marcenaria #altopadrao #projetosobmedida',
+  atualizado_por uuid,
+  atualizado_em timestamptz not null default now()
+);
+insert into public.diretrizes_marca (id) values (1) on conflict (id) do nothing;
+create table if not exists public.conteudos_ia (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid not null default auth.uid() references public.perfis (id) on delete cascade,
+  modo text not null check (modo in ('texto', 'imagem')),
+  pedido jsonb not null,
+  variacoes jsonb not null,
+  texto_final text not null check (length(texto_final) <= 6000),
+  criado_em timestamptz not null default now()
+);
+create index if not exists conteudos_ia_usuario_idx on public.conteudos_ia (usuario_id, criado_em desc);
+alter table public.diretrizes_marca enable row level security;
+alter table public.conteudos_ia enable row level security;
+drop policy if exists "marca le" on public.diretrizes_marca;
+create policy "marca le" on public.diretrizes_marca for select using (public.tem_permissao('marketing'));
+drop policy if exists "marca master" on public.diretrizes_marca;
+create policy "marca master" on public.diretrizes_marca for all using (public.eh_admin()) with check (public.eh_admin());
+drop policy if exists "conteudos proprios" on public.conteudos_ia;
+create policy "conteudos proprios" on public.conteudos_ia for all
+  using (public.tem_permissao('marketing') and (usuario_id = auth.uid() or public.eh_admin()))
+  with check (public.tem_permissao('marketing') and usuario_id = auth.uid());
+drop trigger if exists auditoria on public.diretrizes_marca;
+create trigger auditoria after insert or update or delete on public.diretrizes_marca for each row execute function public.registrar_atividade();

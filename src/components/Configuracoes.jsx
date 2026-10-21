@@ -3,9 +3,13 @@ import { api, MODO_DEMO } from '../lib/api.js'
 import { LISTAS_CONFIG, TIPOS_COLUNA } from '../lib/comercial.js'
 import { Confirmar } from './comercial/comum.jsx'
 import Usuarios from './Usuarios.jsx'
+import FeriadosConfig from './ferramentas/FeriadosConfig.jsx'
+import TiposFormalizacaoConfig from './ferramentas/TiposFormalizacaoConfig.jsx'
+import ReguaConfig from './gestaomensal/ReguaConfig.jsx'
+import DiretrizesMarca from './marketing/DiretrizesMarca.jsx'
 
 // Configurações (somente o master): usuários, listas do Comercial, lojas e credenciais das integrações
-export const PASTAS_CONFIG = [['usuarios', 'Usuários'], ['listas', 'Listas'], ['lojas', 'Lojas'], ['integracoes', 'WhatsApp e e-mail']]
+export const PASTAS_CONFIG = [['usuarios', 'Usuários'], ['listas', 'Listas'], ['lojas', 'Lojas'], ['feriados', 'Feriados e recessos'], ['formalizacao', 'Formalização'], ['comissao', 'Régua de comissão'], ['marca', 'Marca (conteúdo)'], ['integracoes', 'Integrações']]
 
 export default function Configuracoes({ aba, perfil }) {
   const titulo = PASTAS_CONFIG.find(([k]) => k === aba)?.[1] || 'Configurações'
@@ -18,6 +22,10 @@ export default function Configuracoes({ aba, perfil }) {
       </div>
       {aba === 'listas' && <ListasConfig />}
       {aba === 'lojas' && <LojasConfig />}
+      {aba === 'feriados' && <FeriadosConfig />}
+      {aba === 'formalizacao' && <TiposFormalizacaoConfig />}
+      {aba === 'comissao' && <ReguaConfig />}
+      {aba === 'marca' && <DiretrizesMarca />}
       {aba === 'integracoes' && <Integracoes perfil={perfil} />}
     </section>
   )
@@ -215,6 +223,7 @@ const CAMPOS_INTEGRACAO = [
   ['whatsapp_template_lembrete', 'Modelo de mensagem: lembrete', false, '5 variáveis: vendedor, cliente, o que fazer, quando, link.'],
   ['resend_api_key', 'Chave da API da Resend (e-mail)', true, 'resend.com > API Keys.'],
   ['email_remetente', 'Remetente do e-mail', false, 'Ex.: Airam <portal@airam.arq.br> (domínio verificado na Resend).'],
+  ['anthropic_api_key', 'Chave da API de IA (Anthropic)', true, 'console.anthropic.com > API Keys. Usada no Criador de conteúdo e na leitura de RG/CNH.'],
 ]
 const ORIGEM = { portal: 'cadastrado aqui', segredo: 'nos segredos do servidor', padrao: 'valor padrão' }
 
@@ -251,6 +260,11 @@ function Integracoes({ perfil }) {
     setOcupado(canal)
     setResultado((r) => ({ ...r, [canal]: null }))
     try {
+      if (canal === 'ia') {
+        const r = await api.testarIA()
+        setResultado((x) => ({ ...x, ia: { ok: !!r.ok, texto: r.ok ? 'A IA respondeu. Criador de conteúdo pronto.' : 'A IA não respondeu ao teste.' } }))
+        return
+      }
       await api.testarIntegracao(canal, teste[canal])
       setResultado((r) => ({ ...r, [canal]: { ok: true, texto: canal === 'whatsapp' ? 'Enviado. Confira o WhatsApp.' : 'Enviado. Confira a caixa de entrada.' } }))
       carregar()
@@ -266,7 +280,7 @@ function Integracoes({ perfil }) {
   return (
     <div className="integracoes">
       <form className="grupo" onSubmit={salvar}>
-        <p className="dica">As chaves ficam guardadas só no servidor. Deixe em branco para manter o valor atual.</p>
+        <p className="dica">WhatsApp (Meta), e-mail de avisos (Resend) e IA (Anthropic). As chaves ficam guardadas só no servidor. Deixe em branco para manter o valor atual.</p>
         <div className="grade grade-2">
           {CAMPOS_INTEGRACAO.map(([k, rotulo, secreto, ajuda]) => {
             const atual = estado.campos[k]
@@ -288,13 +302,19 @@ function Integracoes({ perfil }) {
       </form>
 
       <div className="grade grade-2">
+        <fieldset className="grupo">
+          <legend>Testar IA</legend>
+          <span className="ajuda">Faz uma pergunta curta à Anthropic com a chave cadastrada.</span>
+          <button type="button" className="btn btn-contorno" onClick={() => testar('ia')} disabled={!!ocupado}>{ocupado === 'ia' ? 'Testando…' : 'Enviar teste'}</button>
+          {resultado.ia && <p className={resultado.ia.ok ? 'ok-texto' : 'erro'} role="status">{resultado.ia.texto}</p>}
+        </fieldset>
         {[['whatsapp', 'Testar WhatsApp', 'tel', 'WhatsApp com DDD', 'Envia o modelo “hello_world” da Meta.'], ['email', 'Testar e-mail', 'email', 'E-mail', 'Envia um e-mail de teste pela Resend.']].map(([canal, titulo, tipo, rot, ajuda]) => (
           <fieldset key={canal} className="grupo">
             <legend>{titulo}</legend>
             <label htmlFor={`teste-${canal}`} className="rotulo-campo">{rot}</label>
             <input id={`teste-${canal}`} type={tipo} value={teste[canal]} onChange={(e) => setTeste((t) => ({ ...t, [canal]: e.target.value }))} />
             <span className="ajuda">{ajuda}</span>
-            <button type="button" className="btn btn-contorno" onClick={() => testar(canal)} disabled={!!ocupado || !teste[canal].trim()}>{ocupado === canal ? 'Enviando…' : 'Enviar teste'}</button>
+            <button type="button" className="btn btn-contorno" onClick={() => testar(canal)} disabled={!!ocupado || !String(teste[canal] || '').trim()}>{ocupado === canal ? 'Enviando…' : 'Enviar teste'}</button>
             {resultado[canal] && <p className={resultado[canal].ok ? 'ok-texto' : 'erro'} role="status">{resultado[canal].texto}</p>}
           </fieldset>
         ))}

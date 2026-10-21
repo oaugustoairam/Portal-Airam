@@ -8,17 +8,24 @@ import Aniversarios, { linkParabens } from './Aniversarios.jsx'
 import EmailMarketing from './EmailMarketing.jsx'
 import GestaoClientes, { PASTAS_GESTAO } from './GestaoClientes.jsx'
 import Configuracoes, { PASTAS_CONFIG } from './Configuracoes.jsx'
+import MeuPerfilEquipe from './MeuPerfilEquipe.jsx'
+import GestaoMensal from './gestaomensal/GestaoMensal.jsx'
+import CriadorConteudo from './marketing/CriadorConteudo.jsx'
 import Comercial from './Comercial.jsx'
 import { subabasComercial } from '../lib/comercial.js'
+import Ferramentas, { pastasFerramentas } from './ferramentas/Ferramentas.jsx'
 
 // ordem da barra: Comercial, Gestão de clientes, Processos, Marketing (e, para o master, Configurações)
 const SECOES = {
   comercial: { nome: 'Comercial', pastas: subabasComercial, permissao: 'comercial' },
+  ferramentas: { nome: 'Ferramentas', pastas: pastasFerramentas, permissao: 'ferramentas' },
   gestao: { nome: 'Gestão de clientes', pastas: PASTAS_GESTAO, permissao: 'gestao' },
   processos: { nome: 'Processos', pastas: [['geral', 'Geral'], ...PASTAS.map((p) => [p.id, p.nome])], permissao: 'processos' },
   // novas ferramentas de marketing entram como novas pastas aqui
-  marketing: { nome: 'Marketing', pastas: [['aniversarios', 'Aniversários'], ['email', 'E-mail marketing']], permissao: 'marketing' },
+  marketing: { nome: 'Marketing', pastas: [['aniversarios', 'Aniversários'], ['email', 'E-mail marketing'], ['conteudo', 'Criador de conteúdo']], permissao: 'marketing' },
+  gestao_mensal: { nome: 'Gestão Mensal', pastas: [], permissao: 'gestao_mensal' },
   config: { nome: 'Configurações', pastas: PASTAS_CONFIG, master: true },
+  perfil: { nome: 'Meu perfil', pastas: [], todos: true },
 }
 
 // Área interna da loja: cada pessoa vê as seções que o master liberou.
@@ -33,14 +40,14 @@ function leadDoLink() {
 }
 
 export default function PainelEquipe({ perfil }) {
-  const secoes = Object.entries(SECOES).filter(([, s]) => (s.master ? perfil?.papel === 'admin' : temPermissao(perfil, s.permissao)))
+  const secoes = Object.entries(SECOES).filter(([, s]) => (s.todos ? true : s.master ? perfil?.papel === 'admin' : temPermissao(perfil, s.permissao)))
   const [leadInicial] = useState(() => (temPermissao(perfil, 'comercial') ? leadDoLink() : null))
   useEffect(() => {
     if (leadInicial) window.history.replaceState(null, '', window.location.pathname)
   }, [])
   const [secao, setSecao] = useState(() => (leadInicial ? 'comercial' : secoes[0]?.[0] || 'processos'))
   const pastasDe = (s) => (typeof SECOES[s].pastas === 'function' ? SECOES[s].pastas(perfil) : SECOES[s].pastas)
-  const [pasta, setPasta] = useState(() => ({ comercial: subabasComercial(perfil)[0]?.[0], gestao: 'novo', processos: 'geral', marketing: 'aniversarios', config: 'usuarios' }))
+  const [pasta, setPasta] = useState(() => ({ comercial: subabasComercial(perfil)[0]?.[0], gestao: 'novo', processos: 'geral', marketing: 'aniversarios', config: 'usuarios', ferramentas: 'dias_uteis' }))
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
   const marketing = temPermissao(perfil, 'marketing')
@@ -61,7 +68,7 @@ export default function PainelEquipe({ perfil }) {
   }
   const abrirProcesso = temPermissao(perfil, 'processos') ? (id) => { irPara('processos', 'geral'); setAbrir(id) } : null
 
-  if (!secoes.length) return <p className="vazio">Seu usuário ainda não tem nenhuma área liberada. Fale com o master.</p>
+  if (secoes.length <= 1) return <p className="vazio">Seu usuário ainda não tem nenhuma área liberada. Fale com o master.</p>
 
   return (
     <div className="painel-equipe">
@@ -114,6 +121,10 @@ export default function PainelEquipe({ perfil }) {
         <Aniversarios processos={processos} onAbrirProcesso={abrirProcesso || (() => {})} />
       )}
       {secao === 'marketing' && atual === 'email' && <EmailMarketing processos={processos} />}
+      {secao === 'marketing' && atual === 'conteudo' && <CriadorConteudo />}
+      {secao === 'ferramentas' && <Ferramentas aba={atual} perfil={perfil} irParaPerfil={() => irPara('perfil')} />}
+      {secao === 'perfil' && <MeuPerfilEquipe perfil={perfil} />}
+      {secao === 'gestao_mensal' && <GestaoMensal perfil={perfil} />}
       {secao === 'config' && <Configuracoes aba={atual} perfil={perfil} />}
     </div>
   )

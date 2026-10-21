@@ -32,10 +32,21 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   Avisos da equipe: gatilhos enfileiram em `avisos_equipe`; função `avisos-equipe` (pg_cron a cada minuto) envia e registra.
   Credenciais do WhatsApp/e-mail: tela do master grava na tabela `integracoes` (sem acesso pelo app). `perfis.ativo` desativa usuário.
 - **Equipe** (ordem da barra): Comercial, Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing),
-  **Configurações** (só master: Usuários, Listas, Lojas, WhatsApp e e-mail; `Configuracoes.jsx`). Fase 2 (plano em `PLANO-FASE2.md`):
+  **Configurações** (só master: Usuários, Listas, Lojas, Feriados, Formalização, Régua de comissão, Marca, Integrações; `Configuracoes.jsx`). Fase 2 (plano em `PLANO-FASE2.md`):
   Ferramentas, Gestão Mensal (salário do dia 10) e Criador de conteúdo com IA; chaves `ferramentas`, `gestao_mensal`,
   `gestao_mensal_todos`. Venda no CRM = valor bruto (`venda_valor`), `venda_deflacionado` (digitado por enquanto) e `codigo_pedido`.
   Link dos avisos `?lead=<id>` abre o cartão.
+  - **Ferramentas** (`src/components/ferramentas/`): Dias úteis (`src/lib/diasUteis.js`: feriados nacionais, SP, São Paulo e
+    Guarulhos, móveis calculados, recessos em `feriados_empresa`) e Formalização (tipos em `tipos_formalizacao`, texto por
+    `src/lib/formalizacao.js`; envio pela caixa Hostinger do próprio usuário — funções `caixa-email` e `formalizacao-enviar`,
+    SMTP 465 + cópia IMAP 993 em `_shared/correio.ts`, senha cifrada AES-GCM com o segredo `CAIXAS_CHAVE`).
+  - **Gestão Mensal** (`src/components/gestaomensal/`): salário do dia 10 = fixo + total deflacionado × % (`regua_comissao` com
+    vigência; funções `salario_mes`, `vendas_do_mes`, `pular_venda`, `desfazer_pulo`, `fechar_mes`; regras espelhadas em
+    `src/lib/salario.js`). Só conta venda com o checklist de 5 itens (`venda_checklist`) completo; competência = mês mais tarde
+    entre venda, checklist completo e pulo desfeito. Mês fechado fica congelado em `fechamentos_mes`.
+  - **Marketing > Criador de conteúdo** (`src/components/marketing/`): função `conteudo-ia` (Claude, chave em Configurações >
+    Integrações ou segredo `ANTHROPIC_API_KEY`), diretrizes em `diretrizes_marca`, histórico em `conteudos_ia`.
+  - **Meu perfil** (equipe, `MeuPerfilEquipe.jsx`): caixa de e-mail com "Testar conexão".
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
   - **Novo cliente / Contrato** (1ª pasta da Gestão, `NovoContrato.jsx`): cria cliente + contrato pela função do banco
     `criar_contrato` (valida no servidor; chave de criação impede duplicar; vendedor = quem está logado, só quem vê todos escolhe).

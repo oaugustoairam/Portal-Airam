@@ -112,14 +112,15 @@ export function comercialSupabase(sb, chamarFuncao) {
       if (error) throw new Error(error.code === '23505' ? 'Já existe uma loja com esse código.' : erroLegivel(error))
     },
     async comercialDados() {
-      const [l, a, r, b] = await Promise.all([
+      const [l, a, r, b, k] = await Promise.all([
         sb.from('leads').select('*').order('posicao', { ascending: false }),
         sb.from('agendamentos').select('*').order('inicio'),
         sb.from('lembretes').select('*').order('quando'),
         sb.from('briefings').select('*'),
+        sb.from('venda_checklist').select('*'),
       ])
-      falhar(l.error || a.error || r.error || b.error)
-      return { leads: l.data, agendamentos: a.data, lembretes: r.data, briefings: b.data }
+      falhar(l.error || a.error || r.error || b.error || k.error)
+      return { leads: l.data, agendamentos: a.data, lembretes: r.data, briefings: b.data, checklists: k.data }
     },
     // novo lead: cadastro, anexos e agendamento; o banco põe o aviso do vendedor na fila
     async criarLead(dados, anexos = {}, agendamento = null) {
@@ -350,6 +351,7 @@ export function comercialDemo({ db, gravar, contaAtual, novoId, garantir }) {
         agendamentos: copia(d.agendamentos.filter((a) => ids.has(a.lead_id))).sort((a, b) => a.inicio.localeCompare(b.inicio)),
         lembretes: c.papel === 'captador' ? [] : copia(d.lembretes.filter((a) => ids.has(a.lead_id))).sort((a, b) => a.quando.localeCompare(b.quando)),
         briefings: copia(Object.values(d.briefings).filter((b) => ids.has(b.lead_id))),
+        checklists: copia(Object.values(d.checklists || {}).filter((b) => ids.has(b.lead_id))),
       }
     },
     async criarLead(dados, anexos = {}, agendamento = null) {
@@ -458,7 +460,8 @@ export function comercialDemo({ db, gravar, contaAtual, novoId, garantir }) {
       podeVer(d, c, id)
       if (!(['admin', 'gerente'].includes(c.papel) || temPermissao(c, 'excluir'))) throw new Error('Seu perfil não tem permissão para excluir leads.')
       d.leads = d.leads.filter((x) => x.id !== id)
-      for (const k of ['leadArquivos', 'agendamentos', 'leadEventos', 'lembretes', 'avisosEquipe']) d[k] = d[k].filter((x) => x.lead_id !== id)
+      for (const k of ['leadArquivos', 'agendamentos', 'leadEventos', 'lembretes', 'avisosEquipe', 'formalizacoes', 'pulos']) d[k] = (d[k] || []).filter((x) => x.lead_id !== id)
+      if (d.checklists) delete d.checklists[id]
       delete d.briefings[id]
       gravar()
     },

@@ -10,6 +10,7 @@ import { errosCliente, errosAmbiente, numeros } from './cadastro.js'
 import { prepararImagem } from './imagem.js'
 import { ORIGENS_PADRAO, MOTIVOS_PADRAO, COLUNAS_PADRAO } from './comercial.js'
 import { comercialSupabase, comercialDemo } from './apiComercial.js'
+import { ferramentasSupabase, ferramentasDemo } from './apiFerramentas.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -1254,8 +1255,8 @@ const demoApi = {
   },
 }
 
-if (sb) Object.assign(supabaseApi, comercialSupabase(sb, chamarFuncao))
-Object.assign(demoApi, comercialDemo({ db, gravar, contaAtual, novoId, garantir: garantirComercial }), {
+if (sb) Object.assign(supabaseApi, comercialSupabase(sb, chamarFuncao), ferramentasSupabase(sb, chamarFuncao))
+Object.assign(demoApi, comercialDemo({ db, gravar, contaAtual, novoId, garantir: garantirComercial }), ferramentasDemo({ db, gravar, contaAtual, novoId }), {
   async lojas() {
     return (await this.todasLojas()).filter((l) => l.ativa)
   },

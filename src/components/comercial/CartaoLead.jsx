@@ -8,8 +8,10 @@ import AgendamentoForm, { TrocarVendedor } from './AgendamentoForm.jsx'
 import { Vendido, Perdido } from './Crm.jsx'
 import { ListaLembretes } from './Lembretes.jsx'
 import Briefing from './Briefing.jsx'
+import ChecklistVenda from './ChecklistVenda.jsx'
+import { ListaFormalizacoes } from '../ferramentas/Formalizacao.jsx'
 
-const ABAS = [['resumo', 'Resumo e agenda'], ['anexos', 'Anexos'], ['lembretes', 'Lembretes'], ['briefing', 'Briefing'], ['historico', 'Anotações e histórico'], ['avisos', 'Avisos enviados']]
+const ABAS = [['resumo', 'Resumo e agenda'], ['checklist', 'Checklist de venda'], ['anexos', 'Anexos'], ['lembretes', 'Lembretes'], ['briefing', 'Briefing'], ['formalizacoes', 'Formalizações'], ['historico', 'Anotações e histórico'], ['avisos', 'Avisos enviados']]
 
 // Cartão completo do cliente (lead)
 export default function CartaoLead({ id, onFechar }) {
@@ -27,7 +29,9 @@ export default function CartaoLead({ id, onFechar }) {
   const [tipoNovo, setTipoNovo] = useState('planta')
   const [enviando, setEnviando] = useState(false)
 
+  const [formalizacoes, setFormalizacoes] = useState(null)
   const carregarExtras = () => Promise.all([
+    api.formalizacoes(id).then(setFormalizacoes).catch(() => setFormalizacoes([])),
     api.arquivosLead(id).then(setArquivos),
     api.eventosLead(id).then(setEventos),
     api.avisosLead(id).then(setAvisos),
@@ -94,9 +98,10 @@ export default function CartaoLead({ id, onFechar }) {
     if (falhas.length) setErro(falhas.join(' '))
     else avisar(lista.length > 1 ? `${lista.length} arquivos adicionados` : 'Arquivo adicionado')
   }
-  async function abrirArquivo(arq, baixar) {
+  const abrirArquivoFormalizacao = (a, baixar) => abrirArquivo(a, baixar, api.urlAnexoFormalizacao)
+  async function abrirArquivo(arq, baixar, gerarUrl = api.urlArquivoLead) {
     try {
-      const url = await api.urlArquivoLead(arq, baixar)
+      const url = await gerarUrl(arq, baixar)
       if (baixar) {
         const a = document.createElement('a')
         a.href = url
@@ -139,7 +144,7 @@ export default function CartaoLead({ id, onFechar }) {
       {erro && <p className="erro" role="alert">{erro}</p>}
 
       <nav className="cartao-abas" role="tablist" aria-label="Partes do cartão">
-        {ABAS.filter(([k]) => (k !== 'lembretes' || acoes.lembretes)).map(([k, t]) => (
+        {ABAS.filter(([k]) => (k !== 'lembretes' || acoes.lembretes) && (k !== 'checklist' || coluna?.tipo === 'ganho')).map(([k, t]) => (
           <button key={k} type="button" role="tab" aria-selected={aba === k} className={aba === k ? 'ativa' : ''} onClick={() => setAba(k)}>{t}</button>
         ))}
       </nav>
@@ -188,7 +193,23 @@ export default function CartaoLead({ id, onFechar }) {
               </label>
             </span>
           </div>
-          {!arquivos ? <p className="vazio-mini">Carregando…</p> : arquivos.length === 0 ? <p className="vazio-mini">Nenhum anexo.</p> : (
+          {formalizacoes?.some((f) => f.formalizacao_anexos?.length) && (
+            <div className="grupo-anexos">
+              <h4>Formalizações</h4>
+              <ul className="lista-anexos">
+                {formalizacoes.flatMap((f) => (f.formalizacao_anexos || []).map((a) => (
+                  <li key={a.id}>
+                    <span>{a.nome}<small>{f.tipo_nome} · {f.codigo}</small></span>
+                    <span className="acoes-linha">
+                      <button type="button" className="btn btn-leve" onClick={() => abrirArquivoFormalizacao(a, false)}>Visualizar</button>
+                      <button type="button" className="btn btn-leve" onClick={() => abrirArquivoFormalizacao(a, true)}>Baixar</button>
+                    </span>
+                  </li>
+                )))}
+              </ul>
+            </div>
+          )}
+          {!arquivos ? <p className="vazio-mini">Carregando…</p> : arquivos.length === 0 ? <p className="vazio-mini">Nenhum anexo do cadastro.</p> : (
             TIPOS_ARQUIVO.map(([k, t]) => {
               const doTipo = arquivos.filter((a) => a.tipo === k)
               if (!doTipo.length) return null
@@ -223,6 +244,19 @@ export default function CartaoLead({ id, onFechar }) {
       {aba === 'briefing' && (
         <div className="cartao-secao">
           <Briefing lead={lead} briefing={dados.briefings.find((b) => b.lead_id === id)} onSalvo={feito} />
+        </div>
+      )}
+
+      {aba === 'checklist' && coluna?.tipo === 'ganho' && (
+        <div className="cartao-secao">
+          <ChecklistVenda lead={lead} checklist={dados.checklists?.find((c) => c.lead_id === id)} onMudou={feito} />
+        </div>
+      )}
+
+      {aba === 'formalizacoes' && (
+        <div className="cartao-secao">
+          <p className="dica">Formalizações enviadas pelo portal para este cliente (Ferramentas › Formalização), com os anexos.</p>
+          {!formalizacoes ? <p className="vazio-mini">Carregando…</p> : <ListaFormalizacoes lista={formalizacoes} compacta onMudou={carregarExtras} />}
         </div>
       )}
 
@@ -301,6 +335,9 @@ export function textoEvento(e, { listas, lojas, pessoas }) {
     case 'lembrete': return `Lembrete para ${dataHoraBR(d.quando)}${e.texto ? `: ${e.texto}` : ''}`
     case 'briefing': return d.feito ? `Briefing realizado${d.forma ? ` por ${d.forma === 'ligacao' ? 'ligação' : 'mensagem'}` : ''}` : 'Briefing atualizado'
     case 'editado': return 'Dados do lead editados'
+    case 'formalizacao': return `Formalização enviada: ${d.tipo || ''} · ${e.texto || ''} · para ${(d.para || []).join(', ')}`
+    case 'checklist': return `Checklist: ${(d.itens || []).map((x) => x.replace(':marcado', ' ✓').replace(':desmarcado', ' desmarcado').replace(/^contrato/, 'contrato').replace(/^documento/, 'documento').replace(/^formalizacao/, 'formalização').replace(/^financeiro/, 'financeiro').replace(/^pasta/, 'pasta')).join(', ')}${d.completa ? ' · checklist completo' : ''}`
+    case 'pulo': return d.acao === 'pulou' ? `Venda pulada no salário: ${e.texto || ''}` : 'Pulo da venda desfeito'
     case 'vendedor': return `Vendedor trocado: ${nomeCurto(pessoas, d.de)} → ${nomeCurto(pessoas, d.para)}`
     default: return e.tipo
   }

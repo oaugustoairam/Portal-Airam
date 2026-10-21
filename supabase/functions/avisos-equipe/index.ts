@@ -13,14 +13,15 @@ const CHAVES = {
   whatsapp_template_lembrete: 'WHATSAPP_TEMPLATE_LEMBRETE',
   resend_api_key: 'RESEND_API_KEY',
   email_remetente: 'EMAIL_REMETENTE',
+  anthropic_api_key: 'ANTHROPIC_API_KEY',
 }
-const SECRETAS = ['whatsapp_token', 'resend_api_key']
+const SECRETAS = ['whatsapp_token', 'resend_api_key', 'anthropic_api_key']
 const PADRAO = { whatsapp_template_lead: 'novo_lead_vendedor', whatsapp_template_lembrete: 'lembrete_vendedor', email_remetente: 'Airam <portal@airam.arq.br>' }
 
 async function credenciais(sb) {
   const { data } = await sb.from('integracoes').select('chave, valor')
   const banco = Object.fromEntries((data ?? []).filter((x) => x.valor).map((x) => [x.chave, x.valor]))
-  const out = {}
+  const out: Record<string, any> = {}
   for (const [k, env] of Object.entries(CHAVES)) out[k] = banco[k] || Deno.env.get(env) || PADRAO[k] || ''
   out.origem = Object.fromEntries(Object.keys(CHAVES).map((k) => [k, banco[k] ? 'portal' : Deno.env.get(CHAVES[k]) ? 'segredo' : PADRAO[k] ? 'padrao' : null]))
   return out

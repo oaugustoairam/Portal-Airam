@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { agendaDoLead, diaLocal, diaMesHora, dinheiro, estadoLembrete, foneBR, nomeCurto } from '../../lib/comercial.js'
 import { errosVenda } from '../../lib/apiComercial.js'
+import { ITENS_CHECKLIST } from '../../lib/salario.js'
 import { Janela, Campo, Icone, useComercial } from './comum.jsx'
 import LeadForm from './LeadForm.jsx'
 
@@ -96,6 +97,7 @@ export default function Crm() {
                   <CartaoKanban key={l.id} lead={l} colunas={colunas} pessoas={pessoas} mostrarVendedor={acoes.todos && !vend}
                     agenda={agendaDoLead(dados.agendamentos, l.id)} lembretes={dados.lembretes.filter((x) => x.lead_id === l.id)}
                     briefing={dados.briefings.find((b) => b.lead_id === l.id)} podeMover={acoes.mover}
+                    checklist={c.tipo === 'ganho' ? ITENS_CHECKLIST.filter(([k]) => dados.checklists?.find((x) => x.lead_id === l.id)?.[`${k}_em`]).length : undefined}
                     onAbrir={() => abrirCartao(l.id)} onArrastar={setArrastando}
                     onMover={(col) => mover(l, col).catch(() => {})} />
                 ))}
@@ -119,7 +121,7 @@ export default function Crm() {
   )
 }
 
-function CartaoKanban({ lead, agenda, lembretes, briefing, colunas, pessoas, mostrarVendedor, podeMover, onAbrir, onArrastar, onMover }) {
+function CartaoKanban({ lead, agenda, lembretes, briefing, checklist, colunas, pessoas, mostrarVendedor, podeMover, onAbrir, onArrastar, onMover }) {
   const estados = lembretes.map((l) => estadoLembrete(l))
   const atrasado = estados.includes('atrasado')
   const pendente = !atrasado && estados.some((e) => e === 'hoje' || e === 'proximo')
@@ -129,6 +131,7 @@ function CartaoKanban({ lead, agenda, lembretes, briefing, colunas, pessoas, mos
         <strong>{lead.nome}</strong>
         <span>{foneBR(lead.telefone)}</span>
         {agenda && <span className="kanban-agenda"><Icone nome="agenda" /> {diaMesHora(agenda.inicio)}</span>}
+        {checklist !== undefined && <span className={`kanban-checklist ${checklist === 5 ? 'completo' : ''}`}>Checklist {checklist}/5</span>}
         {lead.venda_valor && <span className="kanban-valor">{dinheiro(lead.venda_valor)}{lead.codigo_pedido ? ` · ${lead.codigo_pedido}` : ''}</span>}
         {mostrarVendedor && <span className="kanban-vendedor">{nomeCurto(pessoas, lead.vendedor_id)}</span>}
         <span className="kanban-icones">

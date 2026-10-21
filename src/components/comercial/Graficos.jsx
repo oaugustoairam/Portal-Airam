@@ -79,7 +79,7 @@ export function Linhas({ pontos, series, formato = (v) => v }) {
   return (
     <div className="linhas">
       <div className="legenda">
-        {series.map((s, i) => <span key={s.chave}><i className={`marca serie-${i + 1}`} />{s.nome}</span>)}
+        {series.map((s, i) => <span key={s.chave}><i className={`marca-serie serie-${i + 1}`} />{s.nome}</span>)}
       </div>
       <div className="linhas-area" ref={ref}>
         <svg width={L} height={A} viewBox={`0 0 ${L} ${A}`} role="img" aria-label={series.map((s) => s.nome).join(' e ') + ' por mês'}
@@ -110,7 +110,7 @@ export function Linhas({ pontos, series, formato = (v) => v }) {
         {foco !== null && (
           <div className="linhas-dica" role="tooltip" style={{ left: `${(x(foco) / L) * 100}%` }}>
             <strong>{pontos[foco].rotulo}</strong>
-            {series.map((s, i) => <span key={s.chave}><i className={`marca serie-${i + 1}`} />{s.nome}: {formato(pontos[foco].valores[s.chave] || 0)}</span>)}
+            {series.map((s, i) => <span key={s.chave}><i className={`marca-serie serie-${i + 1}`} />{s.nome}: {formato(pontos[foco].valores[s.chave] || 0)}</span>)}
           </div>
         )}
       </div>

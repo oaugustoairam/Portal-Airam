@@ -2159,13 +2159,13 @@ label.btn input[hidden] { display: none; }
 .barra-rotulo { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tinta); }
 .barra-trilho { height: 12px; display: flex; align-items: center; }
 .barra { display: block; height: 12px; border-radius: 0 4px 4px 0; }
-.barra.serie-1, .marca.serie-1 { background: var(--serie-1); }
-.barra.serie-2, .marca.serie-2 { background: var(--serie-2); }
+.barra.serie-1, .marca-serie.serie-1 { background: var(--serie-1); }
+.barra.serie-2, .marca-serie.serie-2 { background: var(--serie-2); }
 .barra-valor { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .barra-dica { position: absolute; right: 0; bottom: calc(100% + 2px); z-index: 3; background: var(--tinta); color: var(--superficie); font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
 .legenda { display: flex; gap: 14px; font-size: 12.5px; color: var(--tinta-2); }
 .legenda span, .linhas-dica span { display: inline-flex; align-items: center; gap: 6px; }
-.marca { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.marca-serie { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .linhas-area { position: relative; }
 .linhas svg { display: block; max-width: 100%; }
 .grade-linha { stroke: var(--linha); stroke-width: 1; }
@@ -2202,3 +2202,90 @@ label.btn input[hidden] { display: none; }
 .cal-legenda span { display: inline-flex; align-items: center; gap: 6px; }
 .cal-legenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .cal-legenda-sit { margin-left: auto; }
+
+/* ferramentas: calculadora de dias úteis */
+.du-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.du-legenda { margin: 0; font-size: 16px; font-weight: 600; }
+.du-resultado { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--linha); padding-top: 12px; }
+.du-numero { display: flex; flex-direction: column; }
+.du-numero strong { font-size: 40px; font-weight: 500; line-height: 1.1; color: var(--acento); font-variant-numeric: tabular-nums; }
+.du-numero span { color: var(--tinta-2); font-size: 14px; }
+.du-numero span::first-letter { text-transform: uppercase; }
+.du-detalhe { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--tinta-2); }
+.du-detalhe strong { color: var(--tinta); font-weight: 600; }
+.du-feriados { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.du-feriados span { font-weight: 600; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.du-feriados small { color: var(--tinta-2); margin-left: 4px; }
+.du-mes { text-transform: capitalize; }
+.du-mes-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.du-sem { font-size: 12px; text-transform: uppercase; color: var(--tinta-2); text-align: center; padding: 4px 0; }
+.du-dia { text-align: center; padding: 10px 0; border-radius: var(--r); background: var(--superficie); border: 1px solid var(--linha); font-variant-numeric: tabular-nums; font-size: 14px; }
+.du-dia.fora { opacity: .35; }
+.du-dia.fds { background: var(--neutro-suave); color: var(--tinta-2); }
+.du-dia.feriado { background: var(--acento-suave); color: var(--acento); font-weight: 600; border-color: var(--acento); }
+.du-dia.feriado-empresa { background: var(--alerta-suave); color: var(--alerta); border-color: var(--alerta); }
+.du-dia.no-periodo { box-shadow: inset 0 -3px 0 var(--serie-2); }
+.du-dia.resultado { outline: 2px solid var(--serie-2); outline-offset: 1px; }
+.du-dia.hoje { text-decoration: underline; text-underline-offset: 3px; }
+.du-legenda-cores i { border: 1px solid var(--linha); }
+.lg-util { background: var(--superficie); } .lg-fds { background: var(--neutro-suave); } .lg-feriado { background: var(--acento-suave); border-color: var(--acento) !important; }
+.lg-empresa { background: var(--alerta-suave); border-color: var(--alerta) !important; } .lg-periodo { background: var(--serie-2); } .lg-resultado { background: var(--superficie); outline: 2px solid var(--serie-2); }
+.du-calendario { gap: 10px; }
+.du-ano summary { cursor: pointer; font-size: 14px; color: var(--acento); }
+.du-ano .du-feriados { margin-top: 8px; }
+
+/* checklist de venda e formalização */
+.kanban-checklist { font-size: 12px; color: var(--alerta) !important; font-weight: 600; }
+.kanban-checklist.completo { color: var(--ok) !important; }
+.checklist-venda { display: flex; flex-direction: column; gap: 10px; }
+.progresso-checklist { height: 8px; border-radius: 999px; background: var(--neutro-suave); overflow: hidden; }
+.progresso-checklist span { display: block; height: 100%; background: var(--acento); border-radius: 999px; transition: width .4s ease; }
+.itens-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.itens-checklist li { background: var(--papel); border-radius: var(--r); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; }
+.itens-checklist li.feito { background: var(--ok-suave); }
+.itens-checklist small { color: var(--tinta-2); font-weight: 400; }
+.form-formalizacao { display: flex; flex-direction: column; gap: 12px; }
+.form-formalizacao .aviso-config { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cliente-escolhido { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--papel); padding: 8px 10px; border-radius: var(--r); font-size: 14px; }
+.chips-emails { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 1px solid var(--linha); border-radius: var(--r); padding: 4px; background: var(--superficie); min-height: 44px; }
+.chips-emails input { border: 0; flex: 1 1 140px; min-width: 120px; min-height: 34px; box-shadow: none !important; padding: 4px 6px; }
+.chip-email { display: inline-flex; align-items: center; gap: 4px; background: var(--acento-suave); color: var(--tinta); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 13px; }
+.chip-email.invalido { background: var(--alerta-suave); color: var(--alerta); }
+.chip-email button { border: 0; background: none; cursor: pointer; font-size: 16px; line-height: 1; color: inherit; padding: 0 4px; }
+.faltas { margin: 0; padding-left: 18px; color: var(--alerta); font-size: 13.5px; }
+.lista-formalizacoes { display: flex; flex-direction: column; gap: 10px; }
+.caixa-email { max-width: 860px; }
+
+/* gestão mensal: salário do dia 10 */
+.salario { display: flex; flex-direction: column; gap: 14px; }
+.salario-destaque { background: linear-gradient(135deg, var(--marca), var(--marca-escura)); color: #fff; border-radius: 10px; padding: 26px 28px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 30px rgb(147 0 0 / .18); }
+.salario-rotulo { font-size: 15px; opacity: .9; }
+.salario-valor { font-size: clamp(38px, 7vw, 60px); font-weight: 500; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.salario-sub { font-size: 13.5px; opacity: .85; }
+.indicador-texto { font-size: 16px !important; }
+.salario-progresso p { margin: 0; }
+.barra-faixa { height: 14px; border-radius: 999px; background: var(--neutro-suave); overflow: hidden; }
+.barra-faixa span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--marca), var(--acento)); animation: cresce-faixa 1.1s ease-out both; transform-origin: left; }
+@keyframes cresce-faixa { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .barra-faixa span { animation: none; } }
+.faixas-mini { display: flex; flex-wrap: wrap; gap: 6px; }
+.faixas-mini span { font-size: 12px; padding: 4px 9px; border-radius: 999px; background: var(--papel); color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.faixas-mini span.atual { background: var(--acento-suave); color: var(--acento); font-weight: 600; }
+.tabela-salarios .linha-total th, .tabela-salarios .linha-total td { border-top: 2px solid var(--tinta); font-weight: 600; }
+.tabela-salarios th small { margin-left: 6px; }
+.tabela-regua input { max-width: 160px; min-height: 38px; }
+.regua-config { gap: 12px; }
+.linha-editor { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.linha-editor input:not([type=checkbox]) { flex: 1 1 200px; }
+
+/* criador de conteúdo */
+.criador-conteudo { display: flex; flex-direction: column; gap: 12px; }
+.fotos-conteudo { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.fotos-conteudo li { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fotos-conteudo img { width: 110px; height: 110px; object-fit: cover; border-radius: var(--r); border: 1px solid var(--linha); }
+.variacoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.variacao { gap: 10px; }
+.variacao-texto { white-space: pre-wrap; font: 14.5px/1.55 var(--f-texto); margin: 0; }
+.variacao textarea { width: 100%; }
+.historico-texto { font-size: 14px; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.diretrizes-marca { max-width: 860px; }

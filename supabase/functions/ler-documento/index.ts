@@ -4,7 +4,8 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.135.0'
 import { betaZodOutputFormat } from 'npm:@anthropic-ai/sdk@0.135.0/helpers/beta/zod'
 import { z } from 'npm:zod@4.6.7'
-import { cors, resposta, exigirEquipe, regraDoUsuario } from '../_shared/comum.ts'
+import { cors, resposta, exigirEquipe, regraDoUsuario, clienteServidor } from '../_shared/comum.ts'
+import { chaveAnthropic } from '../_shared/ia.ts'
 
 const TIPOS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const LIMITE = 5 * 1024 * 1024 // 5 MB de imagem
@@ -37,9 +38,9 @@ Deno.serve(async (req) => {
   if (!quem) return resposta({ erro: 'Acesso negado.' }, 403)
   if (!(await regraDoUsuario(req, 'tem_permissao', { chave: 'gestao' }))) return resposta({ erro: 'Sem permissão para cadastrar clientes.' }, 403)
 
-  const chave = Deno.env.get('ANTHROPIC_API_KEY')
+  const chave = await chaveAnthropic(clienteServidor())
   if (!chave) {
-    return resposta({ erro: 'A leitura automática ainda não está ativada. Cadastre o segredo ANTHROPIC_API_KEY no Supabase (Edge Functions > Secrets). Enquanto isso, preencha os dados à mão.', configurar: true }, 503)
+    return resposta({ erro: 'A leitura automática ainda não está ativada. O master precisa cadastrar a chave da Anthropic em Configurações > Integrações. Enquanto isso, preencha os dados à mão.', configurar: true }, 503)
   }
 
   const { imagem, tipo } = await req.json().catch(() => ({}))
