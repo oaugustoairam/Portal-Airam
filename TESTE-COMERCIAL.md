@@ -61,3 +61,38 @@ vendedor nem exclui, usuário desativado perde o acesso, fila de avisos não env
   *Falhou: WhatsApp não configurado* — registrado, com Reenviar.
 - **E-mail**: falta a chave da Resend (e o domínio airam.arq.br verificado nela). Até lá: *Falhou: E-mail não configurado*.
 - Preencha o **WhatsApp de cada vendedor** em Usuários.
+
+---
+
+# Fase 2 — Etapas 1 a 7 (perfis, briefing novo e ajustes)
+
+Testado em 21/10/2026: **62 de 62 passos aprovados** na demonstração e no banco real de produção (usuários de teste
+temporários, apagados no fim junto com os dados).
+
+## Etapa 1 · Perfis e permissões
+1. Entre como **Master**: a barra termina em **Configurações** (Usuários, Listas, Lojas, WhatsApp e e-mail).
+   A antiga seção "Usuários" e as configurações de dentro do Comercial foram para lá.
+2. Em Configurações > Usuários, abra uma pessoa: as permissões novas são **Ferramentas**, **Gestão Mensal** e
+   **Gestão Mensal: todos os vendedores**. Para o Captador, o Marketing fica desligado até você ligar.
+3. Entre como **Vendedor**: a barra mostra Comercial, Gestão de clientes, Processos e **Marketing**.
+   Como **Captador**, só Comercial. (Ferramentas e Gestão Mensal aparecem na barra quando essas etapas ficarem prontas.)
+
+## Etapas 2 e 6 · Captação e avisos
+1. Novo lead: a planta aceita **DWG**; a conversa aceita o **.zip** exportado do WhatsApp.
+2. A mensagem de aviso termina com o link `…/?lead=…`: ao abrir, o portal entra direto no cartão do cliente
+   (depois de fazer login, se precisar).
+
+## Etapa 3 · CRM
+1. Arraste para **VENDIDOS**: o modal pede **valor bruto, valor deflacionado, código do pedido e data**.
+   Sem o deflacionado ou sem o código, não salva (o banco também recusa). Cancelar deixa o cartão onde estava.
+2. No cartão vendido, **Corrigir venda** muda os valores; a correção aparece no histórico (antes → depois).
+
+## Etapa 4 · Calendário
+1. Escolha **Cor por vendedor** ou **Cor por loja**; a legenda embaixo dos filtros mostra quem é cada cor.
+   ✓ = compareceu, ✗ = não compareceu, riscado = cancelado.
+
+## Etapa 5 · Briefing
+1. No cartão > Briefing > **Preencher briefing**: as 9 perguntas novas, todas opcionais.
+   "Qual a previsão para morar?" só aparece com *Já mora no local?* = Não; os detalhes da obra só com Sim.
+2. **Salvar briefing** → **Editar** → **IMPRIMIR**: uma folha A4; o que não foi respondido sai com linhas em branco,
+   e há a área de observações no rodapé.

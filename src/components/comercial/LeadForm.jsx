@@ -86,7 +86,7 @@ export default function LeadForm({ lead, onFechar, onSalvo }) {
 
       {novo && (
         <>
-          <EscolherArquivos id="ld-plantas" rotulo="Planta do imóvel" arquivos={anexos.plantas} onChange={(x) => setAnexos((a) => ({ ...a, plantas: x }))} ajuda="PDF ou imagem; pode enviar vários." />
+          <EscolherArquivos id="ld-plantas" rotulo="Planta do imóvel" aceitar="image/*,application/pdf,.dwg" arquivos={anexos.plantas} onChange={(x) => setAnexos((a) => ({ ...a, plantas: x }))} ajuda="PDF, imagem ou DWG; pode enviar vários." />
           <EscolherArquivos id="ld-refs" rotulo="Imagens de referência" aceitar="image/*" arquivos={anexos.referencias} onChange={(x) => setAnexos((a) => ({ ...a, referencias: x }))} />
         </>
       )}
@@ -103,8 +103,8 @@ export default function LeadForm({ lead, onFechar, onSalvo }) {
         {conversaModo === 'texto' ? (
           <textarea id="ld-conversa" aria-label="Texto da conversa" rows={novo ? 4 : 6} value={f.conversa_texto} onChange={muda('conversa_texto')} placeholder="Cole aqui a conversa do WhatsApp ou do Instagram" />
         ) : (
-          <EscolherArquivos id="ld-conv-arq" rotulo="Arquivo da conversa" aceitar="image/*,application/pdf,text/plain,.txt" arquivos={anexos.conversa}
-            onChange={(x) => setAnexos((a) => ({ ...a, conversa: x }))} ajuda="Print, PDF ou o .txt exportado do WhatsApp." />
+          <EscolherArquivos id="ld-conv-arq" rotulo="Arquivo da conversa" aceitar="image/*,application/pdf,text/plain,.txt,.zip" arquivos={anexos.conversa}
+            onChange={(x) => setAnexos((a) => ({ ...a, conversa: x }))} ajuda="O .txt ou .zip exportado do WhatsApp, print ou PDF." />
         )}
       </div>
 

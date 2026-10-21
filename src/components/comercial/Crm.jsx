@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { agendaDoLead, diaLocal, diaMesHora, dinheiro, estadoLembrete, foneBR, nomeCurto } from '../../lib/comercial.js'
+import { errosVenda } from '../../lib/apiComercial.js'
 import { Janela, Campo, Icone, useComercial } from './comum.jsx'
 import LeadForm from './LeadForm.jsx'
 
@@ -128,7 +129,7 @@ function CartaoKanban({ lead, agenda, lembretes, briefing, colunas, pessoas, mos
         <strong>{lead.nome}</strong>
         <span>{foneBR(lead.telefone)}</span>
         {agenda && <span className="kanban-agenda"><Icone nome="agenda" /> {diaMesHora(agenda.inicio)}</span>}
-        {lead.venda_valor && <span className="kanban-valor">{dinheiro(lead.venda_valor)}</span>}
+        {lead.venda_valor && <span className="kanban-valor">{dinheiro(lead.venda_valor)}{lead.codigo_pedido ? ` · ${lead.codigo_pedido}` : ''}</span>}
         {mostrarVendedor && <span className="kanban-vendedor">{nomeCurto(pessoas, lead.vendedor_id)}</span>}
         <span className="kanban-icones">
           {atrasado && <span className="kanban-ico ico-atrasado"><Icone nome="sino" titulo="Lembrete atrasado" /> atrasado</span>}
@@ -146,40 +147,50 @@ function CartaoKanban({ lead, agenda, lembretes, briefing, colunas, pessoas, mos
   )
 }
 
-// Vendido: pede valor e data; cancelar deixa o cartão onde estava
-export function Vendido({ lead, onConfirmar, onCancelar }) {
-  const [valor, setValor] = useState(lead.venda_valor ? String(lead.venda_valor).replace('.', ',') : '')
-  const [data, setData] = useState(lead.venda_data || diaLocal(new Date()))
+// Vendido: valor bruto, valor deflacionado, código do pedido e data; cancelar deixa o cartão onde estava.
+// Também serve para corrigir uma venda já registrada (corrigir = true).
+const paraTexto = (v) => (v == null ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+const paraNumero = (t) => Number(String(t).replace(/\./g, '').replace(',', '.'))
+export function Vendido({ lead, onConfirmar, onCancelar, corrigir }) {
+  const [f, setF] = useState(() => ({ bruto: paraTexto(lead.venda_valor), defl: paraTexto(lead.venda_deflacionado), codigo: lead.codigo_pedido || '', data: lead.venda_data || diaLocal(new Date()) }))
   const [ocupado, setOcupado] = useState(false)
   const [erro, setErro] = useState('')
-  const numero = Number(valor.replace(/\./g, '').replace(',', '.'))
+  const dinheiroDigitado = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value.replace(/[^\d.,]/g, '') }))
   async function ok() {
     setErro('')
-    if (!(numero > 0)) return setErro('Informe o valor da venda.')
-    if (!data) return setErro('Informe a data de fechamento.')
+    const venda = { venda_valor: paraNumero(f.bruto), venda_deflacionado: paraNumero(f.defl), codigo_pedido: f.codigo, venda_data: f.data }
+    const e = errosVenda(venda)
+    if (e) return setErro(e)
+    if (venda.venda_deflacionado > venda.venda_valor) return setErro('O valor deflacionado não pode ser maior que o valor bruto.')
     setOcupado(true)
     try {
-      await onConfirmar({ venda_valor: numero, venda_data: data })
-    } catch (e) {
-      setErro(e.message)
+      await onConfirmar(venda)
+    } catch (err) {
+      setErro(err.message)
       setOcupado(false)
     }
   }
   return (
-    <Janela titulo="Marcar como vendido" rotulo={lead.nome} largura="pequena" ocupado={ocupado} onFechar={onCancelar} onSubmit={ok}
+    <Janela titulo={corrigir ? 'Corrigir venda' : 'Marcar como vendido'} rotulo={lead.nome} largura="media" ocupado={ocupado} onFechar={onCancelar} onSubmit={ok}
       rodape={<>
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <button type="button" className="btn btn-leve" onClick={onCancelar} disabled={ocupado}>Cancelar</button>
-        <button className="btn btn-principal" disabled={ocupado}>{ocupado ? 'Salvando…' : 'Confirmar venda'}</button>
+        <button className="btn btn-principal" disabled={ocupado}>{ocupado ? 'Salvando…' : corrigir ? 'Salvar correção' : 'Confirmar venda'}</button>
       </>}>
       <div className="grade grade-2">
-        <Campo id="vd-valor" rotulo="Valor da venda (R$)" obrigatorio>
-          <input id="vd-valor" inputMode="decimal" placeholder="25.000,00" value={valor} onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ''))} />
+        <Campo id="vd-valor" rotulo="Valor bruto da venda (R$)" obrigatorio>
+          <input id="vd-valor" inputMode="decimal" placeholder="30.000,00" value={f.bruto} onChange={dinheiroDigitado('bruto')} />
+        </Campo>
+        <Campo id="vd-defl" rotulo="Valor deflacionado (R$)" obrigatorio ajuda="Base do salário do dia 10.">
+          <input id="vd-defl" inputMode="decimal" placeholder="25.000,00" value={f.defl} onChange={dinheiroDigitado('defl')} />
+        </Campo>
+        <Campo id="vd-codigo" rotulo="Código do pedido" obrigatorio>
+          <input id="vd-codigo" maxLength={40} value={f.codigo} onChange={(e) => setF((x) => ({ ...x, codigo: e.target.value }))} />
         </Campo>
         <Campo id="vd-data" rotulo="Data de fechamento" obrigatorio>
-          <input id="vd-data" type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          <input id="vd-data" type="date" value={f.data} onChange={(e) => setF((x) => ({ ...x, data: e.target.value }))} />
         </Campo>
       </div>
-      {erro && <p className="erro" role="alert">{erro}</p>}
     </Janela>
   )
 }

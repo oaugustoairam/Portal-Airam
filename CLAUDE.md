@@ -31,7 +31,11 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   Calendário, Métricas com PDF/Excel) e dados em `src/lib/apiComercial.js` (Supabase + demonstração com as mesmas regras).
   Avisos da equipe: gatilhos enfileiram em `avisos_equipe`; função `avisos-equipe` (pg_cron a cada minuto) envia e registra.
   Credenciais do WhatsApp/e-mail: tela do master grava na tabela `integracoes` (sem acesso pelo app). `perfis.ativo` desativa usuário.
-- **Equipe** (ordem da barra): Comercial, Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
+- **Equipe** (ordem da barra): Comercial, Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing),
+  **Configurações** (só master: Usuários, Listas, Lojas, WhatsApp e e-mail; `Configuracoes.jsx`). Fase 2 (plano em `PLANO-FASE2.md`):
+  Ferramentas, Gestão Mensal (salário do dia 10) e Criador de conteúdo com IA; chaves `ferramentas`, `gestao_mensal`,
+  `gestao_mensal_todos`. Venda no CRM = valor bruto (`venda_valor`), `venda_deflacionado` (digitado por enquanto) e `codigo_pedido`.
+  Link dos avisos `?lead=<id>` abre o cartão.
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
   - **Novo cliente / Contrato** (1ª pasta da Gestão, `NovoContrato.jsx`): cria cliente + contrato pela função do banco
     `criar_contrato` (valida no servidor; chave de criação impede duplicar; vendedor = quem está logado, só quem vê todos escolhe).

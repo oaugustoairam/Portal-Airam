@@ -84,7 +84,7 @@ export default function Metricas() {
           { nome: 'Resumo', linhas: [['Indicador', 'Valor'], ['Período e filtros', descricaoFiltros], ['Leads', r.leads], ['Agendamentos', r.agendamentos], ['Comparecimentos', r.comparecimentos],
             ['Vendas', r.vendas], ['Faturamento (R$)', r.faturamento], ['Ticket médio (R$)', r.ticket], ['Conversão (%)', conv(r.conversao)], ['Perdas', r.perdas]] },
           ...tabelas.map((x) => ({ nome: x.titulo, linhas: [x.colunas, ...x.linhas] })),
-          { nome: 'Vendas', linhas: [['Cliente', 'Vendedor', 'Data', 'Valor (R$)'], ...m.vendas.map((l) => [l.nome, nomeCurto(pessoas, l.vendedor_id), dataBR(l.venda_data), Number(l.venda_valor)])] },
+          { nome: 'Vendas', linhas: [['Cliente', 'Pedido', 'Vendedor', 'Data', 'Valor bruto (R$)', 'Valor deflacionado (R$)'], ...m.vendas.map((l) => [l.nome, l.codigo_pedido || '', nomeCurto(pessoas, l.vendedor_id), dataBR(l.venda_data), Number(l.venda_valor), l.venda_deflacionado == null ? null : Number(l.venda_deflacionado)])] },
         ]
         baixarArquivo(await gerarXlsx(abas), `${nomeArquivo}.xlsx`)
       }

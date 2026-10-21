@@ -2191,3 +2191,14 @@ label.btn input[hidden] { display: none; }
 .usuario-cartao.inativo { opacity: .65; }
 .janela-corpo > * { flex-shrink: 0; }
 .janela-cartao .cartao-abas { position: sticky; top: -16px; z-index: 2; background: var(--superficie); margin-top: -4px; padding-top: 4px; }
+
+/* calendário: cor por vendedor ou loja (paleta categórica validada para daltonismo; cinza a partir do 9º) */
+:root { --cat-0: #8a8a86; --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100; --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #6250d6; --cat-8: #e34948; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --cat-0: #8f8f8a; --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767; } }
+:root[data-theme='dark'] { --cat-0: #8f8f8a; --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500; --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #e66767; }
+.cal-evento, .cal-evento.sit-compareceu, .cal-evento.sit-nao_compareceu { border-left: 4px solid var(--cor-evento, var(--acento)); background: color-mix(in srgb, var(--cor-evento, var(--acento)) 14%, var(--superficie)); }
+.cal-evento.sit-cancelado { border-left-color: var(--cor-evento); background: var(--neutro-suave); }
+.cal-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--tinta-2); margin: -6px 0 12px; }
+.cal-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.cal-legenda-sit { margin-left: auto; }

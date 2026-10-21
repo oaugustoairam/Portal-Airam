@@ -3,7 +3,7 @@
 import { cors, resposta, clienteServidor, exigirEquipe, gerarSenhaProvisoria } from '../_shared/comum.ts'
 
 const PAPEIS = ['admin', 'gerente', 'equipe', 'vendedor', 'captador']
-const CHAVES = ['gestao', 'processos', 'marketing', 'ver_todos', 'excluir', 'comercial', 'comercial_todos', 'comercial_config']
+const CHAVES = ['gestao', 'processos', 'marketing', 'ver_todos', 'excluir', 'comercial', 'comercial_todos', 'comercial_config', 'ferramentas', 'gestao_mensal', 'gestao_mensal_todos']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })

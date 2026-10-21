@@ -120,7 +120,7 @@ export default function CartaoLead({ id, onFechar }) {
           <div><dt>Vendedor</dt><dd>{nomeCurto(pessoas, lead.vendedor_id)}</dd></div>
           <div><dt>Captador</dt><dd>{nomeCurto(pessoas, lead.captador_id)}</dd></div>
           <div><dt>Cadastrado</dt><dd>{dataHoraBR(lead.criado_em)}</dd></div>
-          {lead.venda_valor && <div><dt>Venda</dt><dd>{dinheiro(lead.venda_valor)} em {dataBR(lead.venda_data)}</dd></div>}
+          {lead.venda_valor && <div><dt>Venda · pedido {lead.codigo_pedido}</dt><dd>{dinheiro(lead.venda_valor)} bruto · {dinheiro(lead.venda_deflacionado)} deflacionado · {dataBR(lead.venda_data)}</dd></div>}
           {lead.perda_motivo_id && <div><dt>Perda</dt><dd>{listas.motivos_perda.find((m) => m.id === lead.perda_motivo_id)?.nome}{lead.perda_texto ? ` · ${lead.perda_texto}` : ''}</dd></div>}
         </dl>
         <div className="cartao-acoes">
@@ -131,6 +131,7 @@ export default function CartaoLead({ id, onFechar }) {
               {colunas.filter((c) => c.id !== lead.coluna_id).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           )}
+          {acoes.mover && coluna?.tipo === 'ganho' && <button type="button" className="btn btn-leve" onClick={() => setJanela({ tipo: 'corrigir' })}>Corrigir venda</button>}
           {acoes.trocarVendedor && <button type="button" className="btn btn-leve" onClick={() => setJanela({ tipo: 'vendedor' })}>Trocar vendedor</button>}
           {acoes.excluir && <button type="button" className="btn btn-leve texto-atraso" onClick={() => setJanela({ tipo: 'excluir' })}>Excluir lead</button>}
         </div>
@@ -182,7 +183,7 @@ export default function CartaoLead({ id, onFechar }) {
               </select>
               <label className={`btn btn-contorno ${enviando ? 'desabilitado' : ''}`}>
                 {enviando ? 'Enviando…' : '+ Adicionar'}
-                <input type="file" multiple hidden disabled={enviando} accept="image/*,application/pdf,text/plain,.txt"
+                <input type="file" multiple hidden disabled={enviando} accept="image/*,application/pdf,text/plain,.txt,.dwg,.zip"
                   onChange={(e) => { const l = [...e.target.files]; e.target.value = ''; if (l.length) enviarArquivos(l) }} />
               </label>
             </span>
@@ -269,6 +270,8 @@ export default function CartaoLead({ id, onFechar }) {
       {janela?.tipo === 'vendedor' && <TrocarVendedor lead={lead} onFechar={() => setJanela(null)} onSalvo={feito} />}
       {janela?.tipo === 'ganho' && <Vendido lead={lead} onCancelar={() => setJanela(null)}
         onConfirmar={async (x) => { await api.moverLead(lead.id, janela.coluna.id, x); await feito('Venda registrada') }} />}
+      {janela?.tipo === 'corrigir' && <Vendido lead={lead} corrigir onCancelar={() => setJanela(null)}
+        onConfirmar={async (x) => { await api.corrigirVenda(lead.id, x); await feito('Venda corrigida') }} />}
       {janela?.tipo === 'perdido' && <Perdido lead={lead} motivos={listas.motivos_perda.filter((m) => m.ativa)} onCancelar={() => setJanela(null)}
         onConfirmar={async (x) => { await api.moverLead(lead.id, janela.coluna.id, x); await feito('Perda registrada') }} />}
       {janela?.tipo === 'cancelar' && <Confirmar titulo="Cancelar este agendamento?" botao="Cancelar agendamento" texto={`${dataHoraBR(janela.agendamento.inicio)} · fica no histórico como cancelado.`}
@@ -288,7 +291,8 @@ export function textoEvento(e, { listas, lojas, pessoas }) {
   switch (e.tipo) {
     case 'criado': return `Lead cadastrado para ${nomeCurto(pessoas, d.vendedor_id)}`
     case 'movido': return `Movido de ${col(e.de_coluna)} para ${col(e.para_coluna)}`
-    case 'vendido': return `Vendido: ${dinheiro(d.valor)} em ${dataBR(d.data)}`
+    case 'vendido': return `Vendido: pedido ${d.codigo || '—'} · ${dinheiro(d.valor)} bruto${d.deflacionado ? ` · ${dinheiro(d.deflacionado)} deflacionado` : ''} · ${dataBR(d.data)}`
+    case 'venda_editada': return `Venda corrigida: ${dinheiro(d.antes?.deflacionado)} → ${dinheiro(d.depois?.deflacionado)} deflacionado · bruto ${dinheiro(d.depois?.valor)} · pedido ${d.depois?.codigo || '—'} · ${dataBR(d.depois?.data)}`
     case 'perdido': return `Perdido: ${listas.motivos_perda.find((m) => m.id === d.motivo_id)?.nome || ''}${e.texto ? ` · ${e.texto}` : ''}`
     case 'nota': return e.texto
     case 'agendamento': return `Agendado para ${dataHoraBR(d.inicio)} · ${loja(d)}`

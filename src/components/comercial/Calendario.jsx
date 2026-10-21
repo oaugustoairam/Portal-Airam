@@ -21,6 +21,7 @@ export default function Calendario() {
   const [loja, setLoja] = useState('')
   const [modalidade, setModalidade] = useState('')
   const [cancelados, setCancelados] = useState(false)
+  const [corPor, setCorPor] = useState('vendedor')
   const [janela, setJanela] = useState(null)
   const hoje = diaLocal(new Date())
   const nomeLoja = (id) => lojas.find((l) => l.id === id)?.nome || id
@@ -40,12 +41,22 @@ export default function Calendario() {
   const novoNoDia = acoes.cadastrar ? (dia) => setJanela({ tipo: 'novo', dia }) : null
   const mudou = async (msg) => { setJanela(null); await recarregar(); avisar(msg) }
 
+  // cor fixa por vendedor (ordem da lista) ou por loja; passou de 8, cinza (a legenda mostra quem é quem)
+  const ordemCor = corPor === 'vendedor' ? vendedores.map((v) => v.id) : lojas.map((l) => l.id)
+  const chaveCor = (a) => (corPor === 'vendedor' ? a.vendedor_id : a.modalidade === 'online' ? 'online' : a.loja_id)
+  const slotCor = (k) => {
+    const i = ordemCor.indexOf(k)
+    return i >= 0 && i < 8 ? i + 1 : 0
+  }
+  const legenda = corPor === 'vendedor' ? vendedores.map((v) => [v.id, v.nome || v.email]) : lojas.map((l) => [l.id, l.nome])
+  const MARCA_SIT = { compareceu: '✓ ', nao_compareceu: '✗ ', cancelado: '' }
   function Evento({ a, compacto }) {
     const l = leadDe(a)
     return (
-      <button type="button" className={`cal-evento sit-${a.situacao}`} onClick={(e) => { e.stopPropagation(); setJanela({ tipo: 'ver', a }) }}
-        title={`${horaLocal(a.inicio)} ${l?.nome || ''}`}>
-        <span className="cal-hora">{horaLocal(a.inicio)}</span>
+      <button type="button" className={`cal-evento sit-${a.situacao}`} style={{ '--cor-evento': `var(--cat-${slotCor(chaveCor(a))})` }}
+        onClick={(e) => { e.stopPropagation(); setJanela({ tipo: 'ver', a }) }}
+        title={`${horaLocal(a.inicio)} ${l?.nome || ''} · ${nomeCurto(pessoas, a.vendedor_id)} · ${a.modalidade === 'online' ? 'Online' : nomeLoja(a.loja_id)}${a.situacao !== 'marcado' ? ` · ${SITUACOES_AGENDA[a.situacao]}` : ''}`}>
+        <span className="cal-hora">{MARCA_SIT[a.situacao] || ''}{horaLocal(a.inicio)}</span>
         <span className="cal-nome">{l?.nome || 'Lead'}</span>
         {!compacto && <span className="cal-local">{a.modalidade === 'online' ? 'Online' : nomeLoja(a.loja_id)} · {nomeCurto(pessoas, a.vendedor_id)}</span>}
       </button>
@@ -139,6 +150,15 @@ export default function Calendario() {
           <option value="online">Só online</option>
         </select>
         <label className="check"><input type="checkbox" checked={cancelados} onChange={(e) => setCancelados(e.target.checked)} /> Mostrar cancelados</label>
+        <div className="segmentado" role="radiogroup" aria-label="Cores por">
+          {[['vendedor', 'Cor por vendedor'], ['loja', 'Cor por loja']].map(([k, t]) => (
+            <button key={k} type="button" role="radio" aria-checked={corPor === k} className={corPor === k ? 'ativo' : ''} onClick={() => setCorPor(k)}>{t}</button>
+          ))}
+        </div>
+      </div>
+      <div className="cal-legenda" aria-label="Legenda das cores">
+        {legenda.map(([k, t]) => <span key={k}><i style={{ background: `var(--cat-${slotCor(k)})` }} />{t}</span>)}
+        <span className="cal-legenda-sit">✓ compareceu · ✗ não compareceu · riscado = cancelado</span>
       </div>
       {corpo}
       {novoNoDia && <p className="dica">Clique num dia para criar um agendamento.</p>}

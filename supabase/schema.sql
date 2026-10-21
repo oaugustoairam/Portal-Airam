@@ -1366,6 +1366,8 @@ create table if not exists public.leads (
   criado_em timestamptz not null default now(),
   atualizado_em timestamptz not null default now()
 );
+alter table public.leads add column if not exists venda_deflacionado numeric(12, 2) check (venda_deflacionado is null or venda_deflacionado > 0);
+alter table public.leads add column if not exists codigo_pedido text check (coalesce(length(codigo_pedido), 0) <= 40);
 create index if not exists leads_vendedor_idx on public.leads (vendedor_id, coluna_id);
 create index if not exists leads_criado_idx on public.leads (criado_em);
 create index if not exists leads_telefone_idx on public.leads (regexp_replace(telefone, '\D', '', 'g'));
@@ -1535,6 +1537,12 @@ begin
       if new.venda_valor is null or new.venda_valor <= 0 or new.venda_data is null then
         raise exception 'Para marcar como vendido, informe o valor da venda e a data de fechamento.';
       end if;
+      if new.venda_deflacionado is null or new.venda_deflacionado <= 0 then
+        raise exception 'Informe o valor deflacionado da venda.';
+      end if;
+      if coalesce(trim(new.codigo_pedido), '') = '' then
+        raise exception 'Informe o código do pedido.';
+      end if;
       new.perda_motivo_id := null; new.perda_texto := null;
     elsif col.tipo = 'perdido' then
       select * into motivo from public.motivos_perda where id = new.perda_motivo_id;
@@ -1545,8 +1553,16 @@ begin
       new.venda_valor := null; new.venda_data := null; new.perda_motivo_id := null; new.perda_texto := null;
     end if;
   elsif meu_papel = 'captador' and (new.venda_valor is distinct from old.venda_valor or new.venda_data is distinct from old.venda_data
+        or new.venda_deflacionado is distinct from old.venda_deflacionado or new.codigo_pedido is distinct from old.codigo_pedido
         or new.perda_motivo_id is distinct from old.perda_motivo_id) then
     raise exception 'O captador não registra venda nem perda.';
+  elsif (select tipo from public.crm_colunas where id = new.coluna_id) = 'ganho' and (new.venda_valor is null or new.venda_valor <= 0
+        or new.venda_data is null or new.venda_deflacionado is null or new.venda_deflacionado <= 0 or coalesce(trim(new.codigo_pedido), '') = '') then
+    raise exception 'Venda precisa de valor bruto, valor deflacionado, código do pedido e data de fechamento.';
+  end if;
+  -- fora de Vendidos não existe venda (valores antigos são limpos)
+  if (select tipo from public.crm_colunas where id = new.coluna_id) <> 'ganho' then
+    new.venda_deflacionado := null; new.codigo_pedido := null;
   end if;
   return new;
 end $$;
@@ -1568,7 +1584,7 @@ begin
     insert into public.lead_eventos (lead_id, tipo, de_coluna, para_coluna, por, dados, texto)
     values (new.id, case col_tipo when 'ganho' then 'vendido' when 'perdido' then 'perdido' else 'movido' end,
       old.coluna_id, new.coluna_id, auth.uid(),
-      case col_tipo when 'ganho' then jsonb_build_object('valor', new.venda_valor, 'data', new.venda_data)
+      case col_tipo when 'ganho' then jsonb_build_object('valor', new.venda_valor, 'deflacionado', new.venda_deflacionado, 'codigo', new.codigo_pedido, 'data', new.venda_data)
                     when 'perdido' then jsonb_build_object('motivo_id', new.perda_motivo_id) end,
       case when col_tipo = 'perdido' then new.perda_texto end);
   end if;
@@ -1577,6 +1593,12 @@ begin
     values (new.id, 'vendedor', auth.uid(), jsonb_build_object('de', old.vendedor_id, 'para', new.vendedor_id));
     update public.agendamentos set vendedor_id = new.vendedor_id where lead_id = new.id;
     update public.lembretes set vendedor_id = new.vendedor_id where lead_id = new.id and concluido_em is null;
+  end if;
+  if new.coluna_id = old.coluna_id and (new.venda_valor, new.venda_deflacionado, new.codigo_pedido, new.venda_data)
+       is distinct from (old.venda_valor, old.venda_deflacionado, old.codigo_pedido, old.venda_data) then
+    insert into public.lead_eventos (lead_id, tipo, por, dados) values (new.id, 'venda_editada', auth.uid(), jsonb_build_object(
+      'antes', jsonb_build_object('valor', old.venda_valor, 'deflacionado', old.venda_deflacionado, 'codigo', old.codigo_pedido, 'data', old.venda_data),
+      'depois', jsonb_build_object('valor', new.venda_valor, 'deflacionado', new.venda_deflacionado, 'codigo', new.codigo_pedido, 'data', new.venda_data)));
   end if;
   if (new.nome, new.telefone, new.email, new.origem_id) is distinct from (old.nome, old.telefone, old.email, old.origem_id) then
     insert into public.lead_eventos (lead_id, tipo, por, dados) values (new.id, 'editado', auth.uid(),
@@ -1860,3 +1882,29 @@ alter table public.briefings add column if not exists quem_opina text check (coa
 alter table public.briefings add column if not exists ambiente_uso text check (coalesce(length(ambiente_uso), 0) <= 2000);
 update public.briefings set moradores = pessoas || case when pessoas = 1 then ' pessoa' else ' pessoas' end
   where moradores is null and pessoas is not null;
+
+-- =============================================================================
+-- 22. FASE 2 — perfis: Ferramentas, Gestão Mensal e Configurações (só o master)
+--     vendedor: ferramentas, marketing e a própria gestão mensal; gerente: também a de todos;
+--     captador: nada disso (marketing só se o master ligar)
+-- =============================================================================
+create or replace function public.tem_permissao(chave text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select case
+      when not ativo then false
+      when papel = 'admin' then true
+      when permissoes ? chave then (permissoes ->> chave)::boolean
+      when papel = 'gerente' then chave in ('gestao', 'processos', 'marketing', 'ver_todos', 'comercial', 'comercial_todos',
+                                            'ferramentas', 'gestao_mensal', 'gestao_mensal_todos')
+      when papel = 'equipe' then chave in ('processos', 'marketing', 'ver_todos')
+      when papel = 'vendedor' then chave in ('gestao', 'processos', 'comercial', 'ferramentas', 'gestao_mensal', 'marketing')
+      when papel = 'captador' then chave in ('comercial', 'comercial_todos')
+      else false end
+    from public.perfis where id = auth.uid()), false);
+$$;
+
+-- histórico: correção de valores da venda
+alter table public.lead_eventos drop constraint if exists lead_eventos_tipo_check;
+alter table public.lead_eventos add constraint lead_eventos_tipo_check check (tipo in ('criado', 'movido', 'nota', 'agendamento', 'remarcado',
+  'comparecimento', 'lembrete', 'briefing', 'vendido', 'perdido', 'editado', 'vendedor', 'venda_editada'));

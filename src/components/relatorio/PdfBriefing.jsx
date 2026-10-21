@@ -78,7 +78,7 @@ function Documento({ cab, b }) {
           // Sim/Não com o complemento: linhas em branco só quando falta a resposta
           const extraPreenchido = resp === q.extra.quando && r[q.extra.campo]
           return (
-            <Pergunta key={q.campo} titulo={titulo} valor={extraPreenchido ? `${q.extra.texto} ${r[q.extra.campo]}` : null}
+            <Pergunta key={q.campo} titulo={titulo} valor={extraPreenchido ? r[q.extra.campo] : null}
               linhas={resp === null || resp === undefined || resp === q.extra.quando ? 1 : 0}>
               <View style={s.marca}>
                 <Opcao marcada={resp === true}>Sim{q.extra.quando === true ? ` — ${q.extra.texto.toLowerCase()}` : ''}</Opcao>

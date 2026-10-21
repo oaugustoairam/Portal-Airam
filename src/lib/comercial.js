@@ -9,7 +9,6 @@ export function subabasComercial(perfil) {
   if (todos) lista.push(['captacao', 'Captação / Agendamentos'])
   if (perfil?.papel !== 'captador') lista.push(['crm', todos ? 'CRM' : 'Meu CRM'], ['lembretes', 'Meus lembretes'])
   lista.push(['calendario', 'Calendário'], ['metricas', 'Métricas de Vendas'])
-  if (temPermissao(perfil, 'comercial_config')) lista.push(['config', 'Configurações'])
   return lista
 }
 

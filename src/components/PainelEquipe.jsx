@@ -7,26 +7,40 @@ import AdminHome from './AdminHome.jsx'
 import Aniversarios, { linkParabens } from './Aniversarios.jsx'
 import EmailMarketing from './EmailMarketing.jsx'
 import GestaoClientes, { PASTAS_GESTAO } from './GestaoClientes.jsx'
-import Usuarios from './Usuarios.jsx'
+import Configuracoes, { PASTAS_CONFIG } from './Configuracoes.jsx'
 import Comercial from './Comercial.jsx'
 import { subabasComercial } from '../lib/comercial.js'
 
-// ordem da barra: Comercial, Gestão de clientes, Processos, Marketing (e, para o master, Usuários)
+// ordem da barra: Comercial, Gestão de clientes, Processos, Marketing (e, para o master, Configurações)
 const SECOES = {
   comercial: { nome: 'Comercial', pastas: subabasComercial, permissao: 'comercial' },
   gestao: { nome: 'Gestão de clientes', pastas: PASTAS_GESTAO, permissao: 'gestao' },
   processos: { nome: 'Processos', pastas: [['geral', 'Geral'], ...PASTAS.map((p) => [p.id, p.nome])], permissao: 'processos' },
   // novas ferramentas de marketing entram como novas pastas aqui
   marketing: { nome: 'Marketing', pastas: [['aniversarios', 'Aniversários'], ['email', 'E-mail marketing']], permissao: 'marketing' },
-  usuarios: { nome: 'Usuários', pastas: [], master: true },
+  config: { nome: 'Configurações', pastas: PASTAS_CONFIG, master: true },
 }
 
 // Área interna da loja: cada pessoa vê as seções que o master liberou.
+// link dos avisos: ?lead=<id> abre o cartão do cliente direto no Comercial
+function leadDoLink() {
+  try {
+    const id = new URLSearchParams(window.location.search).get('lead')
+    return id && /^[\w@.-]{6,80}$/.test(id) ? id : null
+  } catch {
+    return null
+  }
+}
+
 export default function PainelEquipe({ perfil }) {
   const secoes = Object.entries(SECOES).filter(([, s]) => (s.master ? perfil?.papel === 'admin' : temPermissao(perfil, s.permissao)))
-  const [secao, setSecao] = useState(() => secoes[0]?.[0] || 'processos')
+  const [leadInicial] = useState(() => (temPermissao(perfil, 'comercial') ? leadDoLink() : null))
+  useEffect(() => {
+    if (leadInicial) window.history.replaceState(null, '', window.location.pathname)
+  }, [])
+  const [secao, setSecao] = useState(() => (leadInicial ? 'comercial' : secoes[0]?.[0] || 'processos'))
   const pastasDe = (s) => (typeof SECOES[s].pastas === 'function' ? SECOES[s].pastas(perfil) : SECOES[s].pastas)
-  const [pasta, setPasta] = useState(() => ({ comercial: subabasComercial(perfil)[0]?.[0], gestao: 'novo', processos: 'geral', marketing: 'aniversarios' }))
+  const [pasta, setPasta] = useState(() => ({ comercial: subabasComercial(perfil)[0]?.[0], gestao: 'novo', processos: 'geral', marketing: 'aniversarios', config: 'usuarios' }))
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
   const marketing = temPermissao(perfil, 'marketing')
@@ -91,7 +105,7 @@ export default function PainelEquipe({ perfil }) {
         </div>
       )}
 
-      {secao === 'comercial' && <Comercial aba={atual} perfil={perfil} />}
+      {secao === 'comercial' && <Comercial aba={atual} perfil={perfil} leadInicial={leadInicial} />}
       {secao === 'gestao' && <GestaoClientes aba={atual} toque={toque} perfil={perfil} onAbrirProcesso={abrirProcesso} onAba={(p) => irPara('gestao', p)} />}
       {secao === 'processos' && (
         <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />
@@ -100,7 +114,7 @@ export default function PainelEquipe({ perfil }) {
         <Aniversarios processos={processos} onAbrirProcesso={abrirProcesso || (() => {})} />
       )}
       {secao === 'marketing' && atual === 'email' && <EmailMarketing processos={processos} />}
-      {secao === 'usuarios' && <Usuarios perfil={perfil} />}
+      {secao === 'config' && <Configuracoes aba={atual} perfil={perfil} />}
     </div>
   )
 }

@@ -72,12 +72,13 @@ async function enviarEmail(c, para, assunto, texto) {
 
 // monta a mensagem com os dados atuais do lead (inclui o agendamento cadastrado junto)
 async function montar(sb, a) {
-  const link = Deno.env.get('PORTAL_URL') ?? 'https://portal.airam.arq.br'
+  let link = Deno.env.get('PORTAL_URL') ?? 'https://portal.airam.arq.br'
   const [{ data: lead }, { data: pessoa }] = await Promise.all([
     sb.from('leads').select('id, nome, telefone, email').eq('id', a.lead_id).maybeSingle(),
     sb.from('perfis').select('nome, email').eq('id', a.usuario_id).maybeSingle(),
   ])
   if (!lead) return null
+  link = `${link.replace(/\/$/, '')}/?lead=${lead.id}` // abre direto o cartão do cliente
   const vendedor = (pessoa?.nome || pessoa?.email || '').split(' ')[0]
   const contato = fone(lead.telefone) + (lead.email ? ` / ${lead.email}` : '')
   if (a.evento === 'lembrete') {

@@ -5,7 +5,8 @@ import { temPermissao } from './permissoes.js'
 import { prepararImagem } from './imagem.js'
 import { numeros, emailValido } from './cadastro.js'
 
-export const TIPOS_ARQUIVO_LEAD = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'text/plain']
+export const TIPOS_ARQUIVO_LEAD = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'text/plain', 'image/vnd.dwg', 'application/zip']
+const ACEITA_REDUZIR = ['image/jpeg', 'image/png', 'image/webp'] // fotos grandes viram WebP de 2400 px
 const TAMANHO_MAXIMO = 50 * 1024 * 1024
 
 // validação comum (o banco valida de novo)
@@ -18,6 +19,15 @@ export function errosLead(l) {
   if (!l.vendedor_id) e.vendedor_id = 'Escolha o vendedor.'
   return e
 }
+// venda: valor bruto, valor deflacionado (digitado por enquanto), código do pedido e data de fechamento
+export function errosVenda(v) {
+  if (!(Number(v.venda_valor) > 0)) return 'Informe o valor bruto da venda.'
+  if (!(Number(v.venda_deflacionado) > 0)) return 'Informe o valor deflacionado da venda.'
+  if (!String(v.codigo_pedido || '').trim()) return 'Informe o código do pedido.'
+  if (!v.venda_data) return 'Informe a data de fechamento.'
+  return null
+}
+const camposVenda = (v) => ({ venda_valor: Number(v.venda_valor), venda_deflacionado: Number(v.venda_deflacionado), codigo_pedido: String(v.codigo_pedido).trim(), venda_data: v.venda_data })
 export function errosAgendamento(a) {
   const e = {}
   if (!a.data) e.data = 'Informe a data.'
@@ -25,9 +35,17 @@ export function errosAgendamento(a) {
   if (a.modalidade !== 'online' && !a.loja_id) e.loja_id = 'Escolha a loja.'
   return e
 }
+// o navegador costuma mandar DWG e ZIP sem tipo (ou com tipos variados): vale a extensão
+function tipoPelaExtensao(nome) {
+  if (/\.txt$/i.test(nome)) return 'text/plain'
+  if (/\.dwg$/i.test(nome)) return 'image/vnd.dwg'
+  if (/\.zip$/i.test(nome)) return 'application/zip'
+  return ''
+}
 function validarArquivoLead(arquivo) {
-  const tipo = arquivo.type || (/\.txt$/i.test(arquivo.name) ? 'text/plain' : '')
-  if (!TIPOS_ARQUIVO_LEAD.includes(tipo)) throw new Error(`${arquivo.name}: envie PDF, imagem (JPG, PNG, WEBP, HEIC) ou texto (.txt).`)
+  const ext = tipoPelaExtensao(arquivo.name)
+  const tipo = ext === 'image/vnd.dwg' || ext === 'application/zip' ? ext : arquivo.type || ext
+  if (!TIPOS_ARQUIVO_LEAD.includes(tipo)) throw new Error(`${arquivo.name}: envie PDF, imagem (JPG, PNG, WEBP, HEIC), DWG, texto (.txt) ou .zip.`)
   if (arquivo.size > TAMANHO_MAXIMO) throw new Error(`${arquivo.name}: o arquivo passa de 50 MB.`)
   return tipo
 }
@@ -68,11 +86,11 @@ export function comercialSupabase(sb, chamarFuncao) {
   const processarAvisos = () => chamarFuncao('avisos-equipe', { acao: 'processar' }).catch(() => {}) // o agendador do servidor tenta de novo
   async function subir(leadId, tipo, arquivo) {
     const mime = validarArquivoLead(arquivo)
-    const pronto = mime.startsWith('image/') && mime !== 'image/heic' ? await prepararImagem(arquivo) : arquivo
+    const pronto = ACEITA_REDUZIR.includes(mime) ? await prepararImagem(arquivo) : arquivo
     const caminho = `comercial/${leadId}/${Date.now()}-${seguro(pronto.name || arquivo.name)}`
-    const up = await sb.storage.from('documentos').upload(caminho, pronto, { contentType: pronto.type || mime })
+    const up = await sb.storage.from('documentos').upload(caminho, pronto, { contentType: pronto === arquivo ? mime : pronto.type })
     falhar(up.error)
-    const { error } = await sb.from('lead_arquivos').insert({ lead_id: leadId, tipo, nome: arquivo.name, caminho, mime: pronto.type || mime, tamanho: pronto.size })
+    const { error } = await sb.from('lead_arquivos').insert({ lead_id: leadId, tipo, nome: arquivo.name, caminho, mime: pronto === arquivo ? mime : pronto.type, tamanho: pronto.size })
     if (error) {
       await sb.storage.from('documentos').remove([caminho])
       falhar(error)
@@ -133,9 +151,20 @@ export function comercialSupabase(sb, chamarFuncao) {
     },
     async moverLead(id, coluna_id, extra = {}) {
       const campos = { coluna_id, posicao: Date.now() / 1000 }
-      if ('venda_valor' in extra) Object.assign(campos, { venda_valor: extra.venda_valor, venda_data: extra.venda_data })
+      if ('venda_valor' in extra) {
+        const e = errosVenda(extra)
+        if (e) throw new Error(e)
+        Object.assign(campos, camposVenda(extra))
+      }
       if ('perda_motivo_id' in extra) Object.assign(campos, { perda_motivo_id: extra.perda_motivo_id, perda_texto: limparTexto(extra.perda_texto) })
       const { error } = await sb.from('leads').update(campos).eq('id', id)
+      falhar(error)
+    },
+    // gerente, master ou o próprio vendedor corrige os valores (fica no histórico)
+    async corrigirVenda(id, venda) {
+      const e = errosVenda(venda)
+      if (e) throw new Error(e)
+      const { error } = await sb.from('leads').update(camposVenda(venda)).eq('id', id)
       falhar(error)
     },
     async trocarVendedor(id, vendedor_id) {
@@ -282,9 +311,9 @@ export function comercialDemo({ db, gravar, contaAtual, novoId, garantir }) {
   })
   async function subir(d, leadId, tipo, arquivo) {
     const mime = validarArquivoLead(arquivo)
-    const pronto = mime.startsWith('image/') && mime !== 'image/heic' ? await prepararImagem(arquivo) : arquivo
+    const pronto = ACEITA_REDUZIR.includes(mime) ? await prepararImagem(arquivo) : arquivo
     if (pronto.size > LIMITE_DEMO) throw new Error(`${arquivo.name}: na demonstração o limite é 4 MB.`)
-    d.leadArquivos.push({ id: novoId(), lead_id: leadId, tipo, nome: arquivo.name, caminho: await lerArquivo(pronto), mime: pronto.type || mime, tamanho: pronto.size, enviado_por: contaAtual(d).email, criado_em: agora() })
+    d.leadArquivos.push({ id: novoId(), lead_id: leadId, tipo, nome: arquivo.name, caminho: await lerArquivo(pronto), mime: pronto === arquivo ? mime : pronto.type, tamanho: pronto.size, enviado_por: contaAtual(d).email, criado_em: agora() })
   }
   const salvarComCuidado = () => {
     try {
@@ -376,22 +405,36 @@ export function comercialDemo({ db, gravar, contaAtual, novoId, garantir }) {
       if (!col || !col.ativa) throw new Error('Coluna inválida.')
       const de = l.coluna_id
       if (col.tipo === 'ganho') {
-        if (!(Number(extra.venda_valor) > 0) || !extra.venda_data) throw new Error('Para marcar como vendido, informe o valor da venda e a data de fechamento.')
-        Object.assign(l, { venda_valor: Number(extra.venda_valor), venda_data: extra.venda_data, perda_motivo_id: null, perda_texto: null })
+        const e = errosVenda(extra)
+        if (e) throw new Error(e)
+        Object.assign(l, camposVenda(extra), { perda_motivo_id: null, perda_texto: null })
       } else if (col.tipo === 'perdido') {
         const m = d.comercialListas.motivos_perda.find((x) => x.id === extra.perda_motivo_id)
         if (!m) throw new Error('Para marcar como perdido, informe o motivo da perda.')
         if (m.pede_texto && !String(extra.perda_texto || '').trim()) throw new Error('Descreva o motivo da perda.')
-        Object.assign(l, { perda_motivo_id: m.id, perda_texto: limparTexto(extra.perda_texto), venda_valor: null, venda_data: null })
-      } else Object.assign(l, { venda_valor: null, venda_data: null, perda_motivo_id: null, perda_texto: null })
+        Object.assign(l, { perda_motivo_id: m.id, perda_texto: limparTexto(extra.perda_texto), venda_valor: null, venda_data: null, venda_deflacionado: null, codigo_pedido: null })
+      } else Object.assign(l, { venda_valor: null, venda_data: null, venda_deflacionado: null, codigo_pedido: null, perda_motivo_id: null, perda_texto: null })
       Object.assign(l, { coluna_id, posicao: Date.now() / 1000, atualizado_em: agora() })
       if (de !== coluna_id) {
         l.movido_em = agora()
         evento(d, id, col.tipo === 'ganho' ? 'vendido' : col.tipo === 'perdido' ? 'perdido' : 'movido', {
           de_coluna: de, para_coluna: coluna_id, texto: col.tipo === 'perdido' ? l.perda_texto : null,
-          dados: col.tipo === 'ganho' ? { valor: l.venda_valor, data: l.venda_data } : col.tipo === 'perdido' ? { motivo_id: l.perda_motivo_id } : null,
+          dados: col.tipo === 'ganho' ? { valor: l.venda_valor, deflacionado: l.venda_deflacionado, codigo: l.codigo_pedido, data: l.venda_data } : col.tipo === 'perdido' ? { motivo_id: l.perda_motivo_id } : null,
         })
       }
+      gravar()
+    },
+    async corrigirVenda(id, venda) {
+      const d = base()
+      const c = eu(d)
+      const l = podeVer(d, c, id)
+      if (c.papel === 'captador') throw new Error('O captador não registra venda nem perda.')
+      if (d.comercialListas.crm_colunas.find((x) => x.id === l.coluna_id)?.tipo !== 'ganho') throw new Error('O cartão não está em Vendidos.')
+      const e = errosVenda(venda)
+      if (e) throw new Error(e)
+      const antes = { valor: l.venda_valor, deflacionado: l.venda_deflacionado, codigo: l.codigo_pedido, data: l.venda_data }
+      Object.assign(l, camposVenda(venda), { atualizado_em: agora() })
+      evento(d, id, 'venda_editada', { dados: { antes, depois: { valor: l.venda_valor, deflacionado: l.venda_deflacionado, codigo: l.codigo_pedido, data: l.venda_data } } })
       gravar()
     },
     async trocarVendedor(id, vendedor_id) {
