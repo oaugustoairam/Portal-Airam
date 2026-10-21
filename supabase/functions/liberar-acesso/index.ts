@@ -32,6 +32,8 @@ Deno.serve(async (req) => {
     userId = data.user.id
   }
   await sb.from('perfis').upsert({ id: userId, email, nome: proc.cliente_nome, papel: 'cliente', precisa_trocar_senha: true })
+  // registra que o acesso foi liberado (para a liberação em lote não renovar a senha de quem já recebeu)
+  await sb.from('processos').update({ acesso_liberado_em: new Date().toISOString() }).eq('cliente_email', proc.cliente_email)
 
   // e-mail com a senha (opcional: só se RESEND_API_KEY estiver configurada)
   let emailEnviado = false

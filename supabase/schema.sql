@@ -1240,3 +1240,24 @@ grant execute on function public.criar_contrato(jsonb) to authenticated;
 update storage.buckets set allowed_mime_types = (
   select array(select distinct unnest(coalesce(allowed_mime_types, '{}') || array['application/xml', 'text/xml']))
 ) where id = 'documentos';
+
+-- =============================================================================
+-- 18. Lançamento: registro de acesso liberado e valores do contrato para o cliente
+-- =============================================================================
+alter table public.processos add column if not exists acesso_liberado_em timestamptz;
+
+-- O cliente vê o total, os valores por ambiente (valor do contrato, nunca o bruto) e as parcelas do próprio contrato.
+create or replace function public.valores_do_meu_contrato(pid uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.eh_meu_processo(pid) then jsonb_build_object(
+    'total', c.valor_venda,
+    'condicao', c.forma_pagamento,
+    'forma', c.contrato -> 'pagamento' ->> 'forma',
+    'parcelas', coalesce(c.contrato -> 'pagamento' -> 'parcelas', '[]'::jsonb),
+    'ambientes', coalesce((select jsonb_agg(jsonb_build_object('nome', a.nome, 'valor', coalesce(a.valor, a.valor_bruto) * a.qtd) order by a.ordem)
+                           from public.ambientes a where a.processo_id = pid), '[]'::jsonb))
+  end
+  from public.comercial c where c.id = pid;
+$$;
+revoke all on function public.valores_do_meu_contrato(uuid) from public, anon;
+grant execute on function public.valores_do_meu_contrato(uuid) to authenticated;

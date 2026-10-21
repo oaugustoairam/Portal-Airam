@@ -116,6 +116,7 @@ export default function ProcessoView({ processo, onAtualizar, visualizacao, seca
         {assinar.map((a) => (
           <CartaoAssinar key={a.id} assinatura={a} visualizacao={visualizacao} onAssinar={() => setAssinando(a)} />
         ))}
+        {secao === 'contrato' && <ValoresContrato processoId={processo.id} />}
         <DocumentosCategoria documentos={documentos} categoria={secao} />
         {/* a jornada acompanha o cliente em todas as abas, para a tela nunca ficar vazia */}
         <Jornada etapas={etapas} />
@@ -251,6 +252,52 @@ function CartaoAssinar({ assinatura: a, visualizacao, onAssinar }) {
         Assinar agora
       </button>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- Valores do contrato (o cliente vê o total, os ambientes e as parcelas)
+const reais = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+function ValoresContrato({ processoId }) {
+  const [v, setV] = useState(undefined)
+  useEffect(() => {
+    api.valoresContrato(processoId).then(setV).catch(() => setV(null))
+  }, [processoId])
+  if (!v || !v.total) return null
+  const hoje = new Date().toISOString().slice(0, 10)
+  const proxima = v.parcelas.find((p) => p.venc >= hoje)
+  return (
+    <section className="bloco valores-contrato">
+      <div className="valores-topo">
+        <div>
+          <span className="rotulo-mono">Valor do contrato</span>
+          <strong className="valores-total num">{reais(v.total)}</strong>
+          {v.condicao && <span className="celula-sub">{v.condicao}{v.forma ? ` · ${v.forma}` : ''}</span>}
+        </div>
+        {proxima && (
+          <div className="valores-proxima">
+            <span className="rotulo-mono">Próxima parcela</span>
+            <strong className="num">{reais(proxima.valor)}</strong>
+            <span className="celula-sub num">vence em {formatarData(proxima.venc)}</span>
+          </div>
+        )}
+      </div>
+      {v.ambientes.length > 0 && (
+        <ul className="valores-ambientes">
+          {v.ambientes.map((a) => <li key={a.nome}><span>{a.nome}</span><span className="num">{reais(a.valor)}</span></li>)}
+        </ul>
+      )}
+      {v.parcelas.length > 0 && (
+        <details className="valores-parcelas">
+          <summary>Ver as {v.parcelas.length} parcelas</summary>
+          <ol>
+            {v.parcelas.map((p, i) => (
+              <li key={i} className={p.venc < hoje ? 'passada' : ''}><span className="num">{i + 1}ª · {formatarData(p.venc)}</span><span className="num">{reais(p.valor)}</span></li>
+            ))}
+          </ol>
+        </details>
+      )}
+      <p className="dica">Dúvidas sobre pagamento? Fale com a Airam pelo WhatsApp.</p>
+    </section>
   )
 }
 

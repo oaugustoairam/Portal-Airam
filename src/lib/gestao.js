@@ -91,7 +91,7 @@ export function linhaGestao(g) {
     vistoria_obs: ci.vistoria_obs || null,
     prazo_pos_vistoria: dia(ci.assistencia_retorno_max),
     pos_vistoria: ci.pos_vistoria || null,
-    acesso: g.cliente_email ? 'Com e-mail' : 'Sem e-mail',
+    acesso: g.acesso_liberado_em ? 'Liberado' : g.cliente_email ? 'A liberar' : 'Sem e-mail',
     pasta: (g.pasta || []).length,
     pasta_fechada: !!c.pasta_fechada_em,
   }
@@ -139,7 +139,7 @@ export const COLUNAS = {
   vistoria_obs: { t: 'Obs. vistoria', tipo: 'texto', larga: true },
   prazo_pos_vistoria: { t: 'Prazo pós vistoria', tipo: 'data' },
   pos_vistoria: { t: 'Pós vistoria', tipo: 'opcao', opcoes: OP(POS_VISTORIA), fmt: (v) => POS_VISTORIA.find(([k]) => k === v)?.[1] },
-  acesso: { t: 'Portal', tipo: 'opcao', opcoes: OP([['Com e-mail', 'Com e-mail'], ['Sem e-mail', 'Sem e-mail']]) },
+  acesso: { t: 'Portal', tipo: 'opcao', opcoes: OP([['Liberado', 'Liberado'], ['A liberar', 'A liberar'], ['Sem e-mail', 'Sem e-mail']]) },
 }
 
 const soma = (l, k) => l.reduce((t, x) => t + (x[k] || 0), 0)

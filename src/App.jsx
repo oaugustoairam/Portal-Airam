@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { api, MODO_DEMO } from './lib/api.js'
 import Login from './components/Login.jsx'
 import TrocarSenha from './components/TrocarSenha.jsx'
-import ClienteHome from './components/ClienteHome.jsx'
-import PainelEquipe from './components/PainelEquipe.jsx'
+// cada público baixa só o seu código: o cliente não carrega as telas de gestão
+const ClienteHome = lazy(() => import('./components/ClienteHome.jsx'))
+const PainelEquipe = lazy(() => import('./components/PainelEquipe.jsx'))
 import BotaoWhatsApp from './components/BotaoWhatsApp.jsx'
 import InstalarApp from './components/InstalarApp.jsx'
 import Entrada from './components/Entrada.jsx'
@@ -103,7 +104,9 @@ export default function App() {
         {faixaDemo}
       </header>
       <main className={`conteudo ${equipe ? 'conteudo-equipe' : 'conteudo-cliente'}`}>
-        {equipe ? <PainelEquipe perfil={perfil} /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
+        <Suspense fallback={<div className="carregando">Carregando…</div>}>
+          {equipe ? <PainelEquipe perfil={perfil} /> : <ClienteHome aba={abaCliente} onPerfilAtualizado={carregarFoto} />}
+        </Suspense>
         {!equipe && <InstalarApp />}
       </main>
     </div>

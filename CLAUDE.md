@@ -12,6 +12,7 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   com pendência, aparece um lembrete no topo (`linhaDoTempo(p, a, { cliente: true })`).
   Abas do cliente, nesta ordem: Meu perfil, Meu processo, Contrato, Projeto inicial, Renders, Projeto final,
   Quem somos (texto do site; 25 anos de experiência), Nossas lojas (Mooca e Guarulhos, com mapa), Instagram e Site (`src/lib/contato.js`).
+  Na aba Contrato o cliente vê valor total, ambientes (valor do contrato, nunca o bruto) e parcelas (`valores_do_meu_contrato`).
   Topo com o logo no centro, fixo ao rolar. Cliente baixa arquivos e renders (um a um ou .zip). A jornada aparece também embaixo das abas de documentos.
   Meu perfil: o cliente só muda foto, e-mail, celular, Instagram e senha; nome, CPF, nascimento e endereço são só leitura
   (gatilho `travar_perfil_cliente` no banco). Garantia de 10 anos na madeira +
@@ -39,6 +40,8 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
     Planilha com filtro/ordenação por coluna e período de qualquer dia (`PlanilhaFiltravel.jsx`; cartões no celular).
     **Contrato e ambientes** (ficha do cliente, `ContratoEditor.jsx`): ambientes do contrato, XML/peças e o PDF
     (`relatorio/PdfContrato.jsx`, modelo e texto do contrato da loja; `montarContratoPdf` em `src/lib/contrato.js`).
+    **Liberar acessos ao portal** em lote (`LiberarEmLote.jsx`; `processos.acesso_liberado_em` evita trocar senha de quem já tem).
+    Renders/fotos grandes são reduzidos para 2400 px WebP antes de subir (`src/lib/imagem.js`).
     Importa a aba 01 CLIENTES (`registrosDaPlanilha`, `lerPlanilha` em `src/lib/xlsx.js`). **Fazer capa** preenche
     `capa-envelope.xlsx` (`src/lib/planilhas.js`, via `paraVenda`). Excluir cliente pede digitar EXCLUIR (`ConfirmarExclusao.jsx`).
   - **Processos**: Geral e pastas Financeiro, Medição, Conferência, Assinatura do projeto final, Entregas, Vistoria,

@@ -7,6 +7,7 @@ import { avisosDaMudanca, avisoAssinatura, telefoneWhatsApp } from './avisos.js'
 import { temPermissao } from './permissoes.js'
 import { lerXmlPromob, LIMITE_XML } from './promob.js'
 import { errosCliente, errosAmbiente, numeros } from './cadastro.js'
+import { prepararImagem } from './imagem.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -208,6 +209,7 @@ const supabaseApi = {
   },
   async enviarDocumento(processoId, { titulo, categoria }, arquivo) {
     validarArquivo(arquivo)
+    arquivo = await prepararImagem(arquivo)
     const caminho = caminhoArquivo(processoId, categoria, arquivo.name)
     const up = await sb.storage
       .from('documentos')
@@ -234,6 +236,12 @@ const supabaseApi = {
   },
   async liberarAcesso(processoId) {
     return chamarFuncao('liberar-acesso', { processo_id: processoId })
+  },
+  // o que o cliente vê do próprio contrato: total, ambientes (valor do contrato) e parcelas
+  async valoresContrato(processoId) {
+    const { data, error } = await sb.rpc('valores_do_meu_contrato', { pid: processoId })
+    if (error) throw new Error(error.message)
+    return data
   },
   // ---------------- Gestão de clientes (cadastro único = processo do portal)
   async listarGestao() {
@@ -732,6 +740,7 @@ const demoApi = {
   },
   async enviarDocumento(processoId, { titulo, categoria }, arquivo) {
     validarArquivo(arquivo)
+    arquivo = await prepararImagem(arquivo)
     const dataUrl = await new Promise((ok, erro) => {
       const r = new FileReader()
       r.onload = () => ok(r.result)
@@ -1021,8 +1030,21 @@ const demoApi = {
     if (existente) Object.assign(existente, { senha, precisa_trocar_senha: true, cpf: p.cliente_cpf })
     else
       d.contas.push({ email: p.cliente_email, cpf: p.cliente_cpf, nome: p.cliente_nome, papel: 'cliente', senha, precisa_trocar_senha: true })
+    d.processos.filter((x) => x.cliente_email === p.cliente_email).forEach((x) => (x.acesso_liberado_em = new Date().toISOString()))
     gravar()
     return { senha, email: p.cliente_email, emailEnviado: false }
+  },
+  async valoresContrato(processoId) {
+    const d = db()
+    const p = visiveis(d).find((x) => x.id === processoId)
+    const c = d.comercial?.[processoId]
+    if (!p || !c) return null
+    return {
+      total: c.valor_venda, condicao: c.forma_pagamento, forma: c.contrato?.pagamento?.forma || null,
+      parcelas: c.contrato?.pagamento?.parcelas || [],
+      ambientes: (d.ambientesDemo || []).filter((a) => a.processo_id === processoId).sort((a, b) => a.ordem - b.ordem)
+        .map((a) => ({ nome: a.nome, valor: Number(a.valor ?? a.valor_bruto) * (Number(a.qtd) || 1) })),
+    }
   },
   async enviarParaAssinatura(processoId, documentoId, tipo) {
     const d = db()

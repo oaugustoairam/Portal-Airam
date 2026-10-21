@@ -16,6 +16,7 @@ import ConfirmarExclusao from './ConfirmarExclusao.jsx'
 import { Acesso } from './AdminHome.jsx'
 import ContratoEditor from './ContratoEditor.jsx'
 import NovoContrato from './NovoContrato.jsx'
+import LiberarEmLote from './LiberarEmLote.jsx'
 
 const CHIP_SIT = { pendente: 'chip-sit-andamento', resolvido: 'chip-sit-ok', cancelado: 'chip-sit-atraso' }
 const CHIP_STATUS = { montado: 'chip-sit-ok', assinado: 'chip-sit-andamento', conferido: 'chip-sit-andamento', medido: 'chip-sit-neutro', aguarda: 'chip-sit-neutro', cancelado: 'chip-sit-atraso' }
@@ -48,6 +49,7 @@ export default function GestaoClientes({ aba, toque, perfil, onAbrirProcesso, on
   const [filtros, setFiltros] = useState({})
   const [ordens, setOrdens] = useState({})
   const [importar, setImportar] = useState(false)
+  const [lote, setLote] = useState(false)
   const [novoPara, setNovoPara] = useState(null) // cliente para um novo contrato
   const abrirDepois = useRef(null) // ficha para abrir depois de trocar de aba
 
@@ -122,6 +124,7 @@ export default function GestaoClientes({ aba, toque, perfil, onAbrirProcesso, on
         </div>
         <div className="acoes">
           {def.id === 'clientes' && verTodos && <button className="btn btn-leve" onClick={() => setImportar(true)}>Importar planilha</button>}
+          {def.id === 'clientes' && <button className="btn btn-contorno" onClick={() => setLote(true)}>Liberar acessos ao portal</button>}
           <button className="btn btn-principal" onClick={() => onAba?.('novo')}>Novo cliente / Contrato</button>
         </div>
       </div>
@@ -142,6 +145,7 @@ export default function GestaoClientes({ aba, toque, perfil, onAbrirProcesso, on
               : undefined)}
         rotuloVazio={def.id === 'clientes' ? 'Nenhum cliente ainda. Toque em "Novo cliente".' : 'Nenhum cliente nesta etapa.'}
       />
+      {lote && <LiberarEmLote linhas={linhas} onFechar={(mudou) => { setLote(false); if (mudou) carregar() }} />}
       {importar && <Importar onFechar={(mudou) => { setImportar(false); if (mudou) carregar() }} />}
     </section>
   )
