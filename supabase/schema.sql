@@ -1850,3 +1850,13 @@ begin
     grant execute on function public.enfileirar_lembretes() to service_role;
   end if;
 end $$;
+
+-- =============================================================================
+-- 21. BRIEFING: novas perguntas (todas opcionais). "pessoas" (número) fica só nos registros antigos.
+-- =============================================================================
+alter table public.briefings add column if not exists moradores text check (coalesce(length(moradores), 0) <= 2000);
+alter table public.briefings add column if not exists projeto_arquitetura text check (coalesce(length(projeto_arquitetura), 0) <= 2000);
+alter table public.briefings add column if not exists quem_opina text check (coalesce(length(quem_opina), 0) <= 2000);
+alter table public.briefings add column if not exists ambiente_uso text check (coalesce(length(ambiente_uso), 0) <= 2000);
+update public.briefings set moradores = pessoas || case when pessoas = 1 then ' pessoa' else ' pessoas' end
+  where moradores is null and pessoas is not null;

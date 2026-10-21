@@ -4,6 +4,7 @@ import logoVermelho from '../../assets/logo-vermelho.png'
 import albert400 from '../../assets/fontes/albert-sans-latin-400-normal.woff'
 import albert500 from '../../assets/fontes/albert-sans-latin-500-normal.woff'
 import albert600 from '../../assets/fontes/albert-sans-latin-600-normal.woff'
+import { PERGUNTAS_BRIEFING } from '../../lib/comercial.js'
 
 Font.register({ family: 'Albert', fonts: [{ src: albert400, fontWeight: 400 }, { src: albert500, fontWeight: 500 }, { src: albert600, fontWeight: 600 }] })
 Font.registerHyphenationCallback((p) => [p])
@@ -16,10 +17,10 @@ const s = StyleSheet.create({
   cab: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: COR.papel, borderRadius: 4, padding: 9, marginBottom: 12 },
   cabItem: { width: '33.3%', paddingVertical: 3, paddingRight: 6 },
   rotulo: { fontSize: 7, fontWeight: 500, color: COR.tinta2, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1.5 },
-  pergunta: { marginBottom: 9 },
+  pergunta: { marginBottom: 7 },
   ptitulo: { fontSize: 9.5, fontWeight: 600, marginBottom: 3 },
   resposta: { fontSize: 9.5, lineHeight: 1.35 },
-  linha: { borderBottomWidth: 0.6, borderBottomColor: COR.linha, height: 15 },
+  linha: { borderBottomWidth: 0.6, borderBottomColor: COR.linha, height: 14 },
   marca: { flexDirection: 'row', gap: 14, marginBottom: 2 },
   caixa: { width: 9, height: 9, borderWidth: 1, borderStyle: 'solid', borderColor: COR.tinta, borderRadius: 1.5, marginRight: 4, padding: 1.5 },
   rodape: { position: 'absolute', bottom: 16, left: 36, right: 36, flexDirection: 'row', justifyContent: 'space-between', fontSize: 7, color: COR.tinta2 },
@@ -70,18 +71,24 @@ function Documento({ cab, b }) {
           ))}
         </View>
 
-        <Pergunta titulo="1. Endereço, bairro e cidade do imóvel" valor={r.endereco} linhas={2} />
-        <Pergunta titulo="2. Já mora no imóvel?" valor={r.ja_mora === false ? r.previsao_morar : null} linhas={r.ja_mora === true ? 0 : 1}>
-          <View style={s.marca}><Opcao marcada={r.ja_mora === true}>Sim</Opcao><Opcao marcada={r.ja_mora === false}>Não — previsão para morar:</Opcao></View>
-        </Pergunta>
-        <Pergunta titulo="3. Quantas pessoas vão morar" valor={r.pessoas} />
-        <Pergunta titulo="4. Vai ter obra?" valor={r.obra === true ? r.obra_detalhes : null} linhas={r.obra === false ? 0 : 2}>
-          <View style={s.marca}><Opcao marcada={r.obra === true}>Sim — detalhes:</Opcao><Opcao marcada={r.obra === false}>Não</Opcao></View>
-        </Pergunta>
-        <Pergunta titulo="5. Lista de eletros" valor={r.eletros} linhas={3} />
-        <Pergunta titulo="6. Observações" valor={r.observacoes} linhas={3} />
-        <View style={{ marginTop: 4, flexGrow: 1, minHeight: 110 }} wrap={false}>
-          <Text style={s.ptitulo}>Anotações do atendimento</Text>
+        {PERGUNTAS_BRIEFING.map((q, n) => {
+          const titulo = `${n + 1}. ${q.texto}`
+          if (!q.simnao) return <Pergunta key={q.campo} titulo={titulo} valor={r[q.campo]} linhas={q.linhas} />
+          const resp = r[q.campo]
+          // Sim/Não com o complemento: linhas em branco só quando falta a resposta
+          const extraPreenchido = resp === q.extra.quando && r[q.extra.campo]
+          return (
+            <Pergunta key={q.campo} titulo={titulo} valor={extraPreenchido ? `${q.extra.texto} ${r[q.extra.campo]}` : null}
+              linhas={resp === null || resp === undefined || resp === q.extra.quando ? 1 : 0}>
+              <View style={s.marca}>
+                <Opcao marcada={resp === true}>Sim{q.extra.quando === true ? ` — ${q.extra.texto.toLowerCase()}` : ''}</Opcao>
+                <Opcao marcada={resp === false}>Não{q.extra.quando === false ? ` — ${q.extra.texto.toLowerCase()}` : ''}</Opcao>
+              </View>
+            </Pergunta>
+          )
+        })}
+        <View style={{ marginTop: 4, flexGrow: 1, minHeight: 80 }} wrap={false}>
+          <Text style={s.ptitulo}>Observações do atendimento</Text>
           <View style={{ borderWidth: 0.6, borderColor: COR.linha, borderRadius: 4, flexGrow: 1 }} />
         </View>
         <View style={s.rodape} fixed>

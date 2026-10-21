@@ -124,3 +124,17 @@ export function periodo(atalho, hoje = new Date()) {
   }
 }
 export const ATALHOS_PERIODO = [['hoje', 'Hoje'], ['semana', 'Semana'], ['mes', 'Mês'], ['mes_passado', 'Mês passado'], ['trimestre', 'Trimestre'], ['ano', 'Ano']]
+
+// Perguntas do briefing (formulário e PDF usam a mesma lista; todas são opcionais).
+// simnao: resposta Sim/Não; extra: campo de texto que só aparece com a resposta indicada.
+export const PERGUNTAS_BRIEFING = [
+  { campo: 'endereco', texto: 'Onde fica o imóvel?', linhas: 2 },
+  { campo: 'ja_mora', texto: 'Já mora no local?', simnao: true, extra: { campo: 'previsao_morar', texto: 'Qual a previsão para morar?', quando: false } },
+  { campo: 'moradores', texto: 'Quem vai morar no imóvel com você?', linhas: 2 },
+  { campo: 'projeto_arquitetura', texto: 'Tem projeto de arquitetura? Chegou a fazer projeto em alguma loja?', linhas: 2 },
+  { campo: 'quem_opina', texto: 'Além de você, quem vai opinar no estilo do projeto?', linhas: 2 },
+  { campo: 'ambiente_uso', texto: 'Qual ambiente vocês mais usam no imóvel? Do que você sente mais falta onde mora hoje?', linhas: 3 },
+  { campo: 'obra', texto: 'Vai fazer obra no imóvel?', simnao: true, extra: { campo: 'obra_detalhes', texto: 'O que vai ser feito na obra?', quando: true } },
+  { campo: 'eletros', texto: 'Qual a lista de eletros que vai usar?', linhas: 3 },
+  { campo: 'observacoes', texto: 'Observações', linhas: 3 },
+]

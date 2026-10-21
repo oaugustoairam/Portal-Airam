@@ -40,12 +40,13 @@ function camposLead(l) {
   if (out.email) out.email = out.email.toLowerCase()
   return out
 }
+// todas as respostas do briefing são opcionais
+export const TEXTOS_BRIEFING = ['endereco', 'previsao_morar', 'moradores', 'projeto_arquitetura', 'quem_opina', 'ambiente_uso', 'obra_detalhes', 'eletros', 'observacoes']
 function camposBriefing(b) {
   const out = { lead_id: b.lead_id, feito: !!b.feito, forma: b.forma || null, data: b.data || null }
-  for (const k of ['endereco', 'previsao_morar', 'obra_detalhes', 'eletros', 'observacoes']) out[k] = limparTexto(b[k])
+  for (const k of TEXTOS_BRIEFING) out[k] = limparTexto(b[k])
   out.ja_mora = b.ja_mora === true || b.ja_mora === false ? b.ja_mora : null
   out.obra = b.obra === true || b.obra === false ? b.obra : null
-  out.pessoas = b.pessoas === '' || b.pessoas == null ? null : Number(b.pessoas)
   if (out.ja_mora !== false) out.previsao_morar = null
   if (out.obra !== true) out.obra_detalhes = null
   return out

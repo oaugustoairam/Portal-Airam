@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../lib/api.js'
-import { agendaDoLead, dataBR, diaLocal, nomeCurto, foneBR, dataHoraBR } from '../../lib/comercial.js'
+import { agendaDoLead, dataBR, diaLocal, nomeCurto, foneBR, dataHoraBR, PERGUNTAS_BRIEFING } from '../../lib/comercial.js'
+import { TEXTOS_BRIEFING } from '../../lib/apiComercial.js'
 import { baixarArquivo } from '../../lib/relatorio.js'
 import { Campo, Escolha, useComercial } from './comum.jsx'
 
@@ -9,9 +10,14 @@ const SIM_NAO = [[true, 'Sim'], [false, 'Não']]
 // Briefing do cliente: feito por mensagem ou ligação, perguntas e PDF para imprimir
 export default function Briefing({ lead, briefing, onSalvo }) {
   const { acoes, listas, pessoas, lojas, dados } = useComercial()
-  const vazio = { feito: false, forma: null, data: diaLocal(new Date()), endereco: '', ja_mora: null, previsao_morar: '', pessoas: '', obra: null, obra_detalhes: '', eletros: '', observacoes: '' }
-  const [f, setF] = useState(() => ({ ...vazio, ...(briefing || {}), pessoas: briefing?.pessoas ?? '' }))
-  const temRespostas = !!(briefing && (briefing.endereco || briefing.ja_mora != null || briefing.pessoas != null || briefing.obra != null || briefing.eletros || briefing.observacoes))
+  const vazio = { feito: false, forma: null, data: diaLocal(new Date()), ja_mora: null, obra: null, ...Object.fromEntries(TEXTOS_BRIEFING.map((k) => [k, ''])) }
+  const comBriefing = (b) => {
+    const x = { ...vazio, ...(b || {}) }
+    for (const k of TEXTOS_BRIEFING) x[k] = x[k] ?? ''
+    return x
+  }
+  const [f, setF] = useState(() => comBriefing(briefing))
+  const temRespostas = !!(briefing && (briefing.ja_mora != null || briefing.obra != null || TEXTOS_BRIEFING.some((k) => briefing[k])))
   const [editando, setEditando] = useState(!briefing && acoes.briefing)
   const [preencher, setPreencher] = useState(temRespostas)
   const [ocupado, setOcupado] = useState(false)
@@ -25,7 +31,6 @@ export default function Briefing({ lead, briefing, onSalvo }) {
     setErro('')
     if (f.feito && !f.forma) return setErro('Diga se o briefing foi por mensagem ou ligação.')
     if (f.feito && !f.data) return setErro('Informe a data do briefing.')
-    if (f.pessoas !== '' && (Number(f.pessoas) < 0 || Number(f.pessoas) > 50)) return setErro('Quantidade de pessoas inválida.')
     setOcupado(true)
     try {
       await api.salvarBriefing({ ...f, lead_id: lead.id })
@@ -84,37 +89,30 @@ export default function Briefing({ lead, briefing, onSalvo }) {
       {(preencher || (ler && temRespostas)) && (
         <fieldset className="grupo briefing-perguntas" disabled={ler}>
           <legend>Perguntas</legend>
-          <Campo id="bf-end" rotulo="1. Endereço, bairro e cidade do imóvel">
-            <input id="bf-end" value={f.endereco || ''} onChange={(e) => muda('endereco', e.target.value)} />
-          </Campo>
-          <Escolha id="bf-mora" rotulo="2. Já mora no imóvel?" valor={f.ja_mora} onChange={(v) => muda('ja_mora', v)} opcoes={SIM_NAO} />
-          {f.ja_mora === false && (
-            <Campo id="bf-prev" rotulo="Previsão para morar">
-              <input id="bf-prev" placeholder="Ex.: março de 2027" value={f.previsao_morar || ''} onChange={(e) => muda('previsao_morar', e.target.value)} />
-            </Campo>
-          )}
-          <Campo id="bf-pessoas" rotulo="3. Quantas pessoas vão morar">
-            <input id="bf-pessoas" type="number" min={0} max={50} inputMode="numeric" value={f.pessoas} onChange={(e) => muda('pessoas', e.target.value)} />
-          </Campo>
-          <Escolha id="bf-obra" rotulo="4. Vai ter obra?" valor={f.obra} onChange={(v) => muda('obra', v)} opcoes={SIM_NAO} />
-          {f.obra === true && (
-            <Campo id="bf-obra-det" rotulo="Detalhes da obra">
-              <textarea id="bf-obra-det" rows={2} value={f.obra_detalhes || ''} onChange={(e) => muda('obra_detalhes', e.target.value)} />
-            </Campo>
-          )}
-          <Campo id="bf-eletros" rotulo="5. Lista de eletros">
-            <textarea id="bf-eletros" rows={3} placeholder="Geladeira, cooktop, forno de embutir…" value={f.eletros || ''} onChange={(e) => muda('eletros', e.target.value)} />
-          </Campo>
-          <Campo id="bf-obs" rotulo="6. Observações">
-            <textarea id="bf-obs" rows={3} value={f.observacoes || ''} onChange={(e) => muda('observacoes', e.target.value)} />
-          </Campo>
+          <p className="dica">Todas são opcionais. No PDF, o que ficar em branco sai com linhas para preencher à mão.</p>
+          {PERGUNTAS_BRIEFING.map((q, n) => (
+            <div key={q.campo} className="briefing-pergunta">
+              {q.simnao ? (
+                <Escolha id={`bf-${q.campo}`} rotulo={`${n + 1}. ${q.texto}`} valor={f[q.campo]} onChange={(v) => muda(q.campo, f[q.campo] === v ? null : v)} opcoes={SIM_NAO} />
+              ) : (
+                <Campo id={`bf-${q.campo}`} rotulo={`${n + 1}. ${q.texto}`}>
+                  <textarea id={`bf-${q.campo}`} rows={q.linhas > 2 ? 3 : 2} maxLength={2000} value={f[q.campo]} onChange={(e) => muda(q.campo, e.target.value)} />
+                </Campo>
+              )}
+              {q.extra && f[q.campo] === q.extra.quando && (
+                <Campo id={`bf-${q.extra.campo}`} rotulo={q.extra.texto}>
+                  <input id={`bf-${q.extra.campo}`} maxLength={2000} value={f[q.extra.campo]} onChange={(e) => muda(q.extra.campo, e.target.value)} />
+                </Campo>
+              )}
+            </div>
+          ))}
         </fieldset>
       )}
       {briefing?.atualizado_em && ler && <p className="dica">Atualizado em {dataBR(diaLocal(briefing.atualizado_em))}.</p>}
       {erro && <p className="erro" role="alert">{erro}</p>}
       {!ler && (
         <div className="acoes">
-          {briefing && <button type="button" className="btn btn-leve" onClick={() => { setF({ ...vazio, ...briefing, pessoas: briefing.pessoas ?? '' }); setEditando(false) }} disabled={ocupado}>Cancelar</button>}
+          {briefing && <button type="button" className="btn btn-leve" onClick={() => { setF(comBriefing(briefing)); setEditando(false) }} disabled={ocupado}>Cancelar</button>}
           <button className="btn btn-principal" disabled={ocupado}>{ocupado ? 'Salvando…' : 'Salvar briefing'}</button>
         </div>
       )}
