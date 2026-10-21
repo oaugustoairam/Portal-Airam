@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.js'
 import { PERMISSOES, PAPEIS, temPermissao } from '../lib/permissoes.js'
+import { Confirmar } from './comercial/comum.jsx'
 
 // Tela do master: quem tem acesso à área interna e o que cada pessoa pode fazer.
-export default function Usuarios({ perfil }) {
+export default function Usuarios({ perfil, embutido }) {
   const [lista, setLista] = useState(null)
   const [erro, setErro] = useState('')
   const [editando, setEditando] = useState(null) // usuário ou 'novo'
@@ -20,8 +21,8 @@ export default function Usuarios({ perfil }) {
     <section className="gestao usuarios">
       <div className="cab-linha">
         <div className="titulo-processo">
-          <span className="rotulo">Master</span>
-          <h1 className="titulo-grande">Usuários e permissões</h1>
+          {!embutido && <span className="rotulo">Master</span>}
+          {embutido ? <h2>Usuários</h2> : <h1 className="titulo-grande">Usuários e permissões</h1>}
           <p className="dica">Só o master vê esta tela. Cada pessoa entra com o próprio e-mail e senha.</p>
         </div>
         <button className="btn btn-principal" onClick={() => setEditando('novo')}>Novo usuário</button>
@@ -30,12 +31,12 @@ export default function Usuarios({ perfil }) {
       <ul className="usuarios-lista">
         {lista.map((u) => (
           <li key={u.id}>
-            <button type="button" className="usuario-cartao" onClick={() => setEditando(u)}>
+            <button type="button" className={`usuario-cartao ${u.ativo === false ? 'inativo' : ''}`} onClick={() => setEditando(u)}>
               <span className="usuario-topo">
                 <strong>{u.nome || u.email}</strong>
-                <span className={`chip chip-mini ${u.papel === 'admin' ? 'chip-sit-ok' : 'chip-sit-neutro'}`}>{PAPEIS.find(([k]) => k === u.papel)?.[1]}</span>
+                <span className={`chip chip-mini ${u.ativo === false ? 'chip-atraso' : u.papel === 'admin' ? 'chip-sit-ok' : 'chip-sit-neutro'}`}>{u.ativo === false ? 'Desativado' : PAPEIS.find(([k]) => k === u.papel)?.[1]}</span>
               </span>
-              <span className="celula-sub">{u.email}{u.id === perfil.id ? ' · você' : ''}</span>
+              <span className="celula-sub">{u.email}{u.whatsapp ? ` · WhatsApp ${u.whatsapp}` : ''}{u.id === perfil.id ? ' · você' : ''}</span>
               <span className="usuario-perms">
                 {PERMISSOES.filter(([k]) => temPermissao(u, k)).map(([k, t]) => <span key={k}>{t}</span>)}
               </span>
@@ -57,7 +58,9 @@ function EditarUsuario({ u, eu, onFechar }) {
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [senha, setSenha] = useState(null)
+  const [confirmarAtivo, setConfirmarAtivo] = useState(false)
   const souEu = u && u.id === eu.id
+  const ativo = u?.ativo !== false
   const atual = { papel: f.papel, permissoes: f.permissoes }
 
   const marcar = (k, v) => setF((x) => ({ ...x, permissoes: { ...x.permissoes, [k]: v } }))
@@ -136,12 +139,22 @@ function EditarUsuario({ u, eu, onFechar }) {
             )}
             {erro && <p className="erro" role="alert">{erro}</p>}
             <div className="acoes">
+              {u && !souEu && (
+                <button type="button" className={`btn btn-leve ${ativo ? 'texto-atraso' : ''}`} onClick={() => setConfirmarAtivo(true)} disabled={ocupado}>
+                  {ativo ? 'Desativar usuário' : 'Reativar usuário'}
+                </button>
+              )}
               <button type="button" className="btn btn-leve" onClick={() => onFechar(false)} disabled={ocupado}>Cancelar</button>
               <button className="btn btn-principal" disabled={ocupado}>{ocupado ? 'Salvando…' : u ? 'Salvar acesso' : 'Criar e gerar senha'}</button>
             </div>
           </>
         )}
       </form>
+      {confirmarAtivo && (
+        <Confirmar titulo={ativo ? `Desativar ${u.nome || u.email}?` : `Reativar ${u.nome || u.email}?`} botao={ativo ? 'Desativar' : 'Reativar'}
+          texto={ativo ? 'A pessoa perde o acesso na hora e não entra mais no portal. Nada é apagado: leads, vendas e histórico continuam. Dá para reativar depois.' : 'A pessoa volta a entrar com o mesmo e-mail e senha.'}
+          onCancelar={() => setConfirmarAtivo(false)} onConfirmar={async () => { await api.definirAtivo(u.id, !ativo); onFechar(true) }} />
+      )}
     </div>
   )
 }

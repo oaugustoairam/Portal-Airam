@@ -136,3 +136,26 @@ depois `supabase functions deploy enviar-campanha` e `supabase functions deploy 
 
 **Limites da Resend:** no plano gratuito são 100 e-mails por dia e 3.000 por mês. Para campanhas maiores,
 o plano pago (a partir de ≈ US$ 20/mês) libera 50.000 por mês. Confira os valores atuais no site da Resend.
+
+## Avisos da equipe do Comercial (novo lead e lembretes)
+
+Quando um lead é cadastrado (ou trocado de vendedor), o banco põe na fila um aviso por WhatsApp e outro por
+e-mail para o vendedor. Quando um lembrete chega na hora marcada, acontece o mesmo. A função
+`avisos-equipe` envia a fila a cada minuto (agendamento `avisos-equipe-airam`, já criado em produção) e grava
+o resultado de cada envio (Enviado / Falhou + motivo). No cartão do cliente, aba **Avisos enviados**, dá para
+**Reenviar** o que falhou.
+
+**Credenciais:** o master cadastra em Comercial > Configurações > **WhatsApp e e-mail** (ficam só no servidor,
+na tabela `integracoes`, que o app não consegue ler) ou nos segredos do Supabase (`WHATSAPP_TOKEN`,
+`WHATSAPP_PHONE_NUMBER_ID`, `RESEND_API_KEY`, `EMAIL_REMETENTE`). O que for cadastrado na tela vale primeiro.
+O botão **Enviar teste** manda o modelo `hello_world` da Meta (WhatsApp) e um e-mail de teste (Resend).
+
+**Modelos do WhatsApp a aprovar na Meta** (categoria *Utilidade*, idioma pt_BR):
+
+- `novo_lead_vendedor` — 5 variáveis:
+  `Olá {{1}}, você recebeu um novo lead: {{2}} – {{3}}. {{4}} Acesse o portal: {{5}}`
+- `lembrete_vendedor` — 5 variáveis:
+  `Olá {{1}}, lembrete: {{3}} — cliente {{2}}, {{4}}. Acesse o portal: {{5}}`
+
+Cada vendedor precisa ter o **WhatsApp** preenchido em Usuários (sem ele, o aviso de WhatsApp aparece como
+"Falhou: Usuário sem WhatsApp cadastrado" e o e-mail segue normalmente).

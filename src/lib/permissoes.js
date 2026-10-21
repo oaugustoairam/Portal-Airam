@@ -27,7 +27,7 @@ const PADRAO = {
 }
 
 export function temPermissao(perfil, chave) {
-  if (!perfil) return false
+  if (!perfil || perfil.ativo === false) return false
   if (perfil.papel === 'admin') return true
   const p = perfil.permissoes || {}
   if (typeof p[chave] === 'boolean') return p[chave]

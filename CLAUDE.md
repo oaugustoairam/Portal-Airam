@@ -27,7 +27,10 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   `motivos_perda`, `crm_colunas`). Vendedor só vê o que é dele (RLS); gerente/captador/master veem todos (`comercial_todos()`).
   Gatilho `regras_lead`: captador não move cartão nem marca venda/perda; vendido exige valor e data; perdido exige motivo;
   só quem vê todos troca o vendedor. CRM separado do contrato (decisão do dono). Comparecimento é marcado no agendamento.
-  WhatsApp dos avisos: API oficial da Meta.
+  WhatsApp dos avisos: API oficial da Meta. Telas em `src/components/comercial/` (Captação, CRM, Cartão, Lembretes,
+  Calendário, Métricas com PDF/Excel) e dados em `src/lib/apiComercial.js` (Supabase + demonstração com as mesmas regras).
+  Avisos da equipe: gatilhos enfileiram em `avisos_equipe`; função `avisos-equipe` (pg_cron a cada minuto) envia e registra.
+  Credenciais do WhatsApp/e-mail: tela do master grava na tabela `integracoes` (sem acesso pelo app). `perfis.ativo` desativa usuário.
 - **Equipe** (ordem da barra): Comercial, Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
   - **Novo cliente / Contrato** (1ª pasta da Gestão, `NovoContrato.jsx`): cria cliente + contrato pela função do banco

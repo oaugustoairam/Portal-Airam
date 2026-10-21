@@ -9,6 +9,7 @@ import { lerXmlPromob, LIMITE_XML } from './promob.js'
 import { errosCliente, errosAmbiente, numeros } from './cadastro.js'
 import { prepararImagem } from './imagem.js'
 import { ORIGENS_PADRAO, MOTIVOS_PADRAO, COLUNAS_PADRAO } from './comercial.js'
+import { comercialSupabase, comercialDemo } from './apiComercial.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -429,7 +430,7 @@ const supabaseApi = {
   },
   // ---------------- Usuários internos (master)
   async listarUsuarios() {
-    const { data, error } = await sb.from('perfis').select('id, email, nome, papel, permissoes, whatsapp, criado_em').neq('papel', 'cliente').order('nome')
+    const { data, error } = await sb.from('perfis').select('id, email, nome, papel, permissoes, whatsapp, ativo, criado_em').neq('papel', 'cliente').order('nome')
     if (error) throw error
     return data
   },
@@ -543,10 +544,12 @@ function db() {
   if (!memoria) memoria = criarDadosDemo()
   return memoria
 }
-function gravar() {
+function gravar(estrito = false) {
   try {
     localStorage.setItem(CHAVE_DEMO, JSON.stringify(memoria))
-  } catch {}
+  } catch (e) {
+    if (estrito) throw e
+  }
 }
 const avisar = () => ouvintes.forEach((cb) => cb(db().sessao))
 // dados do Comercial na demonstração (criados na primeira vez, sem apagar o resto)
@@ -685,6 +688,7 @@ const demoApi = {
     const d = db()
     const conta = acharContaDemo(d, identificador)
     if (!conta || conta.senha !== senha) throw new Error(ERRO_LOGIN)
+    if (conta.ativo === false) throw new Error('Este usuário foi desativado. Fale com o master.')
     d.sessao = { email: conta.email }
     gravar()
     avisar()
@@ -724,7 +728,7 @@ const demoApi = {
   async perfil() {
     const d = db()
     const conta = d.contas.find((c) => c.email === d.sessao?.email)
-    return conta ? { id: conta.email, email: conta.email, nome: conta.nome, papel: conta.papel, permissoes: conta.permissoes || {}, precisa_trocar_senha: conta.precisa_trocar_senha } : null
+    return conta ? { id: conta.email, email: conta.email, nome: conta.nome, papel: conta.papel, permissoes: conta.permissoes || {}, precisa_trocar_senha: conta.precisa_trocar_senha, ativo: conta.ativo !== false, whatsapp: conta.whatsapp || null } : null
   },
   async listarProcessos() {
     const d = db()
@@ -1044,12 +1048,12 @@ const demoApi = {
   async vendedoresComercial() {
     const d = db()
     const conta = contaAtual(d)
-    return d.contas.filter((c) => ['vendedor', 'gerente'].includes(c.papel) && (temPermissao(conta, 'comercial_todos') || c.email === conta.email))
+    return d.contas.filter((c) => ['vendedor', 'gerente'].includes(c.papel) && c.ativo !== false && (temPermissao(conta, 'comercial_todos') || c.email === conta.email))
       .map((c) => ({ id: c.email, nome: c.nome, email: c.email, papel: c.papel }))
   },
   // ---------------- Usuários internos (master)
   async listarUsuarios() {
-    return db().contas.filter((c) => c.papel !== 'cliente').map((c) => ({ id: c.email, email: c.email, nome: c.nome, papel: c.papel, permissoes: c.permissoes || {}, whatsapp: c.whatsapp || null }))
+    return db().contas.filter((c) => c.papel !== 'cliente').map((c) => ({ id: c.email, email: c.email, nome: c.nome, papel: c.papel, permissoes: c.permissoes || {}, whatsapp: c.whatsapp || null, ativo: c.ativo !== false }))
   },
   async definirAcesso(id, papel, permissoes, nome, whatsapp) {
     const d = db()
@@ -1249,5 +1253,12 @@ const demoApi = {
     return { senha: SENHA_DEMO, contas: db().contas }
   },
 }
+
+if (sb) Object.assign(supabaseApi, comercialSupabase(sb, chamarFuncao))
+Object.assign(demoApi, comercialDemo({ db, gravar, contaAtual, novoId, garantir: garantirComercial }), {
+  async lojas() {
+    return (await this.todasLojas()).filter((l) => l.ativa)
+  },
+})
 
 export const api = MODO_DEMO ? demoApi : supabaseApi

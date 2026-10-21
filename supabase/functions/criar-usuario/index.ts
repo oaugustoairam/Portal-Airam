@@ -10,7 +10,21 @@ Deno.serve(async (req) => {
   const quem = await exigirEquipe(req)
   if (!quem || quem.papel !== 'admin') return resposta({ erro: 'Somente o master cria usuários.' }, 403)
 
-  const { email, nome, papel, permissoes, whatsapp } = await req.json().catch(() => ({}))
+  const corpo = await req.json().catch(() => ({}))
+  // desativar / reativar: a regra fica no banco (definir_ativo) e o login é bloqueado no Auth
+  if (corpo.acao === 'ativo') {
+    if (!corpo.id || corpo.id === quem.id) return resposta({ erro: 'Você não pode desativar o seu próprio acesso.' }, 400)
+    const sb = clienteServidor()
+    const { data: alvo } = await sb.from('perfis').select('id, papel').eq('id', corpo.id).maybeSingle()
+    if (!alvo || alvo.papel === 'cliente') return resposta({ erro: 'Usuário não encontrado.' }, 404)
+    const ativar = corpo.ativo === true
+    const { error: e1 } = await sb.from('perfis').update({ ativo: ativar }).eq('id', alvo.id)
+    if (e1) return resposta({ erro: e1.message }, 500)
+    const { error: e2 } = await sb.auth.admin.updateUserById(alvo.id, { ban_duration: ativar ? 'none' : '876000h' })
+    if (e2) return resposta({ erro: e2.message }, 500)
+    return resposta({ ok: true })
+  }
+  const { email, nome, papel, permissoes, whatsapp } = corpo
   const zap = String(whatsapp ?? '').replace(/\D/g, '')
   if (zap && (zap.length < 10 || zap.length > 13)) return resposta({ erro: 'WhatsApp inválido (use DDD + número).' }, 400)
   const e = String(email ?? '').trim().toLowerCase()

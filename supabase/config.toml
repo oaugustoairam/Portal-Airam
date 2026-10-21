@@ -19,3 +19,6 @@ verify_jwt = false   # chamado pelo agendador; confere o segredo
 
 [functions.entrar-cpf]
 verify_jwt = false   # o cliente ainda não está logado; a função confere a senha
+
+[functions.avisos-equipe]
+verify_jwt = false   # chamado pelo agendador a cada minuto; a função confere o segredo ou o login da equipe

@@ -65,3 +65,20 @@ mesmo que alguém altere a tela.
 6. Avisos de novo lead (WhatsApp + e-mail) com registro e reenvio
 7. Lembretes com aviso agendado no servidor
 8. Métricas de Vendas (filtros, gráficos, PDF e Excel/CSV)
+
+## Telas (prontas)
+
+| Tela | Quem vê | O que faz |
+|---|---|---|
+| Captação / Agendamentos | captador, gerente, master | + Novo lead (planta, imagens, conversa em texto ou arquivo, agendamento opcional), busca, filtros, Ver / Editar / Agendar / Trocar vendedor / Excluir (gerente e master) |
+| CRM (Meu CRM) | vendedor, gerente, master | quadro com contadores, arrastar e soltar (no celular, "Mover para"), Vendidos pede valor e data, Perdidos pede motivo; + Adicionar cliente |
+| Cartão do cliente | todos do Comercial | dados, Editar, agenda (Compareceu / Não compareceu / Reagendar / Cancelar), anexos, lembretes, briefing, anotações e histórico, avisos enviados |
+| Meus lembretes | vendedor, gerente, master | Hoje / Atrasados / Próximos / Concluídos, + Novo lembrete, Concluir / Editar / Excluir |
+| Calendário | todos do Comercial | Mês / Semana / Dia, clicar no dia cria agendamento (captador, gerente, master), clicar no evento abre o painel |
+| Métricas de Vendas | todos do Comercial | período e atalhos, filtros (vendedor travado para o vendedor), 7 indicadores, 15 gráficos com tabela, PDF e Excel |
+| Configurações | master (listas e lojas: quem tem comercial_config) | listas, lojas, usuários (desativar), credenciais do WhatsApp e e-mail com Enviar teste |
+
+Código: `src/components/Comercial.jsx` (carrega os dados e as Configurações), `src/components/comercial/*`,
+`src/lib/apiComercial.js` (Supabase e demonstração), `src/lib/metricas.js`, `src/lib/xlsxSimples.js`,
+PDFs em `src/components/relatorio/PdfBriefing.jsx` e `PdfMetricas.jsx`. Servidor: `supabase/functions/avisos-equipe`.
+Usuário desativado: `perfis.ativo = false` (perde todas as permissões no banco) + bloqueio do login no Auth.

@@ -213,11 +213,15 @@ create policy "admin le registro" on public.registro_atividades for select using
 
 create or replace function public.registrar_atividade()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  -- chave do registro: id (ou lead_id no briefing); códigos de texto (ex.: colunas do CRM) ficam só no antes/depois
+  linha jsonb := case when tg_op = 'DELETE' then to_jsonb(old) else to_jsonb(new) end;
+  chave text := coalesce(linha ->> 'id', linha ->> 'lead_id');
 begin
   insert into public.registro_atividades (usuario_id, usuario_email, tabela, acao, registro_id, antes, depois)
   values (
     auth.uid(), auth.jwt() ->> 'email', tg_table_name, tg_op,
-    case when tg_op = 'DELETE' then old.id else new.id end,
+    case when chave ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then chave::uuid end,
     case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) end,
     case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end
   );
@@ -1506,7 +1510,7 @@ begin
   if tg_op = 'INSERT' then
     -- vendedor que cadastra o próprio lead fica como responsável; captador escolhe qualquer vendedor ativo
     if not public.comercial_todos() then new.vendedor_id := auth.uid(); end if;
-    if not exists (select 1 from public.perfis p where p.id = new.vendedor_id and p.papel in ('vendedor', 'gerente', 'admin')) then
+    if not exists (select 1 from public.perfis p where p.id = new.vendedor_id and p.papel in ('vendedor', 'gerente', 'admin') and p.ativo) then
       raise exception 'Escolha um vendedor válido.';
     end if;
     new.coluna_id := coalesce((select id from public.crm_colunas where tipo = 'entrada' and ativa order by ordem limit 1), 'novo_cliente');
@@ -1704,3 +1708,145 @@ language sql stable security definer set search_path = public as $$
     and (public.comercial_todos() or p.id = auth.uid())
   order by p.nome;
 $$;
+
+-- =============================================================================
+-- 20. COMERCIAL: telas completas — usuário ativo/desativado, exclusão de lead pelo gerente,
+--     credenciais das integrações (só o servidor lê), fila de avisos (novo lead e lembretes)
+-- =============================================================================
+alter table public.perfis add column if not exists ativo boolean not null default true;
+-- usuário desativado perde o acesso interno na hora (todas as regras passam por aqui)
+create or replace function public.eh_equipe()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.perfis where id = auth.uid() and ativo
+                 and papel in ('admin', 'gerente', 'equipe', 'vendedor', 'captador'));
+$$;
+create or replace function public.tem_permissao(chave text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select case
+      when not ativo then false
+      when papel = 'admin' then true
+      when permissoes ? chave then (permissoes ->> chave)::boolean
+      when papel = 'gerente' then chave in ('gestao', 'processos', 'marketing', 'ver_todos', 'comercial', 'comercial_todos')
+      when papel = 'equipe' then chave in ('processos', 'marketing', 'ver_todos')
+      when papel = 'vendedor' then chave in ('gestao', 'processos', 'comercial')
+      when papel = 'captador' then chave in ('comercial', 'comercial_todos')
+      else false end
+    from public.perfis where id = auth.uid()), false);
+$$;
+
+-- excluir lead: gerente e master (ou quem recebeu a permissão "excluir")
+drop policy if exists "comercial apaga leads" on public.leads;
+create policy "comercial apaga leads" on public.leads for delete
+  using (public.tem_permissao('comercial') and (public.papel_atual() in ('admin', 'gerente') or public.tem_permissao('excluir'))
+    and (public.comercial_todos() or vendedor_id = auth.uid()));
+
+-- vendedores ativos (o desativado sai da lista)
+create or replace function public.vendedores_comercial()
+returns table (id uuid, nome text, email text, papel text)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.nome, p.email, p.papel from public.perfis p
+  where public.tem_permissao('comercial') and p.papel in ('vendedor', 'gerente') and p.ativo
+    and (public.comercial_todos() or p.id = auth.uid())
+  order by p.nome;
+$$;
+
+-- Credenciais do WhatsApp e do e-mail: tabela sem nenhuma política (o app não lê nem grava;
+-- só as funções do servidor, depois de conferir que quem pediu é o master)
+create table if not exists public.integracoes (
+  chave text primary key,
+  valor text,
+  atualizado_em timestamptz not null default now(),
+  atualizado_por uuid
+);
+alter table public.integracoes enable row level security;
+
+-- Novo lead (ou troca de vendedor): avisa o vendedor por WhatsApp e e-mail.
+-- A mensagem é montada no envio (assim já inclui o agendamento cadastrado junto).
+create or replace function public.avisar_vendedor_lead()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' and new.vendedor_id is not distinct from old.vendedor_id then return new; end if;
+  insert into public.avisos_equipe (usuario_id, canal, destino, evento, lead_id, mensagem)
+  select p.id, c.canal, case c.canal when 'whatsapp' then p.whatsapp else p.email end, 'novo_lead', new.id, 'Novo lead: ' || new.nome
+  from public.perfis p cross join (values ('whatsapp'), ('email')) as c(canal)
+  where p.id = new.vendedor_id;
+  return new;
+end $$;
+drop trigger if exists avisar_vendedor on public.leads;
+create trigger avisar_vendedor after insert or update of vendedor_id on public.leads
+  for each row execute function public.avisar_vendedor_lead();
+
+-- Lembretes que chegaram na hora: entram na fila (rodado pelo servidor a cada minuto)
+create or replace function public.enfileirar_lembretes()
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  with vencidos as (
+    update public.lembretes set notificado_em = now()
+    where concluido_em is null and notificado_em is null and quando <= now()
+    returning id, lead_id, vendedor_id, descricao
+  ), novos as (
+    insert into public.avisos_equipe (usuario_id, canal, destino, evento, lead_id, lembrete_id, mensagem)
+    select p.id, c.canal, case c.canal when 'whatsapp' then p.whatsapp else p.email end, 'lembrete', v.lead_id, v.id,
+      'Lembrete: ' || coalesce(v.descricao, '')
+    from vencidos v join public.perfis p on p.id = v.vendedor_id cross join (values ('whatsapp'), ('email')) as c(canal)
+    returning 1
+  )
+  select count(*) into n from novos;
+  return n;
+end $$;
+revoke all on function public.enfileirar_lembretes() from public, anon, authenticated;
+
+-- Reenviar um aviso que falhou (quem pode ver o lead)
+create or replace function public.reenviar_aviso_equipe(aid uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.avisos_equipe where id = aid and public.pode_ver_lead(lead_id)) then
+    raise exception 'Aviso não encontrado.';
+  end if;
+  update public.avisos_equipe set situacao = 'pendente', erro = null, processando_em = null,
+    destino = (select case canal when 'whatsapp' then p.whatsapp else p.email end from public.perfis p where p.id = avisos_equipe.usuario_id)
+  where id = aid;
+end $$;
+
+-- lojas: o master (ou quem configura o Comercial) cadastra, renomeia e desativa
+drop policy if exists "master lojas" on public.lojas;
+create policy "master lojas" on public.lojas for all
+  using (public.eh_admin() or public.tem_permissao('comercial_config'))
+  with check (public.eh_admin() or public.tem_permissao('comercial_config'));
+
+create or replace function public.eh_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.perfis where id = auth.uid() and papel = 'admin' and ativo);
+$$;
+
+-- Master desativa/reativa um usuário interno (ele perde o acesso na hora; nada é apagado)
+create or replace function public.definir_ativo(usuario uuid, ativar boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.eh_admin() then raise exception 'Somente o master pode desativar usuários.'; end if;
+  if usuario = auth.uid() then raise exception 'Você não pode desativar o seu próprio acesso.'; end if;
+  if exists (select 1 from public.perfis where id = usuario and papel = 'cliente') then raise exception 'Este usuário é um cliente do portal.'; end if;
+  update public.perfis set ativo = ativar where id = usuario;
+end $$;
+revoke execute on function public.definir_ativo(uuid, boolean) from anon;
+
+-- Fila de avisos da equipe: o servidor pega um lote por vez (sem enviar duas vezes)
+alter table public.avisos_equipe add column if not exists processando_em timestamptz;
+create or replace function public.pegar_avisos_equipe(limite int default 30)
+returns setof public.avisos_equipe language sql security definer set search_path = public as $$
+  update public.avisos_equipe set processando_em = now(), tentativas = tentativas + 1
+  where id in (select id from public.avisos_equipe
+               where situacao = 'pendente' and (processando_em is null or processando_em < now() - interval '5 minutes')
+               order by criado_em limit limite for update skip locked)
+  returning *;
+$$;
+revoke all on function public.pegar_avisos_equipe(int) from public, anon, authenticated;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.pegar_avisos_equipe(int) to service_role;
+    grant execute on function public.enfileirar_lembretes() to service_role;
+  end if;
+end $$;
