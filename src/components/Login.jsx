@@ -64,7 +64,7 @@ export default function Login() {
             {demo.contas.map((c) => (
               <button key={c.email} type="button" className="btn btn-contorno"
                 onClick={() => api.entrar(c.email, c.senha).catch((e) => setErro(e.message))}>
-                {c.papel === 'cliente' ? `Cliente · ${c.nome.split(' ')[0]}` : c.papel === 'vendedor' ? 'Vendedor' : 'Equipe Airam'}
+                {c.papel === 'cliente' ? `Cliente · ${c.nome.split(' ')[0]}` : c.papel === 'vendedor' ? `Vendedor · ${c.nome.split(' ')[0]}` : c.papel === 'gerente' ? 'Gerente' : c.papel === 'captador' ? 'Captador (SDR)' : 'Equipe Airam (master)'}
                 {c.precisa_trocar_senha ? ' (1º acesso)' : ''}
               </button>
             ))}

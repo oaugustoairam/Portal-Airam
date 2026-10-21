@@ -18,11 +18,17 @@ Dono: Augusto (augusto@airam.arq.br). Tudo em português do Brasil, com linguage
   (gatilho `travar_perfil_cliente` no banco). Garantia de 10 anos na madeira +
   card "Padrão Airam" só tipográfico (dobradiças e corrediças ocultas com amortecimento; não é garantia).
   O fundo do topo alterna entre os renders do cliente (ou fotos da loja). Ao avançar de fase, aparece a transição.
-- **Papéis**: admin (= master), equipe, vendedor, cliente (`perfis.papel`) + `perfis.permissoes` (gestao, processos,
-  marketing, ver_todos, excluir; padrões em `src/lib/permissoes.js` = `tem_permissao()` no banco). `eh_equipe()` = interno;
+- **Papéis**: admin (= master), gerente, captador (SDR), equipe, vendedor, cliente (`perfis.papel`, + `perfis.whatsapp`) + `perfis.permissoes` (gestao, processos,
+  marketing, ver_todos, excluir, comercial, comercial_todos, comercial_config; padrões em `src/lib/permissoes.js` = `tem_permissao()` no banco). `eh_equipe()` = interno;
   `ve_todos()`; `pode_gerir(pid)`. Vendedor sem `ver_todos` vê só processos com `vendedor_id` = ele (RLS).
   O master muda acessos na seção **Usuários** (`definir_acesso`, função `criar-usuario`).
-- **Equipe** (ordem da barra): Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
+- **Comercial** (1ª da barra; `Comercial.jsx`, `src/lib/comercial.js`, plano em `COMERCIAL.md`): leads (`leads`, `lead_arquivos`,
+  `agendamentos`, `lead_eventos` = histórico, `lembretes`, `briefings`, `avisos_equipe`), listas configuráveis (`origens_lead`,
+  `motivos_perda`, `crm_colunas`). Vendedor só vê o que é dele (RLS); gerente/captador/master veem todos (`comercial_todos()`).
+  Gatilho `regras_lead`: captador não move cartão nem marca venda/perda; vendido exige valor e data; perdido exige motivo;
+  só quem vê todos troca o vendedor. CRM separado do contrato (decisão do dono). Comparecimento é marcado no agendamento.
+  WhatsApp dos avisos: API oficial da Meta.
+- **Equipe** (ordem da barra): Comercial, Gestão de clientes, Processos, Marketing (Aniversários primeiro, depois E-mail marketing), Usuários (só master).
   Aniversários do dia aparecem só no Marketing; WhatsApp às 9h pela função `aniversarios-do-dia` (pg_cron 12h UTC).
   - **Novo cliente / Contrato** (1ª pasta da Gestão, `NovoContrato.jsx`): cria cliente + contrato pela função do banco
     `criar_contrato` (valida no servidor; chave de criação impede duplicar; vendedor = quem está logado, só quem vê todos escolhe).

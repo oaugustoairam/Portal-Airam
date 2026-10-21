@@ -8,9 +8,12 @@ import Aniversarios, { linkParabens } from './Aniversarios.jsx'
 import EmailMarketing from './EmailMarketing.jsx'
 import GestaoClientes, { PASTAS_GESTAO } from './GestaoClientes.jsx'
 import Usuarios from './Usuarios.jsx'
+import Comercial from './Comercial.jsx'
+import { subabasComercial } from '../lib/comercial.js'
 
-// ordem da barra: Gestão de clientes, Processos, Marketing (e, para o master, Usuários)
+// ordem da barra: Comercial, Gestão de clientes, Processos, Marketing (e, para o master, Usuários)
 const SECOES = {
+  comercial: { nome: 'Comercial', pastas: subabasComercial, permissao: 'comercial' },
   gestao: { nome: 'Gestão de clientes', pastas: PASTAS_GESTAO, permissao: 'gestao' },
   processos: { nome: 'Processos', pastas: [['geral', 'Geral'], ...PASTAS.map((p) => [p.id, p.nome])], permissao: 'processos' },
   // novas ferramentas de marketing entram como novas pastas aqui
@@ -22,7 +25,8 @@ const SECOES = {
 export default function PainelEquipe({ perfil }) {
   const secoes = Object.entries(SECOES).filter(([, s]) => (s.master ? perfil?.papel === 'admin' : temPermissao(perfil, s.permissao)))
   const [secao, setSecao] = useState(() => secoes[0]?.[0] || 'processos')
-  const [pasta, setPasta] = useState({ gestao: 'novo', processos: 'geral', marketing: 'aniversarios' })
+  const pastasDe = (s) => (typeof SECOES[s].pastas === 'function' ? SECOES[s].pastas(perfil) : SECOES[s].pastas)
+  const [pasta, setPasta] = useState(() => ({ comercial: subabasComercial(perfil)[0]?.[0], gestao: 'novo', processos: 'geral', marketing: 'aniversarios' }))
   const [processos, setProcessos] = useState([])
   const [abrir, setAbrir] = useState(null)
   const marketing = temPermissao(perfil, 'marketing')
@@ -57,9 +61,9 @@ export default function PainelEquipe({ perfil }) {
         ))}
       </nav>
 
-      {SECOES[secao].pastas.length > 0 && (
+      {pastasDe(secao).length > 0 && (
         <nav className="subpastas" aria-label={`Pastas de ${SECOES[secao].nome}`}>
-          {SECOES[secao].pastas.map(([k, t]) => (
+          {pastasDe(secao).map(([k, t]) => (
             <button key={k} className={`subpasta ${atual === k ? 'ativa' : ''}`} aria-current={atual === k ? 'page' : undefined}
               onClick={() => irPara(secao, k)}>
               {t}
@@ -87,6 +91,7 @@ export default function PainelEquipe({ perfil }) {
         </div>
       )}
 
+      {secao === 'comercial' && <Comercial aba={atual} perfil={perfil} />}
       {secao === 'gestao' && <GestaoClientes aba={atual} toque={toque} perfil={perfil} onAbrirProcesso={abrirProcesso} onAba={(p) => irPara('gestao', p)} />}
       {secao === 'processos' && (
         <AdminHome key={`${atual}-${abrir || 'lista'}`} abrirInicial={abrir} pasta={atual} onPasta={(p) => irPara('processos', p)} />

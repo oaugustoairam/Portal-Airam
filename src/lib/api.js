@@ -8,6 +8,7 @@ import { temPermissao } from './permissoes.js'
 import { lerXmlPromob, LIMITE_XML } from './promob.js'
 import { errosCliente, errosAmbiente, numeros } from './cadastro.js'
 import { prepararImagem } from './imagem.js'
+import { ORIGENS_PADRAO, MOTIVOS_PADRAO, COLUNAS_PADRAO } from './comercial.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const chave = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -405,14 +406,35 @@ const supabaseApi = {
     const { error } = await sb.from('comercial').upsert({ id: processoId, pasta_fechada_em: new Date().toISOString() })
     if (error) throw error
   },
+  // ---------------- Comercial: listas configuráveis
+  async comercialListas() {
+    const [o, m, c] = await Promise.all([
+      sb.from('origens_lead').select('*').order('ordem'),
+      sb.from('motivos_perda').select('*').order('ordem'),
+      sb.from('crm_colunas').select('*').order('ordem'),
+    ])
+    const erro = o.error || m.error || c.error
+    if (erro) throw new Error(erro.message)
+    return { origens_lead: o.data, motivos_perda: m.data, crm_colunas: c.data }
+  },
+  async salvarItemLista(tabela, item) {
+    if (!['origens_lead', 'motivos_perda', 'crm_colunas'].includes(tabela)) throw new Error('Lista inválida.')
+    const { error } = await sb.from(tabela).upsert(item)
+    if (error) throw new Error(error.code === '23505' ? 'Já existe um item com esse nome.' : error.message)
+  },
+  async vendedoresComercial() {
+    const { data, error } = await sb.rpc('vendedores_comercial')
+    if (error) throw new Error(error.message)
+    return data
+  },
   // ---------------- Usuários internos (master)
   async listarUsuarios() {
-    const { data, error } = await sb.from('perfis').select('id, email, nome, papel, permissoes, criado_em').neq('papel', 'cliente').order('nome')
+    const { data, error } = await sb.from('perfis').select('id, email, nome, papel, permissoes, whatsapp, criado_em').neq('papel', 'cliente').order('nome')
     if (error) throw error
     return data
   },
-  async definirAcesso(id, papel, permissoes, nome) {
-    const { error } = await sb.rpc('definir_acesso', { usuario: id, novo_papel: papel, novas_permissoes: permissoes, novo_nome: nome || null })
+  async definirAcesso(id, papel, permissoes, nome, whatsapp) {
+    const { error } = await sb.rpc('definir_acesso', { usuario: id, novo_papel: papel, novas_permissoes: permissoes, novo_nome: nome || null, novo_whatsapp: whatsapp || null })
     if (error) throw new Error(error.message)
   },
   async criarUsuario(dados) {
@@ -508,7 +530,7 @@ const supabaseApi = {
 }
 
 // ---------------------------------------------------------------- Demonstração
-const CHAVE_DEMO = 'portal-airam-demo-v17'
+const CHAVE_DEMO = 'portal-airam-demo-v18'
 let memoria = null
 const ouvintes = new Set()
 
@@ -527,6 +549,25 @@ function gravar() {
   } catch {}
 }
 const avisar = () => ouvintes.forEach((cb) => cb(db().sessao))
+// dados do Comercial na demonstração (criados na primeira vez, sem apagar o resto)
+function garantirComercial(d) {
+  if (!d.comercialListas) {
+    d.comercialListas = {
+      origens_lead: ORIGENS_PADRAO.map((nome, i) => ({ id: `o${i}`, nome, ativa: true, ordem: nome === 'Outro' ? 99 : i + 1 })),
+      motivos_perda: MOTIVOS_PADRAO.map(([nome, pede_texto], i) => ({ id: `m${i}`, nome, pede_texto, ativa: true, ordem: nome === 'Outro' ? 99 : i + 1 })),
+      crm_colunas: COLUNAS_PADRAO.map(([id, nome, tipo, ordem]) => ({ id, nome, tipo, ordem, ativa: true })),
+    }
+    d.leads = d.leads || []
+    d.leadArquivos = d.leadArquivos || []
+    d.agendamentos = d.agendamentos || []
+    d.leadEventos = d.leadEventos || []
+    d.lembretes = d.lembretes || []
+    d.briefings = d.briefings || {}
+    d.avisosEquipe = d.avisosEquipe || []
+    gravar()
+  }
+  return d
+}
 const novoId = () => crypto.randomUUID?.() || Math.random().toString(36).slice(2)
 const comTipo = (p) => ({ ...p, tipo_prazo: calcularTipoPrazo(p.data_venda, p.data_disponivel_medicao) || p.tipo_prazo || 'normal' })
 // quem está logado na demonstração e o que pode ver (mesmas regras do banco)
@@ -983,26 +1024,52 @@ const demoApi = {
     d.comercial[processoId] = { ...(d.comercial[processoId] || {}), pasta_fechada_em: new Date().toISOString() }
     gravar()
   },
+  // ---------------- Comercial: listas configuráveis (demonstração)
+  async comercialListas() {
+    const d = garantirComercial(db())
+    return JSON.parse(JSON.stringify(d.comercialListas))
+  },
+  async salvarItemLista(tabela, item) {
+    const d = garantirComercial(db())
+    if (!temPermissao(contaAtual(d), 'comercial_config')) throw new Error('Sem permissão para mudar as configurações.')
+    const lista = d.comercialListas[tabela]
+    if (!lista) throw new Error('Lista inválida.')
+    if (lista.some((x) => x.nome.trim().toLowerCase() === String(item.nome || '').trim().toLowerCase() && x.id !== item.id)) throw new Error('Já existe um item com esse nome.')
+    const i = lista.findIndex((x) => x.id === item.id)
+    if (i >= 0) lista[i] = { ...lista[i], ...item }
+    else lista.push({ ativa: true, ...item, id: item.id || novoId() })
+    lista.sort((a, b) => a.ordem - b.ordem)
+    gravar()
+  },
+  async vendedoresComercial() {
+    const d = db()
+    const conta = contaAtual(d)
+    return d.contas.filter((c) => ['vendedor', 'gerente'].includes(c.papel) && (temPermissao(conta, 'comercial_todos') || c.email === conta.email))
+      .map((c) => ({ id: c.email, nome: c.nome, email: c.email, papel: c.papel }))
+  },
   // ---------------- Usuários internos (master)
   async listarUsuarios() {
-    return db().contas.filter((c) => c.papel !== 'cliente').map((c) => ({ id: c.email, email: c.email, nome: c.nome, papel: c.papel, permissoes: c.permissoes || {} }))
+    return db().contas.filter((c) => c.papel !== 'cliente').map((c) => ({ id: c.email, email: c.email, nome: c.nome, papel: c.papel, permissoes: c.permissoes || {}, whatsapp: c.whatsapp || null }))
   },
-  async definirAcesso(id, papel, permissoes, nome) {
+  async definirAcesso(id, papel, permissoes, nome, whatsapp) {
     const d = db()
     if (contaAtual(d)?.papel !== 'admin') throw new Error('Somente o master pode mudar acessos.')
     if (id === d.sessao.email && papel !== 'admin') throw new Error('Você não pode tirar o seu próprio acesso de master.')
+    const zap = String(whatsapp || '').replace(/\D/g, '')
+    if (zap && (zap.length < 10 || zap.length > 13)) throw new Error('WhatsApp inválido (use DDD + número).')
     const c = d.contas.find((x) => x.email === id)
-    Object.assign(c, { papel, permissoes: permissoes || {}, nome: nome || c.nome })
+    if (c.papel === 'admin' && papel !== 'admin' && d.contas.filter((x) => x.papel === 'admin').length <= 1) throw new Error('O sistema precisa de pelo menos um master.')
+    Object.assign(c, { papel, permissoes: permissoes || {}, nome: nome || c.nome, whatsapp: zap || c.whatsapp || null })
     gravar()
   },
-  async criarUsuario({ email, nome, papel, permissoes }) {
+  async criarUsuario({ email, nome, papel, permissoes, whatsapp }) {
     const d = db()
     if (contaAtual(d)?.papel !== 'admin') throw new Error('Somente o master cria usuários.')
     const e = String(email || '').trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error('E-mail inválido.')
     if (d.contas.some((c) => c.email === e)) throw new Error('Este e-mail já tem acesso.')
     const senha = 'Airam' + Math.floor(1000 + Math.random() * 9000)
-    d.contas.push({ email: e, nome, papel, permissoes: permissoes || {}, senha, precisa_trocar_senha: true })
+    d.contas.push({ email: e, nome, papel, permissoes: permissoes || {}, whatsapp: String(whatsapp || '').replace(/\D/g, '') || null, senha, precisa_trocar_senha: true })
     gravar()
     return { id: e, senha }
   },

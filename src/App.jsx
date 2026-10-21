@@ -12,6 +12,7 @@ import Avatar from './components/Avatar.jsx'
 import logoBranco from './assets/logo-branco.png'
 import { IconeInstagram, IconeSite } from './components/NossasLojas.jsx'
 import { INSTAGRAM_AIRAM, SITE_AIRAM } from './lib/contato.js'
+import { ehInterno } from './lib/permissoes.js'
 
 export const NOME_EMPRESA = 'Airam Arquitetura & Marcenaria'
 
@@ -46,7 +47,7 @@ export default function App() {
 
   if (perfil === undefined) return <div className="carregando">Carregando…</div>
 
-  const equipe = perfil && ['admin', 'equipe', 'vendedor'].includes(perfil.papel)
+  const equipe = ehInterno(perfil)
   const faixaDemo = MODO_DEMO && (
     <div className="faixa-demo">Modo demonstração: dados fictícios, salvos só neste navegador.</div>
   )

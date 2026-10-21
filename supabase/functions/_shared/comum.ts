@@ -29,7 +29,7 @@ export async function exigirEquipe(req) {
   const { data, error } = await sb.auth.getUser(jwt)
   if (error || !data.user) return null
   const { data: perfil } = await sb.from('perfis').select('*').eq('id', data.user.id).maybeSingle()
-  if (!perfil || !['admin', 'equipe', 'vendedor'].includes(perfil.papel)) return null
+  if (!perfil || !['admin', 'gerente', 'equipe', 'vendedor', 'captador'].includes(perfil.papel)) return null
   return perfil
 }
 

@@ -26,13 +26,13 @@ create trigger ao_criar_usuario after insert on auth.users
   for each row execute function public.criar_perfil();
 
 alter table public.perfis drop constraint if exists perfis_papel_check;
-alter table public.perfis add constraint perfis_papel_check check (papel in ('admin', 'equipe', 'vendedor', 'cliente'));
+alter table public.perfis add constraint perfis_papel_check check (papel in ('admin', 'gerente', 'equipe', 'vendedor', 'captador', 'cliente'));
 
--- Funcionário = papel admin, equipe ou vendedor. Papéis só mudam pelo SQL Editor ou pelas
+-- Funcionário = qualquer papel interno. Papéis só mudam pelo SQL Editor ou pelas
 -- funções do servidor; o app não consegue alterar.
 create or replace function public.eh_equipe()
 returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'equipe', 'vendedor'));
+  select exists (select 1 from public.perfis where id = auth.uid() and papel in ('admin', 'gerente', 'equipe', 'vendedor', 'captador'));
 $$;
 
 
@@ -1261,3 +1261,446 @@ returns jsonb language sql stable security definer set search_path = public as $
 $$;
 revoke all on function public.valores_do_meu_contrato(uuid) from public, anon;
 grant execute on function public.valores_do_meu_contrato(uuid) to authenticated;
+
+-- =============================================================================
+-- 19. COMERCIAL (Etapa 1): perfis gerente e captador, leads, CRM, agendamentos,
+--     lembretes, briefing e avisos para a equipe. Regras de acesso no banco.
+-- =============================================================================
+alter table public.perfis add column if not exists whatsapp text;
+
+-- Permissões por papel (o master pode ligar/desligar cada uma na tela Usuários).
+-- comercial = acessa a aba; comercial_todos = vê leads/agenda/métricas de todos os vendedores;
+-- comercial_config = edita listas (origens, motivos de perda, colunas do CRM).
+create or replace function public.tem_permissao(chave text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select case
+      when papel = 'admin' then true
+      when permissoes ? chave then (permissoes ->> chave)::boolean
+      when papel = 'gerente' then chave in ('gestao', 'processos', 'marketing', 'ver_todos', 'comercial', 'comercial_todos')
+      when papel = 'equipe' then chave in ('processos', 'marketing', 'ver_todos')
+      when papel = 'vendedor' then chave in ('gestao', 'processos', 'comercial')
+      when papel = 'captador' then chave in ('comercial', 'comercial_todos')
+      else false end
+    from public.perfis where id = auth.uid()), false);
+$$;
+
+create or replace function public.papel_atual()
+returns text language sql stable security definer set search_path = public as $$
+  select papel from public.perfis where id = auth.uid();
+$$;
+create or replace function public.comercial_todos()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.eh_equipe() and public.tem_permissao('comercial') and public.tem_permissao('comercial_todos');
+$$;
+
+-- Listas configuráveis
+create table if not exists public.origens_lead (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null unique check (length(trim(nome)) between 2 and 60),
+  ativa boolean not null default true,
+  ordem int not null default 0
+);
+create table if not exists public.motivos_perda (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null unique check (length(trim(nome)) between 2 and 80),
+  pede_texto boolean not null default false,          -- "Outro": exige descrever
+  ativa boolean not null default true,
+  ordem int not null default 0
+);
+create table if not exists public.crm_colunas (
+  id text primary key check (id ~ '^[a-z0-9_]{2,40}$'),
+  nome text not null,
+  tipo text not null default 'normal' check (tipo in ('entrada', 'normal', 'ganho', 'perdido')),
+  ordem int not null default 0,
+  ativa boolean not null default true
+);
+insert into public.origens_lead (nome, ordem) values
+  ('Instagram', 1), ('Indicação', 2), ('Site', 3), ('Arquiteto', 4), ('Tráfego pago', 5), ('Link da bio', 6),
+  ('Porta de loja', 7), ('Telefone da loja', 8), ('Corretores', 9), ('Parcerias', 10), ('Metrocasa', 11),
+  ('Amigos pessoais', 12), ('Outro', 99)
+on conflict (nome) do nothing;
+insert into public.motivos_perda (nome, ordem, pede_texto) values
+  ('Veio e não fechou', 1, false), ('Não compareceu', 2, false), ('Preço', 3, false), ('Prazo', 4, false),
+  ('Fechou com concorrente', 5, false), ('Desistiu do projeto', 6, false), ('Outro', 99, true)
+on conflict (nome) do nothing;
+insert into public.crm_colunas (id, nome, tipo, ordem) values
+  ('novo_cliente', 'Novo cliente', 'entrada', 10), ('nao_responde', 'Não responde', 'normal', 20),
+  ('vendidos', 'Vendidos', 'ganho', 90), ('perdidos', 'Perdidos', 'perdido', 100)
+on conflict (id) do nothing;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['origens_lead', 'motivos_perda', 'crm_colunas'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "comercial le" on public.%I', t);
+    execute format('create policy "comercial le" on public.%I for select using (public.tem_permissao(''comercial''))', t);
+    execute format('drop policy if exists "config edita" on public.%I', t);
+    execute format('create policy "config edita" on public.%I for all using (public.tem_permissao(''comercial_config'')) with check (public.tem_permissao(''comercial_config''))', t);
+  end loop;
+end $$;
+
+-- Leads (cartões do CRM)
+create table if not exists public.leads (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null check (length(trim(nome)) between 2 and 150),
+  telefone text not null check (length(regexp_replace(telefone, '\D', '', 'g')) between 10 and 13),
+  email text check (email is null or email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  origem_id uuid references public.origens_lead (id),
+  captador_id uuid references public.perfis (id) on delete set null default auth.uid(),
+  vendedor_id uuid not null references public.perfis (id),
+  coluna_id text not null default 'novo_cliente' references public.crm_colunas (id),
+  posicao double precision not null default extract(epoch from now()),
+  conversa_texto text check (coalesce(length(conversa_texto), 0) <= 200000),
+  venda_valor numeric(12, 2) check (venda_valor is null or venda_valor > 0),
+  venda_data date,
+  perda_motivo_id uuid references public.motivos_perda (id),
+  perda_texto text,
+  primeiro_contato_em timestamptz,
+  movido_em timestamptz not null default now(),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create index if not exists leads_vendedor_idx on public.leads (vendedor_id, coluna_id);
+create index if not exists leads_criado_idx on public.leads (criado_em);
+create index if not exists leads_telefone_idx on public.leads (regexp_replace(telefone, '\D', '', 'g'));
+
+create or replace function public.pode_ver_lead(lid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.tem_permissao('comercial') and (
+    public.comercial_todos() or exists (select 1 from public.leads where id = lid and vendedor_id = auth.uid()));
+$$;
+
+create table if not exists public.lead_arquivos (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads on delete cascade,
+  tipo text not null check (tipo in ('planta', 'referencia', 'conversa')),
+  nome text not null,
+  caminho text not null check (caminho like 'comercial/%'),
+  mime text,
+  tamanho bigint,
+  enviado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now()
+);
+create table if not exists public.agendamentos (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads on delete cascade,
+  vendedor_id uuid not null references public.perfis (id),
+  inicio timestamptz not null,
+  fim timestamptz,
+  modalidade text not null check (modalidade in ('loja', 'online')),
+  loja_id text references public.lojas (id),
+  situacao text not null default 'marcado' check (situacao in ('marcado', 'compareceu', 'nao_compareceu', 'cancelado')),
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now(),
+  atualizado_em timestamptz not null default now(),
+  constraint agendamento_loja check (modalidade = 'online' or loja_id is not null),
+  constraint agendamento_fim check (fim is null or fim > inicio)
+);
+create index if not exists agendamentos_inicio_idx on public.agendamentos (inicio);
+create table if not exists public.lead_eventos (
+  id bigint generated always as identity primary key,
+  lead_id uuid not null references public.leads on delete cascade,
+  tipo text not null check (tipo in ('criado', 'movido', 'nota', 'agendamento', 'remarcado', 'comparecimento',
+    'lembrete', 'briefing', 'vendido', 'perdido', 'editado', 'vendedor')),
+  de_coluna text, para_coluna text,
+  texto text check (coalesce(length(texto), 0) <= 5000),
+  dados jsonb,
+  por uuid default auth.uid(),
+  quando timestamptz not null default now()
+);
+create index if not exists lead_eventos_lead_idx on public.lead_eventos (lead_id, quando);
+create table if not exists public.lembretes (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references public.leads on delete cascade,
+  vendedor_id uuid not null references public.perfis (id),
+  quando timestamptz not null,
+  tipo text not null check (tipo in ('retornar_contato', 'enviar_orcamento', 'confirmar_agendamento', 'outro')),
+  descricao text check (coalesce(length(descricao), 0) <= 1000),
+  concluido_em timestamptz,
+  notificado_em timestamptz,
+  criado_por uuid default auth.uid(),
+  criado_em timestamptz not null default now()
+);
+create index if not exists lembretes_fila_idx on public.lembretes (quando) where concluido_em is null and notificado_em is null;
+create table if not exists public.briefings (
+  lead_id uuid primary key references public.leads on delete cascade,
+  feito boolean not null default false,
+  forma text check (forma is null or forma in ('mensagem', 'ligacao')),
+  data date,
+  endereco text, ja_mora boolean, previsao_morar text, pessoas int check (pessoas is null or pessoas between 0 and 50),
+  obra boolean, obra_detalhes text, eletros text, observacoes text,
+  atualizado_por uuid default auth.uid(),
+  atualizado_em timestamptz not null default now()
+);
+create table if not exists public.avisos_equipe (
+  id uuid primary key default gen_random_uuid(),
+  usuario_id uuid references public.perfis (id) on delete set null,
+  canal text not null check (canal in ('whatsapp', 'email')),
+  destino text,
+  evento text not null check (evento in ('novo_lead', 'lembrete', 'remarcado')),
+  lead_id uuid references public.leads on delete cascade,
+  lembrete_id uuid references public.lembretes on delete cascade,
+  mensagem text not null,
+  situacao text not null default 'pendente' check (situacao in ('pendente', 'enviado', 'falhou')),
+  erro text,
+  tentativas int not null default 0,
+  criado_em timestamptz not null default now(),
+  enviado_em timestamptz
+);
+create index if not exists avisos_equipe_fila_idx on public.avisos_equipe (situacao, criado_em);
+
+-- RLS: vendedor só o que é dele; gerente, captador e master veem todos
+do $$
+declare t text;
+begin
+  foreach t in array array['leads', 'lead_arquivos', 'agendamentos', 'lead_eventos', 'lembretes', 'briefings', 'avisos_equipe'] loop
+    execute format('alter table public.%I enable row level security', t);
+  end loop;
+end $$;
+
+drop policy if exists "comercial ve leads" on public.leads;
+create policy "comercial ve leads" on public.leads for select
+  using (public.tem_permissao('comercial') and (public.comercial_todos() or vendedor_id = auth.uid()));
+drop policy if exists "comercial cria leads" on public.leads;
+create policy "comercial cria leads" on public.leads for insert
+  with check (public.tem_permissao('comercial') and (public.comercial_todos() or vendedor_id = auth.uid()));
+drop policy if exists "comercial edita leads" on public.leads;
+create policy "comercial edita leads" on public.leads for update
+  using (public.tem_permissao('comercial') and (public.comercial_todos() or vendedor_id = auth.uid()))
+  with check (public.tem_permissao('comercial') and (public.comercial_todos() or vendedor_id = auth.uid()));
+drop policy if exists "comercial apaga leads" on public.leads;
+create policy "comercial apaga leads" on public.leads for delete
+  using (public.tem_permissao('comercial') and public.tem_permissao('excluir') and (public.comercial_todos() or vendedor_id = auth.uid()));
+
+drop policy if exists "arquivos do lead" on public.lead_arquivos;
+create policy "arquivos do lead" on public.lead_arquivos for all
+  using (public.pode_ver_lead(lead_id)) with check (public.pode_ver_lead(lead_id));
+drop policy if exists "agenda do lead" on public.agendamentos;
+create policy "agenda do lead" on public.agendamentos for all
+  using (public.pode_ver_lead(lead_id)) with check (public.pode_ver_lead(lead_id));
+drop policy if exists "eventos do lead" on public.lead_eventos;
+create policy "eventos do lead" on public.lead_eventos for select using (public.pode_ver_lead(lead_id));
+drop policy if exists "notas do lead" on public.lead_eventos;
+create policy "notas do lead" on public.lead_eventos for insert
+  with check (public.pode_ver_lead(lead_id) and tipo = 'nota' and por = auth.uid());
+-- lembretes: do vendedor do lead (o captador não cria lembretes)
+drop policy if exists "lembretes" on public.lembretes;
+create policy "lembretes" on public.lembretes for all
+  using (public.pode_ver_lead(lead_id) and (public.papel_atual() <> 'captador'))
+  with check (public.pode_ver_lead(lead_id) and public.papel_atual() <> 'captador');
+drop policy if exists "briefing" on public.briefings;
+create policy "briefing" on public.briefings for all
+  using (public.pode_ver_lead(lead_id)) with check (public.pode_ver_lead(lead_id) and public.papel_atual() <> 'captador');
+drop policy if exists "avisos equipe" on public.avisos_equipe;
+create policy "avisos equipe" on public.avisos_equipe for select
+  using (usuario_id = auth.uid() or public.comercial_todos());
+
+-- Regras do cartão (no banco: valem mesmo que alguém altere a tela)
+create or replace function public.regras_lead()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare col public.crm_colunas; motivo public.motivos_perda; meu_papel text := public.papel_atual();
+begin
+  new.atualizado_em := now();
+  if tg_op = 'INSERT' then
+    -- vendedor que cadastra o próprio lead fica como responsável; captador escolhe qualquer vendedor ativo
+    if not public.comercial_todos() then new.vendedor_id := auth.uid(); end if;
+    if not exists (select 1 from public.perfis p where p.id = new.vendedor_id and p.papel in ('vendedor', 'gerente', 'admin')) then
+      raise exception 'Escolha um vendedor válido.';
+    end if;
+    new.coluna_id := coalesce((select id from public.crm_colunas where tipo = 'entrada' and ativa order by ordem limit 1), 'novo_cliente');
+    new.captador_id := auth.uid();
+    new.criado_em := now(); new.movido_em := now();
+    new.venda_valor := null; new.venda_data := null; new.perda_motivo_id := null; new.perda_texto := null;
+    return new;
+  end if;
+  -- troca de vendedor: só gerente, captador ou master (quem vê todos)
+  if new.vendedor_id is distinct from old.vendedor_id and not public.comercial_todos() then
+    raise exception 'Somente o gerente pode trocar o vendedor responsável.';
+  end if;
+  if new.captador_id is distinct from old.captador_id or new.criado_em is distinct from old.criado_em then
+    raise exception 'Captador e data de cadastro não podem ser alterados.';
+  end if;
+  if new.coluna_id is distinct from old.coluna_id then
+    if meu_papel = 'captador' then raise exception 'O captador não move cartões no CRM.'; end if;
+    select * into col from public.crm_colunas where id = new.coluna_id;
+    if col.id is null or not col.ativa then raise exception 'Coluna inválida.'; end if;
+    new.movido_em := now();
+    if col.tipo = 'ganho' then
+      if new.venda_valor is null or new.venda_valor <= 0 or new.venda_data is null then
+        raise exception 'Para marcar como vendido, informe o valor da venda e a data de fechamento.';
+      end if;
+      new.perda_motivo_id := null; new.perda_texto := null;
+    elsif col.tipo = 'perdido' then
+      select * into motivo from public.motivos_perda where id = new.perda_motivo_id;
+      if motivo.id is null then raise exception 'Para marcar como perdido, informe o motivo da perda.'; end if;
+      if motivo.pede_texto and coalesce(trim(new.perda_texto), '') = '' then raise exception 'Descreva o motivo da perda.'; end if;
+      new.venda_valor := null; new.venda_data := null;
+    else
+      new.venda_valor := null; new.venda_data := null; new.perda_motivo_id := null; new.perda_texto := null;
+    end if;
+  elsif meu_papel = 'captador' and (new.venda_valor is distinct from old.venda_valor or new.venda_data is distinct from old.venda_data
+        or new.perda_motivo_id is distinct from old.perda_motivo_id) then
+    raise exception 'O captador não registra venda nem perda.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists regras on public.leads;
+create trigger regras before insert or update on public.leads for each row execute function public.regras_lead();
+
+-- Histórico automático (base dos relatórios: movimentações, primeiro contato, tempo parado)
+create or replace function public.historico_lead()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare col_tipo text;
+begin
+  if tg_op = 'INSERT' then
+    insert into public.lead_eventos (lead_id, tipo, para_coluna, por, dados)
+    values (new.id, 'criado', new.coluna_id, auth.uid(), jsonb_build_object('vendedor_id', new.vendedor_id, 'origem_id', new.origem_id));
+    return new;
+  end if;
+  if new.coluna_id is distinct from old.coluna_id then
+    select tipo into col_tipo from public.crm_colunas where id = new.coluna_id;
+    insert into public.lead_eventos (lead_id, tipo, de_coluna, para_coluna, por, dados, texto)
+    values (new.id, case col_tipo when 'ganho' then 'vendido' when 'perdido' then 'perdido' else 'movido' end,
+      old.coluna_id, new.coluna_id, auth.uid(),
+      case col_tipo when 'ganho' then jsonb_build_object('valor', new.venda_valor, 'data', new.venda_data)
+                    when 'perdido' then jsonb_build_object('motivo_id', new.perda_motivo_id) end,
+      case when col_tipo = 'perdido' then new.perda_texto end);
+  end if;
+  if new.vendedor_id is distinct from old.vendedor_id then
+    insert into public.lead_eventos (lead_id, tipo, por, dados)
+    values (new.id, 'vendedor', auth.uid(), jsonb_build_object('de', old.vendedor_id, 'para', new.vendedor_id));
+    update public.agendamentos set vendedor_id = new.vendedor_id where lead_id = new.id;
+    update public.lembretes set vendedor_id = new.vendedor_id where lead_id = new.id and concluido_em is null;
+  end if;
+  if (new.nome, new.telefone, new.email, new.origem_id) is distinct from (old.nome, old.telefone, old.email, old.origem_id) then
+    insert into public.lead_eventos (lead_id, tipo, por, dados) values (new.id, 'editado', auth.uid(),
+      jsonb_build_object('antes', jsonb_build_object('nome', old.nome, 'telefone', old.telefone, 'email', old.email, 'origem_id', old.origem_id)));
+  end if;
+  return new;
+end $$;
+drop trigger if exists historico on public.leads;
+create trigger historico after insert or update on public.leads for each row execute function public.historico_lead();
+
+-- Primeiro contato: a primeira movimentação ou anotação feita pelo vendedor responsável
+create or replace function public.primeiro_contato()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.tipo in ('movido', 'nota', 'vendido', 'perdido', 'briefing', 'lembrete') then
+    update public.leads set primeiro_contato_em = new.quando
+    where id = new.lead_id and primeiro_contato_em is null and vendedor_id = new.por;
+  end if;
+  return new;
+end $$;
+drop trigger if exists primeiro_contato on public.lead_eventos;
+create trigger primeiro_contato after insert on public.lead_eventos for each row execute function public.primeiro_contato();
+
+-- Agendamento: vendedor = o do lead; remarcação e comparecimento ficam no histórico
+create or replace function public.regras_agendamento()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.vendedor_id := (select vendedor_id from public.leads where id = new.lead_id);
+  new.atualizado_em := now();
+  if new.modalidade = 'online' then new.loja_id := null; end if;
+  if tg_op = 'INSERT' then
+    insert into public.lead_eventos (lead_id, tipo, por, dados)
+    values (new.lead_id, 'agendamento', auth.uid(), jsonb_build_object('inicio', new.inicio, 'modalidade', new.modalidade, 'loja_id', new.loja_id));
+  else
+    if (new.inicio, new.modalidade, new.loja_id) is distinct from (old.inicio, old.modalidade, old.loja_id) then
+      insert into public.lead_eventos (lead_id, tipo, por, dados) values (new.lead_id, 'remarcado', auth.uid(),
+        jsonb_build_object('antes', jsonb_build_object('inicio', old.inicio, 'modalidade', old.modalidade, 'loja_id', old.loja_id),
+                           'depois', jsonb_build_object('inicio', new.inicio, 'modalidade', new.modalidade, 'loja_id', new.loja_id)));
+    end if;
+    if new.situacao is distinct from old.situacao then
+      insert into public.lead_eventos (lead_id, tipo, por, dados)
+      values (new.lead_id, 'comparecimento', auth.uid(), jsonb_build_object('de', old.situacao, 'para', new.situacao));
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists regras on public.agendamentos;
+create trigger regras before insert or update on public.agendamentos for each row execute function public.regras_agendamento();
+
+-- Lembrete: sempre do vendedor do lead
+create or replace function public.regras_lembrete()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.vendedor_id := (select vendedor_id from public.leads where id = new.lead_id);
+  if tg_op = 'INSERT' then
+    insert into public.lead_eventos (lead_id, tipo, por, texto, dados)
+    values (new.lead_id, 'lembrete', auth.uid(), new.descricao, jsonb_build_object('quando', new.quando, 'tipo', new.tipo));
+  elsif new.quando is distinct from old.quando then
+    new.notificado_em := null; -- remarcado: avisa de novo no novo horário
+  end if;
+  return new;
+end $$;
+drop trigger if exists regras on public.lembretes;
+create trigger regras before insert or update on public.lembretes for each row execute function public.regras_lembrete();
+
+-- Briefing marcado/atualizado entra no histórico
+create or replace function public.historico_briefing()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  new.atualizado_em := now(); new.atualizado_por := auth.uid();
+  if tg_op = 'INSERT' or new.feito is distinct from old.feito then
+    insert into public.lead_eventos (lead_id, tipo, por, dados)
+    values (new.lead_id, 'briefing', auth.uid(), jsonb_build_object('feito', new.feito, 'forma', new.forma));
+  end if;
+  return new;
+end $$;
+drop trigger if exists historico on public.briefings;
+create trigger historico before insert or update on public.briefings for each row execute function public.historico_briefing();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['leads', 'agendamentos', 'lembretes', 'briefings', 'lead_arquivos', 'origens_lead', 'motivos_perda', 'crm_colunas'] loop
+    execute format('drop trigger if exists auditoria on public.%I', t);
+    execute format('create trigger auditoria after insert or update or delete on public.%I for each row execute function public.registrar_atividade()', t);
+  end loop;
+end $$;
+
+-- Arquivos do lead: documentos/comercial/<lead>/...
+drop policy if exists "comercial arquivos" on storage.objects;
+create policy "comercial arquivos" on storage.objects for all
+  using (bucket_id = 'documentos' and (storage.foldername(name))[1] = 'comercial'
+    and public.pode_ver_lead(case when (storage.foldername(name))[2] ~ '^[0-9a-f-]{36}$' then ((storage.foldername(name))[2])::uuid end))
+  with check (bucket_id = 'documentos' and (storage.foldername(name))[1] = 'comercial'
+    and public.pode_ver_lead(case when (storage.foldername(name))[2] ~ '^[0-9a-f-]{36}$' then ((storage.foldername(name))[2])::uuid end));
+update storage.buckets set allowed_mime_types = (
+  select array(select distinct unnest(coalesce(allowed_mime_types, '{}') || array['text/plain', 'image/heic']))
+) where id = 'documentos';
+
+-- Master define papel, permissões e WhatsApp. O master nunca pode ser rebaixado por outro, e sempre sobra um master.
+drop function if exists public.definir_acesso(uuid, text, jsonb, text);
+create or replace function public.definir_acesso(usuario uuid, novo_papel text, novas_permissoes jsonb, novo_nome text default null, novo_whatsapp text default null)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.eh_admin() then raise exception 'Somente o master pode mudar acessos.'; end if;
+  if novo_papel not in ('admin', 'gerente', 'equipe', 'vendedor', 'captador') then raise exception 'Papel inválido.'; end if;
+  if usuario = auth.uid() and novo_papel <> 'admin' then raise exception 'Você não pode tirar o seu próprio acesso de master.'; end if;
+  if exists (select 1 from public.perfis where id = usuario and papel = 'cliente') then raise exception 'Este usuário é um cliente do portal.'; end if;
+  if novo_papel <> 'admin' and exists (select 1 from public.perfis where id = usuario and papel = 'admin')
+     and (select count(*) from public.perfis where papel = 'admin') <= 1 then
+    raise exception 'O sistema precisa de pelo menos um master.';
+  end if;
+  if novo_whatsapp is not null and length(regexp_replace(novo_whatsapp, '\D', '', 'g')) not between 10 and 13 then
+    raise exception 'WhatsApp inválido (use DDD + número).';
+  end if;
+  update public.perfis set papel = novo_papel, permissoes = coalesce(novas_permissoes, '{}'::jsonb),
+    nome = coalesce(nullif(novo_nome, ''), nome),
+    whatsapp = coalesce(nullif(regexp_replace(coalesce(novo_whatsapp, ''), '\D', '', 'g'), ''), whatsapp)
+  where id = usuario;
+end $$;
+revoke execute on function public.definir_acesso(uuid, text, jsonb, text, text) from anon;
+
+-- Vendedores ativos (para o captador escolher o responsável)
+create or replace function public.vendedores_comercial()
+returns table (id uuid, nome text, email text, papel text)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.nome, p.email, p.papel from public.perfis p
+  where public.tem_permissao('comercial') and p.papel in ('vendedor', 'gerente')
+    and (public.comercial_todos() or p.id = auth.uid())
+  order by p.nome;
+$$;

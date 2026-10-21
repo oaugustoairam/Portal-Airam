@@ -53,7 +53,7 @@ export default function Usuarios({ perfil }) {
 }
 
 function EditarUsuario({ u, eu, onFechar }) {
-  const [f, setF] = useState(() => ({ email: u?.email || '', nome: u?.nome || '', papel: u?.papel || 'vendedor', permissoes: { ...(u?.permissoes || {}) } }))
+  const [f, setF] = useState(() => ({ email: u?.email || '', nome: u?.nome || '', papel: u?.papel || 'vendedor', permissoes: { ...(u?.permissoes || {}) }, whatsapp: u?.whatsapp || '' }))
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [senha, setSenha] = useState(null)
@@ -69,10 +69,10 @@ function EditarUsuario({ u, eu, onFechar }) {
     setOcupado(true)
     try {
       if (u) {
-        await api.definirAcesso(u.id, f.papel, f.permissoes, f.nome)
+        await api.definirAcesso(u.id, f.papel, f.permissoes, f.nome, f.whatsapp)
         onFechar(true)
       } else {
-        const r = await api.criarUsuario({ email: f.email, nome: f.nome, papel: f.papel, permissoes: f.permissoes })
+        const r = await api.criarUsuario({ email: f.email, nome: f.nome, papel: f.papel, permissoes: f.permissoes, whatsapp: f.whatsapp })
         setSenha(r.senha)
       }
     } catch (err) {
@@ -106,6 +106,11 @@ function EditarUsuario({ u, eu, onFechar }) {
               <div className="campo">
                 <label htmlFor="usr-email">E-mail</label>
                 <input id="usr-email" type="email" value={f.email} disabled={!!u} onChange={(e) => setF((x) => ({ ...x, email: e.target.value }))} required />
+              </div>
+              <div className="campo">
+                <label htmlFor="usr-zap">WhatsApp</label>
+                <input id="usr-zap" type="tel" inputMode="tel" placeholder="(11) 98888-7777" value={f.whatsapp} onChange={(e) => setF((x) => ({ ...x, whatsapp: e.target.value }))} />
+                <span className="ajuda">Usado nos avisos de novo lead e lembretes.</span>
               </div>
             </div>
             <div className="campo">

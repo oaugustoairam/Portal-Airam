@@ -114,7 +114,10 @@ export function criarDadosDemo() {
     sessao: null,
     contas: [
       { email: 'equipe@airam.exemplo', nome: 'Equipe Airam', papel: 'admin', senha: SENHA_DEMO, precisa_trocar_senha: false },
-      { email: 'vendedor@airam.exemplo', nome: 'Augusto Moraes', papel: 'vendedor', senha: SENHA_DEMO, precisa_trocar_senha: false },
+      { email: 'vendedor@airam.exemplo', nome: 'Augusto Moraes', papel: 'vendedor', whatsapp: '11900000001', senha: SENHA_DEMO, precisa_trocar_senha: false },
+      { email: 'agatha@airam.exemplo', nome: 'Agatha Moraes', papel: 'vendedor', whatsapp: '11900000002', senha: SENHA_DEMO, precisa_trocar_senha: false },
+      { email: 'gerente@airam.exemplo', nome: 'Gerente Airam', papel: 'gerente', whatsapp: '11900000003', senha: SENHA_DEMO, precisa_trocar_senha: false },
+      { email: 'captador@airam.exemplo', nome: 'Rubia Captação', papel: 'captador', whatsapp: '11900000004', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'marina@exemplo.com', cpf: '52998224725', nome: 'Marina Duarte', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'carla@exemplo.com', cpf: '27584319637', nome: 'Carla Nogueira', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: false },
       { email: 'rafael@exemplo.com', cpf: '11144477735', nome: 'Rafael Moura', papel: 'cliente', senha: SENHA_DEMO, precisa_trocar_senha: true },
