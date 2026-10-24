@@ -99,8 +99,8 @@ Dias úteis sem feriados municipais (`somarDiasUteis` em `src/lib/constants.js`)
 ## Pendências
 
 - Publicado na Vercel em https://portal-airam.vercel.app (projeto `portal-airam`, plano Hobby; passar para Pro
-  antes do uso comercial). Falta: domínio portal.airam.arq.br, liberar o domínio no Auth do Supabase
-  (Site URL / Redirect URLs) e definir o segredo `PORTAL_URL`.
+  antes do uso comercial). Auth (Site URL / Redirect URLs) e segredo `PORTAL_URL` apontam para esse endereço.
+  Falta o domínio portal.airam.arq.br (CNAME na Hostinger); ao trocar, atualizar Auth e `PORTAL_URL`.
 - Contas a criar: ZapSign, Resend (e-mail), Meta WhatsApp Cloud API, Twilio (SMS).
 
 ## Comandos
